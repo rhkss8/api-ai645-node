@@ -113,13 +113,15 @@ export const createRecommendationRoutes = (controller: RecommendationController)
    *                       type: integer
    *                       example: 1150
    *                       description: 대상 회차 (선택사항)
+   *                     analysis:
+   *                       type: string
+   *                       example: "이번 추천은 최근 당첨 패턴과 사용자 선호도를 반영하여 생성되었습니다. 홀짝 비율과 구간 분포를 고려했습니다."
    *                 message:
    *                   type: string
    *                   example: "무료 번호 추천이 완료되었습니다."
    *                 timestamp:
    *                   type: string
    *                   format: date-time
-   *                   example: "2025-06-23T07:45:28.502Z"
    *       400:
    *         description: 잘못된 요청
    *         content:
@@ -265,6 +267,9 @@ export const createRecommendationRoutes = (controller: RecommendationController)
    *                       type: integer
    *                       example: 1150
    *                       description: 대상 회차 (선택사항)
+   *                     analysis:
+   *                       type: string
+   *                       example: "이번 추천은 최근 당첨 패턴과 사용자 선호도를 반영하여 생성되었습니다. 홀짝 비율과 구간 분포를 고려했습니다."
    *                 message:
    *                   type: string
    *                   example: "프리미엄 번호 추천이 완료되었습니다."

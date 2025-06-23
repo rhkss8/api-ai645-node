@@ -7,7 +7,7 @@ import {
   WinningNumbers,
   UploadedFile,
 } from '../../types/common';
-import { IGPTService } from '../IGPTService';
+import { IGPTService, GPTRecommendationResult } from '../IGPTService';
 import { generateFreeRecommendationPrompt } from '../../prompts/freeRecommendationPrompt';
 import { generatePremiumRecommendationPrompt } from '../../prompts/premiumRecommendationPrompt';
 import { generateImageExtractionPrompt } from '../../prompts/imageExtractionPrompt';
@@ -29,7 +29,7 @@ export class OpenAIGPTService implements IGPTService {
     round?: number,
     imageData?: ImageExtractResult,
     previousReviews?: string[],
-  ): Promise<LotteryNumberSets> {
+  ): Promise<GPTRecommendationResult> {
     try {
       const prompt = model === GPTModel.GPT_4O 
         ? generatePremiumRecommendationPrompt({ gameCount, conditions, round, imageData, previousReviews })
@@ -60,7 +60,7 @@ export class OpenAIGPTService implements IGPTService {
         throw new Error('GPT 응답 형식이 올바르지 않습니다.');
       }
 
-      return this.parseNumbersFromResponse(response);
+      return this.parseRecommendationFromResponse(response);
     } catch (error) {
       console.error('GPT 추천 생성 중 오류:', error);
       throw new Error('번호 추천 생성에 실패했습니다.');
@@ -217,6 +217,21 @@ export class OpenAIGPTService implements IGPTService {
     try {
       const parsed = JSON.parse(response);
       return parsed.recommendations;
+    } catch (error) {
+      console.error('응답 파싱 중 오류:', error);
+      throw new Error('GPT 응답을 파싱할 수 없습니다.');
+    }
+  }
+
+  parseRecommendationFromResponse(response: string): GPTRecommendationResult {
+    try {
+      const parsed = JSON.parse(response);
+      return {
+        numbers: parsed.recommendations,
+        analysis: parsed.analysis,
+        strategies: parsed.strategies,
+        confidence: parsed.confidence,
+      };
     } catch (error) {
       console.error('응답 파싱 중 오류:', error);
       throw new Error('GPT 응답을 파싱할 수 없습니다.');
