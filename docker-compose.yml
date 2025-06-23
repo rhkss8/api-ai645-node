@@ -11,6 +11,12 @@ services:
       - "3350:4000"  # 외부:내부 포트 매핑
     environment:
       - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/main
+      - OPENAI_API_KEY=test-key-for-development
+      - JWT_SECRET=development-jwt-secret-key
+      - API_VERSION=v1
+      - LOG_LEVEL=debug
+      - CORS_ORIGIN=http://localhost:3000
     env_file:
       - ./backend/.env
     depends_on:

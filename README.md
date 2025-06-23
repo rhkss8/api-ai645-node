@@ -1,202 +1,297 @@
-# API AI645 Node.js Backend
+# 🎰 로또 번호 추천 API (TypeScript + Clean Architecture)
 
-Node.js(Express) 백엔드와 PostgreSQL 데이터베이스를 사용하는 웹서비스입니다.
+Node.js(TypeScript) + Express + PostgreSQL + OpenAI GPT를 사용하는 AI 기반 로또 번호 추천 웹서비스입니다.
 
-## 🚀 시작하기
+## ✨ 주요 기능
+
+### 🆓 무료 번호 추천 API (`/api/recommend/free`)
+- GPT-3.5-turbo 사용
+- 사용자 조건 기반 추천 (제외번호, 포함번호, 최근구매이력, 선호사항)
+- 회차별 추천 저장
+
+### 💎 프리미엄 번호 추천 API (`/api/recommend/premium`)
+- GPT-4o 사용
+- 이미지 기반 번호 추출 및 분석 지원
+- 고급 패턴 분석 및 전략 제공
+
+### 📷 이미지 번호 추출 API (`/api/image/extract`)
+- GPT-4o Vision으로 로또 용지/번호표에서 번호 인식
+- OCR 신뢰도 측정
+- 다양한 형태의 번호 이미지 지원
+
+### 📊 당첨번호 매칭 회고 API (`/api/review/generate`)
+- 추천번호와 실제 당첨번호 비교 분석
+- AI 기반 패턴 분석 및 개선점 제시
+- 성공/실패 요인 분석
+
+### 🏗️ Clean Architecture 구조
+- **Entities**: 비즈니스 로직 핵심 객체
+- **Use Cases**: 애플리케이션 비즈니스 규칙
+- **Repositories**: 데이터 액세스 추상화
+- **Controllers**: API 요청/응답 처리
+- **Prompts**: GPT 프롬프트 템플릿 관리
+
+## 🚀 빠른 시작
 
 ### 전제 조건
-- Docker
-- Docker Compose
+- Docker & Docker Compose
+- Node.js 18+ (로컬 개발시)
 
-### 환경 설정
-
-1. **환경변수 파일 생성**
-   ```bash
-   # 루트 디렉토리에서
-   cp env.example .env
-   
-   # backend 디렉토리에서
-   cd backend
-   cp env.example .env
-   ```
-
-2. **환경변수 수정**
-   ```bash
-   # backend/.env 파일을 열어서 필요한 값들을 설정하세요
-   ```
-
-### 개발 환경 실행
-
+### 1. 환경 설정
 ```bash
-# 전체 서비스 실행
-docker compose up
+# 프로젝트 클론
+git clone <repository-url>
+cd api-ai645-node
 
-# 백그라운드에서 실행
+# 환경변수 설정 (OpenAI API 키 필요)
+cp backend/env.example backend/.env
+# backend/.env 파일에서 OPENAI_API_KEY 설정
+```
+
+### 2. Docker로 실행 (권장)
+```bash
+# 개발 환경 시작
 docker compose up -d
 
-# 특정 서비스만 실행
-docker compose up backend
-docker compose up db
+# 또는 편의 스크립트 사용
+./scripts/dev.sh setup    # 초기 설정
+./scripts/dev.sh start    # 서비스 시작
+./scripts/dev.sh health   # 상태 확인
 ```
 
-### Production 환경 실행
-
+### 3. 로컬 개발
 ```bash
-# Production 환경 설정
-docker compose -f docker-compose.prod.yml up -d
+cd backend
+npm install
+npx prisma generate
+npm run dev
 ```
+
+## 🔧 접속 정보
+
+| 서비스 | URL | 포트 |
+|--------|-----|------|
+| Backend API | http://localhost:3350 | 3350 |
+| API 문서 | http://localhost:3350/api-docs | 3350 |
+| Health Check | http://localhost:3350/health | 3350 |
+| PostgreSQL | localhost:3236 | 3236 |
 
 ## 📁 프로젝트 구조
 
 ```
-.
-├── docker-compose.yml          # 개발 환경 Docker Compose
-├── docker-compose.prod.yml     # Production 환경 Docker Compose
-├── .dockerignore              # Docker 빌드 제외 파일
-├── env.example               # 환경변수 예시 파일
-├── README.md
-└── backend/
-    ├── Dockerfile            # 개발용 Dockerfile
-    ├── Dockerfile.prod       # Production용 Dockerfile
-    ├── env.example          # Backend 환경변수 예시
+api-ai645-node/
+├── docker-compose.yml              # 개발환경 Docker 설정
+├── docker-compose.prod.yml         # 프로덕션 Docker 설정
+├── .dockerignore                   # Docker 제외 파일
+├── scripts/dev.sh                  # 개발 편의 스크립트
+├── examples/api-examples.md        # API 사용 예제
+└── backend/                        # TypeScript 백엔드
+    ├── src/
+    │   ├── entities/               # 도메인 엔티티
+    │   │   ├── RecommendationHistory.ts
+    │   │   ├── RecommendationReview.ts
+    │   │   └── WinningNumbers.ts
+    │   ├── repositories/           # 데이터 액세스 인터페이스
+    │   │   ├── IRecommendationHistoryRepository.ts
+    │   │   ├── IRecommendationReviewRepository.ts
+    │   │   ├── IWinningNumbersRepository.ts
+    │   │   └── IGPTService.ts
+    │   ├── usecases/              # 비즈니스 로직 (구현 예정)
+    │   ├── controllers/           # API 컨트롤러 (구현 예정)
+    │   ├── routes/               # API 라우트 (구현 예정)
+    │   ├── prompts/              # GPT 프롬프트 템플릿
+    │   │   ├── freeRecommendationPrompt.ts
+    │   │   ├── premiumRecommendationPrompt.ts
+    │   │   ├── imageExtractionPrompt.ts
+    │   │   └── reviewPrompt.ts
+    │   ├── config/               # 설정 파일
+    │   │   ├── env.ts
+    │   │   ├── database.ts
+    │   │   └── test-setup.ts
+    │   ├── types/                # TypeScript 타입 정의
+    │   │   └── common.ts
+    │   └── index.ts              # 애플리케이션 진입점
+    ├── prisma/
+    │   └── schema.prisma         # 데이터베이스 스키마
+    ├── Dockerfile                # 개발용 Dockerfile
+    ├── Dockerfile.prod           # 프로덕션용 Dockerfile
     ├── package.json
-    └── src/
-        └── ... (애플리케이션 코드)
+    ├── tsconfig.json
+    ├── jest.config.js
+    ├── .eslintrc.js
+    └── .prettierrc
 ```
 
-## 🔧 주요 설정
+## 🎯 API 사용 예제
 
-### 포트 설정
-- **Backend**: 외부 3350 → 내부 4000
-- **PostgreSQL**: 외부 3236 → 내부 5432
-
-### 데이터베이스 연결
-```javascript
-DATABASE_URL=postgres://postgres:postgres@db:5432/main
+### 무료 번호 추천
+```bash
+curl -X POST http://localhost:3350/api/recommend/free \
+  -H "Content-Type: application/json" \
+  -d '{
+    "round": 1105,
+    "conditions": {
+      "excludeNumbers": [1, 2, 3],
+      "includeNumbers": [7, 14],
+      "preferences": "홀수 번호를 선호합니다"
+    }
+  }'
 ```
 
-### 환경변수
-| 변수명 | 설명 | 기본값 |
-|--------|------|--------|
-| `DATABASE_URL` | PostgreSQL 연결 URL | postgres://postgres:postgres@db:5432/main |
-| `NODE_ENV` | 실행 환경 | development |
-| `PORT` | 서버 포트 | 4000 |
-| `JWT_SECRET` | JWT 비밀키 | - |
+### 프리미엄 이미지 기반 추천
+```bash
+curl -X POST http://localhost:3350/api/recommend/premium \
+  -F "image=@lottery_numbers.jpg" \
+  -F "data={\"round\": 1105}"
+```
 
-## 🛠️ 유용한 명령어
+### 이미지 번호 추출
+```bash
+curl -X POST http://localhost:3350/api/image/extract \
+  -F "image=@lottery_ticket.jpg"
+```
+
+## 🗄️ 데이터베이스 구조
+
+### 주요 테이블
+- `recommendation_history`: 추천 내역 저장
+- `recommendation_review`: 회고 분석 결과
+- `winning_numbers`: 당첨번호 데이터
+- `api_usage`: API 사용량 통계
+
+### 데이터베이스 관리
+```bash
+# Prisma 마이그레이션
+docker compose exec backend npx prisma migrate dev
+
+# Prisma Studio (DB 관리 UI)
+docker compose exec backend npx prisma studio
+
+# 데이터베이스 직접 접속
+docker compose exec db psql -U postgres -d main
+```
+
+## 🛠️ 개발 도구
+
+### 코드 품질
+```bash
+# TypeScript 컴파일
+npm run build
+
+# 린팅
+npm run lint
+npm run lint:fix
+
+# 포매팅
+npm run format
+
+# 테스트
+npm test
+npm run test:watch
+```
 
 ### Docker 명령어
 ```bash
-# 컨테이너 상태 확인
-docker compose ps
+# 전체 로그 확인
+docker compose logs -f
 
-# 로그 확인
-docker compose logs backend
-docker compose logs db
+# 특정 서비스 로그
+docker compose logs -f backend
 
 # 컨테이너 재시작
 docker compose restart backend
 
-# 컨테이너 내부 접속
-docker compose exec backend sh
-docker compose exec db psql -U postgres -d main
-
-# 모든 컨테이너 중지 및 제거
-docker compose down
-
-# 볼륨과 함께 모든 것 제거
+# 전체 정리
 docker compose down -v
 ```
 
-### 데이터베이스 관리
+## 🔒 환경변수
+
+### 필수 환경변수
 ```bash
-# PostgreSQL 컨테이너에 접속
-docker compose exec db psql -U postgres -d main
-
-# 데이터베이스 백업
-docker compose exec db pg_dump -U postgres main > backup.sql
-
-# 데이터베이스 복원
-docker compose exec -T db psql -U postgres main < backup.sql
+DATABASE_URL=postgres://postgres:postgres@db:5432/main
+OPENAI_API_KEY=your-openai-api-key-here
+JWT_SECRET=your-jwt-secret-key
 ```
 
-## 🔒 보안 고려사항
-
-### Development 환경
-- 기본 PostgreSQL 계정 사용 (postgres/postgres)
-- 볼륨 마운트로 실시간 코드 변경 반영
-
-### Production 환경
-- 강력한 PostgreSQL 비밀번호 사용
-- 비특권 사용자로 컨테이너 실행
-- Health check 설정
-- 리소스 제한 설정
-- dumb-init으로 시그널 처리 최적화
-
-## 📈 모니터링
-
-### Health Check
-- Backend: `http://localhost:3350/health`
-- Database: PostgreSQL의 `pg_isready` 명령어 사용
-
-### 로그 모니터링
+### 선택 환경변수
 ```bash
-# 실시간 로그 확인
-docker compose logs -f backend
-
-# 특정 시간대 로그 확인
-docker compose logs --since="2024-01-01T00:00:00" backend
+NODE_ENV=development
+PORT=4000
+LOG_LEVEL=debug
+CORS_ORIGIN=http://localhost:3000
+API_VERSION=v1
 ```
 
-## 🚀 배포
+## 📈 배포
 
-1. **Production 환경변수 설정**
+### 프로덕션 배포
+```bash
+# 프로덕션 환경변수 설정
+cp backend/env.example backend/.env.production
+
+# 프로덕션 배포
+docker compose -f docker-compose.prod.yml up -d
+
+# 배포 확인
+curl http://localhost:3350/health
+```
+
+## 🧪 테스트
+
+### API 테스트
+- 상세한 API 사용 예제: `examples/api-examples.md`
+- Postman 컬렉션 제공
+- 자동화된 curl 스크립트
+
+### 단위 테스트
+```bash
+# 테스트 실행
+npm test
+
+# 커버리지 확인
+npm run test:coverage
+```
+
+## 🔧 문제 해결
+
+### 일반적인 문제
+
+1. **Prisma 관련 오류**
+   - 현재 데이터베이스 연결이 임시로 비활성화됨
+   - ARM64 Alpine Linux 호환성 문제 해결 중
+
+2. **포트 충돌**
    ```bash
-   cp backend/env.example backend/.env.production
-   # .env.production 파일에서 production 값들 설정
-   ```
-
-2. **Production 배포**
-   ```bash
-   docker compose -f docker-compose.prod.yml up -d
-   ```
-
-3. **배포 확인**
-   ```bash
-   docker compose -f docker-compose.prod.yml ps
-   curl http://localhost:3350/health
-   ```
-
-## 🆘 문제 해결
-
-### 일반적인 문제들
-
-1. **포트 충돌**
-   ```bash
-   # 포트 사용 중인 프로세스 확인
-   lsof -i :3350
-   lsof -i :3236
-   ```
-
-2. **데이터베이스 연결 실패**
-   ```bash
-   # DB 컨테이너 상태 확인
-   docker compose logs db
-   
-   # 네트워크 연결 확인
-   docker compose exec backend ping db
+   lsof -i :3350  # 백엔드 포트 확인
+   lsof -i :3236  # DB 포트 확인
    ```
 
 3. **컨테이너 재시작 루프**
    ```bash
-   # 상세 로그 확인
    docker compose logs --tail=50 backend
    ```
 
-## 📞 지원
+## 🤝 기여하기
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open Pull Request
+
+## 📄 라이센스
+
+이 프로젝트는 MIT 라이센스 하에 배포됩니다.
+
+## 🆘 지원
 
 문제가 발생하면 다음을 확인해주세요:
 1. Docker와 Docker Compose 버전
-2. 포트 충돌 여부
-3. 환경변수 설정
-4. 컨테이너 로그 
+2. 환경변수 설정 (특히 OPENAI_API_KEY)
+3. 포트 충돌 여부
+4. 컨테이너 로그 및 상태
+
+---
+
+🎰 **Happy Lottery Number Recommending!** 🍀
