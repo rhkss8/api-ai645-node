@@ -69,6 +69,7 @@ export interface RecommendationResponse {
   gameCount: number;
   numbers: LotteryNumberSets;
   round?: number;
+  analysis?: string;
 }
 
 export interface ReviewRequest {

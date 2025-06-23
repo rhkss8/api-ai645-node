@@ -1,6 +1,6 @@
 import { RecommendationHistory } from '../entities/RecommendationHistory';
 import { IRecommendationHistoryRepository } from '../repositories/IRecommendationHistoryRepository';
-import { IGPTService } from '../repositories/IGPTService';
+import { IGPTService, GPTRecommendationResult } from '../repositories/IGPTService';
 import { IdGenerator } from '../utils/idGenerator';
 import {
   RecommendationRequest,
@@ -40,7 +40,7 @@ export class GenerateRecommendationUseCase {
     const previousReviews = await this.getPreviousReviews();
 
     // 6. 번호 추천 생성 (게임수 전달)
-    const numbers = await this.gptService.generateRecommendation(
+    const gptResult = await this.gptService.generateRecommendation(
       gptModel,
       gameCount, // 게임수 추가
       request.conditions,
@@ -53,7 +53,7 @@ export class GenerateRecommendationUseCase {
     const id = IdGenerator.generateRecommendationId();
     const recommendation = RecommendationHistory.create(
       id,
-      numbers,
+      gptResult.numbers,
       request.type,
       gptModel,
       request.round,
@@ -66,8 +66,8 @@ export class GenerateRecommendationUseCase {
     // 8. 데이터베이스 저장
     const savedRecommendation = await this.recommendationRepository.create(recommendation);
 
-    // 9. 응답 변환
-    return this.toResponse(savedRecommendation, gameCount);
+    // 9. 응답 변환 (GPT 분석 결과 포함)
+    return this.toResponse(savedRecommendation, gameCount, gptResult.analysis);
   }
 
   private validateRequest(request: RecommendationRequest): void {
@@ -208,11 +208,12 @@ export class GenerateRecommendationUseCase {
     }
   }
 
-  private toResponse(recommendation: RecommendationHistory, gameCount: number): RecommendationResponse {
+  private toResponse(recommendation: RecommendationHistory, gameCount: number, analysis?: string): RecommendationResponse {
     return {
       gameCount: gameCount,
       numbers: recommendation.numbers,
       round: recommendation.round || undefined,
+      analysis: analysis,
     };
   }
 } 
