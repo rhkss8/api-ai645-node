@@ -20,7 +20,10 @@ export class GenerateRecommendationUseCase {
     // 1. 입력 검증
     this.validateRequest(request);
 
-    // 2. 이미지 처리 (프리미엄만)
+    // 2. 게임수 설정 (기본값 설정)
+    const gameCount = this.validateAndSetGameCount(request);
+
+    // 3. 이미지 처리 (프리미엄만)
     let imageData: ImageExtractResult | undefined;
     if (request.type === RecommendationType.PREMIUM && request.image) {
       try {
@@ -30,22 +33,23 @@ export class GenerateRecommendationUseCase {
       }
     }
 
-    // 3. GPT 모델 선택
+    // 4. GPT 모델 선택
     const gptModel = this.selectGPTModel(request.type);
 
-    // 4. 이전 회고 가져오기 (개선을 위해)
+    // 5. 이전 회고 가져오기 (개선을 위해)
     const previousReviews = await this.getPreviousReviews();
 
-    // 5. 번호 추천 생성
+    // 6. 번호 추천 생성 (게임수 전달)
     const numbers = await this.gptService.generateRecommendation(
       gptModel,
+      gameCount, // 게임수 추가
       request.conditions,
       request.round,
       imageData,
       previousReviews,
     );
 
-    // 6. 추천 엔티티 생성 및 검증
+    // 7. 추천 엔티티 생성 및 검증
     const id = IdGenerator.generateRecommendationId();
     const recommendation = RecommendationHistory.create(
       id,
@@ -59,11 +63,11 @@ export class GenerateRecommendationUseCase {
 
     recommendation.validate();
 
-    // 7. 데이터베이스 저장
+    // 8. 데이터베이스 저장
     const savedRecommendation = await this.recommendationRepository.create(recommendation);
 
-    // 8. 응답 변환
-    return this.toResponse(savedRecommendation);
+    // 9. 응답 변환
+    return this.toResponse(savedRecommendation, gameCount);
   }
 
   private validateRequest(request: RecommendationRequest): void {
@@ -92,6 +96,23 @@ export class GenerateRecommendationUseCase {
     if (request.image) {
       this.validateImage(request.image);
     }
+  }
+
+  private validateAndSetGameCount(request: RecommendationRequest): number {
+    let gameCount = request.gameCount || 5; // 기본값 5
+
+    // 타입별 최대 게임수 제한
+    const maxGameCount = request.type === RecommendationType.PREMIUM ? 10 : 5;
+    
+    if (gameCount < 1) {
+      throw new Error('게임수는 최소 1개 이상이어야 합니다.');
+    }
+
+    if (gameCount > maxGameCount) {
+      throw new Error(`${request.type === RecommendationType.PREMIUM ? '프리미엄' : '무료'} 추천은 최대 ${maxGameCount}게임까지 가능합니다.`);
+    }
+
+    return gameCount;
   }
 
   private validateConditions(conditions: any): void {
@@ -187,16 +208,11 @@ export class GenerateRecommendationUseCase {
     }
   }
 
-  private toResponse(recommendation: RecommendationHistory): RecommendationResponse {
+  private toResponse(recommendation: RecommendationHistory, gameCount: number): RecommendationResponse {
     return {
-      id: recommendation.id,
-      type: recommendation.type,
-      round: recommendation.round || undefined,
+      gameCount: gameCount,
       numbers: recommendation.numbers,
-      conditions: recommendation.conditions || undefined,
-      imageData: recommendation.imageData || undefined,
-      gptModel: recommendation.gptModel,
-      createdAt: recommendation.createdAt.toISOString(),
+      round: recommendation.round || undefined,
     };
   }
 } 

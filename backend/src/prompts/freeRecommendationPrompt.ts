@@ -1,6 +1,7 @@
 import { UserConditions } from '../types/common';
 
 export interface FreeRecommendationPromptParams {
+  gameCount?: number; // 추천할 게임수 (기본값: 5)
   conditions?: UserConditions;
   round?: number;
   previousReviews?: string[];
@@ -9,13 +10,13 @@ export interface FreeRecommendationPromptParams {
 export const generateFreeRecommendationPrompt = (
   params: FreeRecommendationPromptParams,
 ): string => {
-  const { conditions, round, previousReviews } = params;
+  const { gameCount = 5, conditions, round, previousReviews } = params;
 
-  let prompt = `당신은 로또 번호 추천 전문가입니다. 사용자를 위해 로또 번호 5세트를 추천해주세요.
+  let prompt = `당신은 로또 번호 추천 전문가입니다. 사용자를 위해 로또 번호 ${gameCount}세트를 추천해주세요.
 
 ## 기본 규칙
 - 각 세트는 1~45 사이의 서로 다른 6개 숫자로 구성
-- 총 5세트를 추천
+- 총 ${gameCount}세트를 추천
 - 통계적 분석과 패턴 분석을 활용
 - 과도한 연속 번호나 패턴은 피하기
 
@@ -60,15 +61,12 @@ export const generateFreeRecommendationPrompt = (
   prompt += `
 
 ## 응답 형식
-정확히 아래 JSON 형식으로만 응답해주세요. 다른 설명은 포함하지 마세요.
+정확히 아래 JSON 형식으로만 응답해주세요. ${gameCount}개의 세트를 배열로 제공해주세요.
 
 {
   "recommendations": [
-    [1, 7, 14, 21, 28, 35],
-    [3, 12, 19, 26, 33, 40],
-    [5, 8, 17, 24, 31, 42],
-    [2, 11, 18, 25, 32, 39],
-    [6, 13, 20, 27, 34, 41]
+    // ${gameCount}개의 번호 세트를 여기에 배열 형태로 제공
+    // 예시: [1, 7, 14, 21, 28, 35]
   ],
   "analysis": "추천 근거에 대한 간단한 설명 (100자 이내)"
 }`;
