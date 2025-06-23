@@ -10,6 +10,7 @@ import {
 export interface IGPTService {
   generateRecommendation(
     model: GPTModel,
+    gameCount: number,
     conditions?: UserConditions,
     round?: number,
     imageData?: ImageExtractResult,

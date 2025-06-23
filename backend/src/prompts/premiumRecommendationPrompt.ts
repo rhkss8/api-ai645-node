@@ -1,6 +1,7 @@
 import { UserConditions, ImageExtractResult } from '@/types/common';
 
 export interface PremiumRecommendationPromptParams {
+  gameCount?: number; // 추천할 게임수 (기본값: 5)
   conditions?: UserConditions;
   round?: number;
   imageData?: ImageExtractResult;
@@ -10,9 +11,9 @@ export interface PremiumRecommendationPromptParams {
 export const generatePremiumRecommendationPrompt = (
   params: PremiumRecommendationPromptParams,
 ): string => {
-  const { conditions, round, imageData, previousReviews } = params;
+  const { gameCount = 5, conditions, round, imageData, previousReviews } = params;
 
-  let prompt = `당신은 고급 로또 번호 추천 전문가입니다. 고도의 분석과 패턴 인식을 통해 프리미엄 로또 번호 5세트를 추천해주세요.
+  let prompt = `당신은 고급 로또 번호 추천 전문가입니다. 고도의 분석과 패턴 인식을 통해 프리미엄 로또 번호 ${gameCount}세트를 추천해주세요.
 
 ## 프리미엄 추천 전략
 - 심층적 통계 분석 및 고급 패턴 인식
@@ -31,7 +32,7 @@ export const generatePremiumRecommendationPrompt = (
 
 ## 기본 규칙
 - 각 세트는 1~45 사이의 서로 다른 6개 숫자로 구성
-- 총 5세트를 추천
+- 총 ${gameCount}세트를 추천
 - 각 세트는 서로 다른 전략을 적용`;
 
   if (round) {
@@ -81,23 +82,17 @@ export const generatePremiumRecommendationPrompt = (
   prompt += `
 
 ## 프리미엄 응답 형식
-정확히 아래 JSON 형식으로만 응답해주세요. 각 세트별 상세 분석을 포함하세요.
+정확히 아래 JSON 형식으로만 응답해주세요. ${gameCount}개의 세트와 각 세트별 상세 분석을 포함하세요.
 
 {
   "recommendations": [
-    [1, 7, 14, 21, 28, 35],
-    [3, 12, 19, 26, 33, 40],
-    [5, 8, 17, 24, 31, 42],
-    [2, 11, 18, 25, 32, 39],
-    [6, 13, 20, 27, 34, 41]
+    // ${gameCount}개의 번호 세트를 여기에 배열 형태로 제공
+    // 예시: [1, 7, 14, 21, 28, 35]
   ],
   "analysis": "종합적인 분석 결과와 추천 근거 (200자 이내)",
   "strategies": [
-    "세트 1 전략 설명",
-    "세트 2 전략 설명", 
-    "세트 3 전략 설명",
-    "세트 4 전략 설명",
-    "세트 5 전략 설명"
+    // ${gameCount}개의 각 세트별 전략 설명
+    // 예시: "세트 1 전략 설명"
   ],
   "confidence": 85
 }`;

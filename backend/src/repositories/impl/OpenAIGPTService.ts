@@ -24,6 +24,7 @@ export class OpenAIGPTService implements IGPTService {
 
   async generateRecommendation(
     model: GPTModel,
+    gameCount: number,
     conditions?: UserConditions,
     round?: number,
     imageData?: ImageExtractResult,
@@ -31,8 +32,8 @@ export class OpenAIGPTService implements IGPTService {
   ): Promise<LotteryNumberSets> {
     try {
       const prompt = model === GPTModel.GPT_4O 
-        ? generatePremiumRecommendationPrompt({ conditions, round, imageData, previousReviews })
-        : generateFreeRecommendationPrompt({ conditions, round, previousReviews });
+        ? generatePremiumRecommendationPrompt({ gameCount, conditions, round, imageData, previousReviews })
+        : generateFreeRecommendationPrompt({ gameCount, conditions, round, previousReviews });
 
       const completion = await this.openai.chat.completions.create({
         model: model,
@@ -55,7 +56,7 @@ export class OpenAIGPTService implements IGPTService {
         throw new Error('GPT 응답을 받지 못했습니다.');
       }
 
-      if (!this.validateResponse(response)) {
+      if (!this.validateResponse(response, gameCount)) {
         throw new Error('GPT 응답 형식이 올바르지 않습니다.');
       }
 
@@ -172,7 +173,7 @@ export class OpenAIGPTService implements IGPTService {
     }
   }
 
-  validateResponse(response: string): boolean {
+  validateResponse(response: string, expectedGameCount?: number): boolean {
     try {
       const parsed = JSON.parse(response);
       
@@ -181,8 +182,8 @@ export class OpenAIGPTService implements IGPTService {
         return false;
       }
 
-      // 5세트 확인
-      if (parsed.recommendations.length !== 5) {
+      // 게임수 확인 (expectedGameCount가 제공된 경우)
+      if (expectedGameCount && parsed.recommendations.length !== expectedGameCount) {
         return false;
       }
 

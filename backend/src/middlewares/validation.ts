@@ -27,6 +27,11 @@ export const handleValidationErrors = (
 
 // 무료 추천 요청 검증
 export const validateFreeRecommendationRequest = [
+  body('gameCount')
+    .optional()
+    .isInt({ min: 1, max: 5 })
+    .withMessage('게임수는 1-5 사이의 숫자여야 합니다.'),
+  
   body('round')
     .optional()
     .isInt({ min: 1, max: 9999 })
@@ -77,6 +82,11 @@ export const validateFreeRecommendationRequest = [
 
 // 프리미엄 추천 요청 검증
 export const validatePremiumRecommendationRequest = [
+  body('gameCount')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('게임수는 1-10 사이의 숫자여야 합니다.'),
+  
   body('round')
     .optional()
     .isInt({ min: 1, max: 9999 })

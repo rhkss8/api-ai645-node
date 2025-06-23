@@ -59,20 +59,16 @@ export interface UploadedFile {
 
 export interface RecommendationRequest {
   type: RecommendationType;
+  gameCount?: number;
   round?: number;
   conditions?: UserConditions;
   image?: UploadedFile;
 }
 
 export interface RecommendationResponse {
-  id: string;
-  type: RecommendationType;
-  round?: number;
+  gameCount: number;
   numbers: LotteryNumberSets;
-  conditions?: UserConditions;
-  imageData?: ImageExtractResult;
-  gptModel: GPTModel;
-  createdAt: string;
+  round?: number;
 }
 
 export interface ReviewRequest {
