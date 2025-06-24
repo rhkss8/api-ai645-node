@@ -45,7 +45,7 @@ export class GenerateRecommendationUseCase {
       gameCount, // 게임수 추가
       request.conditions,
       request.round,
-      imageData,
+      imageData, // 무료/프리미엄 상관없이 이미지 데이터 전달
       previousReviews,
     );
 

@@ -42,7 +42,7 @@ export interface UserConditions {
 }
 
 export interface ImageExtractResult {
-  numbers: LotteryNumbers;
+  numbers: LotteryNumberSets;
   confidence: number;
   extractedText?: string;
   notes?: string;
