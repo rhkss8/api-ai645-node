@@ -39,6 +39,13 @@ export class IdGenerator {
   }
 
   /**
+   * IP 제한 기록 ID 생성
+   */
+  static generateIPLimitId(): string {
+    return `ip_${this.generateShortId()}`;
+  }
+
+  /**
    * 짧은 ID 생성 (8자리)
    */
   private static generateShortId(): string {

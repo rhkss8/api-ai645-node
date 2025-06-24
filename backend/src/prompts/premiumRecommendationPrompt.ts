@@ -39,14 +39,15 @@ export const generatePremiumRecommendationPrompt = (
     prompt += `\n\n## 대상 회차\n${round}회차를 대상으로 고급 분석을 수행하여 추천해주세요.`;
   }
 
-  if (imageData) {
-    prompt += `\n\n## 이미지 분석 데이터\n업로드된 이미지에서 추출된 번호 정보:`;
-    prompt += `\n- 추출된 번호: [${imageData.numbers.join(', ')}]`;
-    prompt += `\n- 신뢰도: ${imageData.confidence}%`;
-    if (imageData.extractedText) {
-      prompt += `\n- 추출된 텍스트: "${imageData.extractedText}"`;
-    }
-    prompt += `\n\n이 이미지 데이터를 참고하여 연관성 있는 번호들을 분석하고 활용해주세요.`;
+  if (imageData && imageData.numbers && imageData.numbers.length > 0) {
+    prompt += `\n\n## 이미지 분석 결과\n이미지에서 추출된 번호 조합들:`;
+    imageData.numbers.forEach((numbers, index) => {
+      prompt += `\n${index + 1}. [${numbers.join(', ')}]`;
+    });
+    prompt += `\n\n**중요**: 위 조합들과 완전히 동일한 번호 조합은 추천하지 마세요. 
+하지만 이 번호들을 다른 조합에서 사용하는 것은 가능합니다.
+예시: 이미지에 [1,2,3,4,5,6]이 있다면, [1,2,3,4,5,6] 조합은 제외하지만 
+[1,7,14,21,28,35] 같이 1이 포함된 다른 조합은 추천 가능합니다.`;
   }
 
   if (conditions) {

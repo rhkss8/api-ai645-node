@@ -11,6 +11,7 @@ import {
   premiumRecommendationLimiter,
   imageExtractionLimiter,
 } from '../middlewares/rateLimiter';
+import { freeRecommendationIPLimit } from '../middleware/ipLimitMiddleware';
 
 // Multer 설정 (메모리 저장)
 const upload = multer({
@@ -145,7 +146,7 @@ export const createRecommendationRoutes = (controller: RecommendationController)
    *                   type: string
    *                   format: date-time
    *       429:
-   *         description: 요청 한도 초과
+   *         description: 일일 요청 한도 초과 (IP별 하루 1회 제한)
    *         content:
    *           application/json:
    *             schema:
@@ -156,20 +157,52 @@ export const createRecommendationRoutes = (controller: RecommendationController)
    *                   example: false
    *                 error:
    *                   type: string
-   *                   example: "무료 추천 요청 한도를 초과했습니다."
+   *                   example: "일일 무료 추천 한도를 초과했습니다."
+   *                 message:
+   *                   type: string
+   *                   example: "무료 추천은 하루에 한 번만 가능합니다. 12시간 후에 다시 시도해주세요."
    *                 data:
    *                   type: object
    *                   properties:
-   *                     retryAfter:
+   *                     nextAllowedTime:
    *                       type: string
-   *                       example: "1분 후에 다시 시도해주세요."
+   *                       format: date-time
+   *                       example: "2025-06-24T00:00:00.000Z"
+   *                     remainingHours:
+   *                       type: integer
+   *                       example: 12
    *                 timestamp:
    *                   type: string
    *                   format: date-time
+   *                   example: "2025-06-23T12:00:00.000Z"
+   *             headers:
+   *               X-RateLimit-Limit:
+   *                 schema:
+   *                   type: string
+   *                   example: "1"
+   *                 description: 일일 최대 요청 횟수
+   *               X-RateLimit-Remaining:
+   *                 schema:
+   *                   type: string
+   *                   example: "0"
+   *                 description: 남은 요청 횟수
+   *               X-RateLimit-Reset:
+   *                 schema:
+   *                   type: string
+   *                   format: date-time
+   *                   example: "2025-06-24T00:00:00.000Z"
+   *                 description: 다음 요청 가능 시간
+   *       500:
+   *         description: 서버 오류
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
    */
   router.post(
     '/free',
     freeRecommendationLimiter,
+    freeRecommendationIPLimit,
     validateFreeRecommendationRequest,
     controller.generateFreeRecommendation,
   );

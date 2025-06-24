@@ -33,7 +33,7 @@ export class OpenAIGPTService implements IGPTService {
     try {
       const prompt = model === GPTModel.GPT_4O 
         ? generatePremiumRecommendationPrompt({ gameCount, conditions, round, imageData, previousReviews })
-        : generateFreeRecommendationPrompt({ gameCount, conditions, round, previousReviews });
+        : generateFreeRecommendationPrompt({ gameCount, conditions, round, imageData, previousReviews });
 
       const completion = await this.openai.chat.completions.create({
         model: model,
@@ -114,16 +114,34 @@ export class OpenAIGPTService implements IGPTService {
         throw new Error('추출된 번호가 올바른 형식이 아닙니다.');
       }
 
-      // 번호 유효성 검증
-      const validNumbers = parsed.numbers.filter((num: number) => 
-        typeof num === 'number' && num >= 1 && num <= 45
-      );
+      // 여러 게임 번호 검증 및 정리
+      const validGameSets: LotteryNumberSets = [];
+      
+      for (const gameNumbers of parsed.numbers) {
+        if (!Array.isArray(gameNumbers)) {
+          continue; // 잘못된 형식 스킵
+        }
+        
+        // 번호 유효성 검증 및 정리
+        const validNumbers = gameNumbers
+          .filter((num: any) => typeof num === 'number' && num >= 1 && num <= 45)
+          .slice(0, 6); // 최대 6개까지만
+        
+        // 중복 제거
+        const uniqueNumbers = [...new Set(validNumbers)];
+        
+        // 6개가 되는 경우만 유효한 게임으로 인정
+        if (uniqueNumbers.length === 6) {
+          // 번호를 오름차순으로 정렬
+          validGameSets.push(uniqueNumbers.sort((a, b) => a - b));
+        }
+      }
 
       return {
-        numbers: validNumbers.slice(0, 6), // 최대 6개까지만
+        numbers: validGameSets,
         confidence: parsed.confidence || 0,
         extractedText: parsed.extractedText || '',
-        notes: parsed.notes || '',
+        notes: parsed.notes || `총 ${validGameSets.length}게임 추출됨`,
       };
     } catch (error) {
       console.error('이미지 번호 추출 중 오류:', error);

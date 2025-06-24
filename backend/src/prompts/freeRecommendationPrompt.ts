@@ -1,16 +1,17 @@
-import { UserConditions } from '../types/common';
+import { UserConditions, ImageExtractResult } from '../types/common';
 
 export interface FreeRecommendationPromptParams {
   gameCount?: number; // 추천할 게임수 (기본값: 5)
   conditions?: UserConditions;
   round?: number;
+  imageData?: ImageExtractResult; // 이미지 데이터 (선택사항)
   previousReviews?: string[];
 }
 
 export const generateFreeRecommendationPrompt = (
   params: FreeRecommendationPromptParams,
 ): string => {
-  const { gameCount = 5, conditions, round, previousReviews } = params;
+  const { gameCount = 5, conditions, round, imageData, previousReviews } = params;
 
   let prompt = `당신은 로또 번호 추천 전문가입니다. 사용자를 위해 로또 번호 ${gameCount}세트를 추천해주세요.
 
@@ -48,6 +49,15 @@ export const generateFreeRecommendationPrompt = (
 
     if (conditions.preferences) {
       prompt += `\n\n## 사용자 선호사항\n${conditions.preferences}`;
+    }
+
+    if (imageData && imageData.numbers && imageData.numbers.length > 0) {
+      prompt += `\n\n## 이미지 분석 결과\n이미지에서 추출된 번호 조합들:`;
+      imageData.numbers.forEach((numbers, index) => {
+        prompt += `\n${index + 1}. [${numbers.join(', ')}]`;
+      });
+      prompt += `\n\n**중요**: 위 조합들과 완전히 동일한 번호 조합은 추천하지 마세요. 
+하지만 이 번호들을 다른 조합에서 사용하는 것은 가능합니다.`;
     }
   }
 
