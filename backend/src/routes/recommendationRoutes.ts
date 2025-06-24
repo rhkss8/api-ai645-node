@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { RecommendationController } from '../controllers/RecommendationController';
+import { IPLimitService } from '../services/IPLimitService';
 import {
   validateFreeRecommendationRequest,
   validatePremiumRecommendationRequest,
@@ -29,7 +30,10 @@ const upload = multer({
   },
 });
 
-export const createRecommendationRoutes = (controller: RecommendationController): Router => {
+export const createRecommendationRoutes = (
+  controller: RecommendationController,
+  ipLimitService: IPLimitService
+): Router => {
   const router = Router();
 
   /**
@@ -202,7 +206,7 @@ export const createRecommendationRoutes = (controller: RecommendationController)
   router.post(
     '/free',
     freeRecommendationLimiter,
-    freeRecommendationIPLimit,
+    freeRecommendationIPLimit(ipLimitService),
     validateFreeRecommendationRequest,
     controller.generateFreeRecommendation,
   );
