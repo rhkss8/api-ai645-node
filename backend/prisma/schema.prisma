@@ -75,6 +75,18 @@ enum RecommendationType {
   PREMIUM
 }
 
+model IPLimitRecord {
+  id                String      @id @default(cuid())
+  ipAddress         String      @unique
+  lastRequestDate   String      // YYYY-MM-DD 형식
+  requestCount      Int         @default(0)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([ipAddress, lastRequestDate])
+  @@map("ip_limit_records")
+}
+
 // 인덱스 최적화
 // @@index([createdAt])
 // @@index([type])
