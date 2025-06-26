@@ -179,23 +179,6 @@ export const createRecommendationRoutes = (
    *                   type: string
    *                   format: date-time
    *                   example: "2025-06-23T12:00:00.000Z"
-   *             headers:
-   *               X-RateLimit-Limit:
-   *                 schema:
-   *                   type: string
-   *                   example: "1"
-   *                 description: 일일 최대 요청 횟수
-   *               X-RateLimit-Remaining:
-   *                 schema:
-   *                   type: string
-   *                   example: "0"
-   *                 description: 남은 요청 횟수
-   *               X-RateLimit-Reset:
-   *                 schema:
-   *                   type: string
-   *                   format: date-time
-   *                   example: "2025-06-24T00:00:00.000Z"
-   *                 description: 다음 요청 가능 시간
    *       500:
    *         description: 서버 오류
    *         content:
