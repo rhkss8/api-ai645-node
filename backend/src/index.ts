@@ -52,8 +52,8 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: `http://localhost:${env.PORT}`,
-        description: 'Development server',
+        url: `http://localhost:3350 (env.PORT=${env.PORT})`,
+        description: 'Docker Local (외부 접근용)',
       },
     ],
     tags: [
@@ -74,6 +74,21 @@ const swaggerOptions = {
         description: '데이터 조회 관련 API',
       },
     ],
+    components: {
+      schemas: {
+        ErrorResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: '에러 메시지' },
+            message: { type: 'string', example: '상세 설명', nullable: true },
+            data: { type: 'object', nullable: true },
+            timestamp: { type: 'string', format: 'date-time', example: '2025-06-23T12:00:00.000Z' }
+          },
+          required: ['success', 'error', 'timestamp']
+        }
+      }
+    }
   },
   apis: env.NODE_ENV === 'production' 
     ? ['./dist/routes/*.js'] 
@@ -82,6 +97,12 @@ const swaggerOptions = {
 
 const specs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+// OpenAPI JSON spec 엔드포인트
+app.get('/openapi.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(specs);
+});
 
 // Health check endpoint
 app.get('/health', async (req, res) => {

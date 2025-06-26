@@ -48,15 +48,46 @@ cp backend/env.example backend/.env
 # backend/.env 파일에서 OPENAI_API_KEY 설정
 ```
 
-### 2. Docker로 실행 (권장)
+### 2. 🐳 Docker로 실행 (권장)
+
+#### 기본 도커 명령어
 ```bash
 # 개발 환경 시작
 docker compose up -d
 
-# 또는 편의 스크립트 사용
+# 백그라운드에서 실행하면서 로그 확인
+docker compose up -d && docker compose logs -f
+
+# 서비스 중지
+docker compose down
+
+# 서비스 중지 및 볼륨 삭제 (데이터 초기화)
+docker compose down -v
+```
+
+#### 편의 스크립트 사용
+```bash
+# 초기 설정 및 시작
 ./scripts/dev.sh setup    # 초기 설정
 ./scripts/dev.sh start    # 서비스 시작
 ./scripts/dev.sh health   # 상태 확인
+./scripts/dev.sh stop     # 서비스 중지
+```
+
+#### 개별 서비스 관리
+```bash
+# 백엔드만 재시작
+docker compose restart backend
+
+# 데이터베이스만 재시작
+docker compose restart db
+
+# 특정 서비스 로그 확인
+docker compose logs -f backend
+docker compose logs -f db
+
+# 컨테이너 상태 확인
+docker compose ps
 ```
 
 ### 3. 로컬 개발
@@ -191,18 +222,69 @@ npm run test:watch
 ```
 
 ### Docker 명령어
+
+#### 🚀 서비스 관리
+```bash
+# 전체 서비스 시작
+docker compose up -d
+
+# 전체 서비스 중지
+docker compose down
+
+# 전체 서비스 중지 및 볼륨 삭제 (데이터 초기화)
+docker compose down -v
+
+# 서비스 재시작
+docker compose restart
+
+# 특정 서비스 재시작
+docker compose restart backend
+docker compose restart db
+
+# 도커 재시작
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
+
+#### 📊 모니터링
 ```bash
 # 전체 로그 확인
 docker compose logs -f
 
 # 특정 서비스 로그
 docker compose logs -f backend
+docker compose logs -f db
 
-# 컨테이너 재시작
-docker compose restart backend
+# 컨테이너 상태 확인
+docker compose ps
 
-# 전체 정리
-docker compose down -v
+# 리소스 사용량 확인
+docker stats
+```
+
+#### 🔧 개발 도구
+```bash
+# 백엔드 컨테이너에 접속
+docker compose exec backend sh
+
+# 데이터베이스에 직접 접속
+docker compose exec db psql -U postgres -d main
+
+# Prisma 마이그레이션 실행
+docker compose exec backend npx prisma migrate dev
+
+# Prisma Studio 실행 (DB 관리 UI)
+docker compose exec backend npx prisma studio
+```
+
+#### 🧹 정리
+```bash
+# 사용하지 않는 컨테이너/이미지 정리
+docker system prune
+
+# 모든 컨테이너, 이미지, 볼륨 삭제 (주의!)
+docker system prune -a --volumes
 ```
 
 ## 🔒 환경변수
@@ -217,7 +299,7 @@ JWT_SECRET=your-jwt-secret-key
 ### 선택 환경변수
 ```bash
 NODE_ENV=development
-PORT=4000
+PORT=3350
 LOG_LEVEL=debug
 CORS_ORIGIN=http://localhost:3000
 API_VERSION=v1
@@ -295,3 +377,74 @@ npm run test:coverage
 ---
 
 🎰 **Happy Lottery Number Recommending!** 🍀
+
+## 🐳 Docker 환경 분리 (개발/배포)
+
+### 개발 환경 (코드 실시간 반영)
+```bash
+docker compose up -d
+```
+- `docker-compose.yml` + `docker-compose.override.yml`가 자동 적용됨
+- 볼륨 마운트로 소스코드 변경이 바로 반영됨
+
+### 배포 환경 (빌드된 코드만 사용)
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+- 볼륨 마운트 없이 빌드된 코드만 사용
+- 배포용 환경변수, 설정 적용
+
+---
+
+## 예시 파일 구조
+
+- `docker-compose.yml`: 공통 설정
+- `docker-compose.override.yml`: 개발용(볼륨 마운트 등)
+- `docker-compose.prod.yml`: 배포용(볼륨 마운트 없음, prod 환경변수)
+
+---
+
+## 예시
+
+### docker-compose.yml (공통)
+```yaml
+version: '3.8'
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: api-backend
+    ports:
+      - "3350:4000"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
+    networks:
+      - app-network
+    command: npm run start
+  db:
+    image: postgres:15
+    # ...
+```
+
+### docker-compose.override.yml (개발)
+```yaml
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+```
+
+### docker-compose.prod.yml (배포)
+```yaml
+services:
+  backend:
+    environment:
+      - NODE_ENV=production
+    # 볼륨 마운트 없음
+```
