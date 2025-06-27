@@ -1,0 +1,136 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# API 디자인 패턴
+
+## 🏛️ Clean Architecture 구현
+
+### 디렉토리 구조
+```
+backend/src/
+├── entities/          # 도메인 엔티티 (비즈니스 로직 핵심)
+├── repositories/      # 데이터 액세스 인터페이스
+├── usecases/         # 애플리케이션 비즈니스 규칙
+├── controllers/      # API 요청/응답 처리
+├── routes/          # API 라우트 정의
+├── prompts/         # GPT 프롬프트 템플릿
+├── config/          # 설정 파일
+└── types/           # TypeScript 타입 정의
+```
+
+### 주요 파일들
+- **라우트 정의**: [backend/src/routes/index.ts](mdc:backend/src/routes/index.ts)
+- **타입 정의**: [backend/src/types/common.ts](mdc:backend/src/types/common.ts)
+- **환경 설정**: [backend/src/config/env.ts](mdc:backend/src/config/env.ts)
+
+## 🎯 API 엔드포인트 패턴
+
+### 추천 API 패턴
+```typescript
+// 무료 추천: GPT-3.5-turbo 사용
+POST /api/recommend/free
+{
+  "gameCount": 5,
+  "round": 1105,
+  "conditions": {
+    "excludeNumbers": [1, 2, 3],
+    "includeNumbers": [7, 14],
+    "preferences": "홀수 번호를 선호합니다"
+  }
+}
+
+// 프리미엄 추천: GPT-4o 사용 (이미지 지원)
+POST /api/recommend/premium
+Content-Type: multipart/form-data
+{
+  "image": File,
+  "data": JSON.stringify({
+    "gameCount": 10,
+    "round": 1105
+  })
+}
+```
+
+### 이미지 처리 API 패턴
+```typescript
+// 이미지 번호 추출: GPT-4o Vision 사용
+POST /api/image/extract
+Content-Type: multipart/form-data
+{
+  "image": File
+}
+```
+
+### 회고 분석 API 패턴
+```typescript
+// 추천 결과 회고 생성
+POST /api/review/generate
+{
+  "recommendationId": "uuid",
+  "winningNumbers": [1, 7, 14, 21, 28, 35],
+  "round": 1105
+}
+```
+
+## 🔒 보안 및 제한
+
+### Rate Limiting
+- **무료 추천**: IP별 하루 1회
+- **프리미엄 추천**: 시간당 10회
+- **이미지 분석**: 시간당 5회
+- **회고 생성**: 시간당 3회
+
+### 미들웨어 체인
+```typescript
+router.post('/free',
+  freeRecommendationLimiter,        // Rate limiting
+  freeRecommendationIPLimit,        // IP 제한
+  validateFreeRecommendationRequest, // 요청 검증
+  controller.generateFreeRecommendation // 비즈니스 로직
+);
+```
+
+## 📊 응답 데이터 구조
+
+### 성공 응답
+```typescript
+{
+  "success": true,
+  "data": {
+    "gameCount": 5,
+    "numbers": [[1,7,14,21,28,35], [2,8,15,22,29,36]],
+    "round": 1105,
+    "analysis": "추천 분석 내용"
+  },
+  "message": "추천이 완료되었습니다.",
+  "timestamp": "2025-06-23T12:00:00.000Z"
+}
+```
+
+### 에러 응답
+```typescript
+{
+  "success": false,
+  "error": "에러 메시지",
+  "message": "상세 설명",
+  "data": {
+    "code": "ERROR_CODE",
+    "details": {}
+  },
+  "timestamp": "2025-06-23T12:00:00.000Z"
+}
+```
+
+## 🤖 AI 통합 패턴
+
+### GPT 프롬프트 관리
+- **프롬프트 템플릿**: [backend/src/prompts/](mdc:backend/src/prompts/) 디렉토리
+- **동적 프롬프트**: 사용자 조건에 따른 프롬프트 생성
+- **응답 파싱**: 구조화된 JSON 응답 파싱
+
+### 모델별 사용
+- **GPT-3.5-turbo**: 무료 추천 (빠른 응답, 비용 효율)
+- **GPT-4o**: 프리미엄 추천 (고품질 분석)
+- **GPT-4o Vision**: 이미지 번호 추출 (OCR 기능)

@@ -22,9 +22,9 @@ services:
       - ./backend/.env
     depends_on:
       - db
-    # volumes:
-    #   - ./backend:/app
-    #   - /app/node_modules  # node_modules는 컨테이너 내부 것을 사용
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
     restart: unless-stopped
     networks:
       - app-network

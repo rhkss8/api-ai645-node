@@ -1,0 +1,79 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# OpenAPI 스펙 작성 표준
+
+## 📋 OpenAPI 3.0 스펙 준수 규칙
+
+### 응답 헤더 정의 위치
+**❌ 잘못된 방식** (content 안에 headers 정의):
+```yaml
+429:
+  description: Rate limit exceeded
+  content:
+    application/json:
+      schema: ...
+      headers:  # ❌ 잘못된 위치
+        X-RateLimit-Limit: ...
+```
+
+**✅ 올바른 방식** (responses 레벨에 headers 정의):
+```yaml
+429:
+  description: Rate limit exceeded
+  headers:  # ✅ 올바른 위치
+    X-RateLimit-Limit:
+      schema:
+        type: string
+        example: "100"
+      description: Rate limit per hour
+  content:
+    application/json:
+      schema: ...
+```
+
+### 주요 라우트 파일
+- [recommendationRoutes.ts](mdc:backend/src/routes/recommendationRoutes.ts) - 추천 API 스펙
+- [reviewRoutes.ts](mdc:backend/src/routes/reviewRoutes.ts) - 회고 API 스펙  
+- [dataRoutes.ts](mdc:backend/src/routes/dataRoutes.ts) - 데이터 API 스펙
+
+### JSDoc 주석 작성 규칙
+1. **@swagger** 태그로 시작
+2. **응답 헤더**는 `responses.[status].headers`에 직접 정의
+3. **스키마 참조**는 `$ref: '#/components/schemas/...'` 사용
+4. **예시 값**은 실제 사용 가능한 데이터로 작성
+
+### 공통 응답 패턴
+```yaml
+200:
+  description: 성공
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          success: { type: boolean, example: true }
+          data: { type: object }
+          message: { type: string }
+          timestamp: { type: string, format: date-time }
+
+400:
+  description: 잘못된 요청
+  content:
+    application/json:
+      schema:
+        $ref: '#/components/schemas/ErrorResponse'
+
+429:
+  description: 요청 한도 초과
+  headers:
+    X-RateLimit-Limit: { schema: { type: string } }
+    X-RateLimit-Remaining: { schema: { type: string } }
+    X-RateLimit-Reset: { schema: { type: string, format: date-time } }
+  content:
+    application/json:
+      schema:
+        $ref: '#/components/schemas/ErrorResponse'
+```

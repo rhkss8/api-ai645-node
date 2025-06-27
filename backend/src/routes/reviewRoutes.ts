@@ -147,6 +147,23 @@ export const createReviewRoutes = (controller: ReviewController): Router => {
    *                   format: date-time
    *       429:
    *         description: 요청 한도 초과
+   *         headers:
+   *           X-RateLimit-Limit:
+   *             schema:
+   *               type: string
+   *               example: "60"
+   *             description: 최대 허용 요청 수
+   *           X-RateLimit-Remaining:
+   *             schema:
+   *               type: string
+   *               example: "0"
+   *             description: 남은 요청 수
+   *           X-RateLimit-Reset:
+   *             schema:
+   *               type: string
+   *               format: date-time
+   *               example: "2025-06-24T00:00:00.000Z"
+   *             description: 다음 요청 가능 시간
    *         content:
    *           application/json:
    *             schema:
@@ -244,6 +261,23 @@ export const createReviewRoutes = (controller: ReviewController): Router => {
    *                   format: date-time
    *       429:
    *         description: 요청 한도 초과
+   *         headers:
+   *           X-RateLimit-Limit:
+   *             schema:
+   *               type: string
+   *               example: "60"
+   *             description: 최대 허용 요청 수
+   *           X-RateLimit-Remaining:
+   *             schema:
+   *               type: string
+   *               example: "0"
+   *             description: 남은 요청 수
+   *           X-RateLimit-Reset:
+   *             schema:
+   *               type: string
+   *               format: date-time
+   *               example: "2025-06-24T00:00:00.000Z"
+   *             description: 다음 요청 가능 시간
    *         content:
    *           application/json:
    *             schema:
@@ -330,6 +364,23 @@ export const createReviewRoutes = (controller: ReviewController): Router => {
    *                   format: date-time
    *       429:
    *         description: 요청 한도 초과
+   *         headers:
+   *           X-RateLimit-Limit:
+   *             schema:
+   *               type: string
+   *               example: "60"
+   *             description: 최대 허용 요청 수
+   *           X-RateLimit-Remaining:
+   *             schema:
+   *               type: string
+   *               example: "0"
+   *             description: 남은 요청 수
+   *           X-RateLimit-Reset:
+   *             schema:
+   *               type: string
+   *               format: date-time
+   *               example: "2025-06-24T00:00:00.000Z"
+   *             description: 다음 요청 가능 시간
    *         content:
    *           application/json:
    *             schema:
@@ -437,6 +488,23 @@ export const createReviewRoutes = (controller: ReviewController): Router => {
    *                   format: date-time
    *       429:
    *         description: 요청 한도 초과
+   *         headers:
+   *           X-RateLimit-Limit:
+   *             schema:
+   *               type: string
+   *               example: "60"
+   *             description: 최대 허용 요청 수
+   *           X-RateLimit-Remaining:
+   *             schema:
+   *               type: string
+   *               example: "0"
+   *             description: 남은 요청 수
+   *           X-RateLimit-Reset:
+   *             schema:
+   *               type: string
+   *               format: date-time
+   *               example: "2025-06-24T00:00:00.000Z"
+   *             description: 다음 요청 가능 시간
    *         content:
    *           application/json:
    *             schema:
@@ -525,6 +593,23 @@ export const createReviewRoutes = (controller: ReviewController): Router => {
    *                   format: date-time
    *       429:
    *         description: 요청 한도 초과
+   *         headers:
+   *           X-RateLimit-Limit:
+   *             schema:
+   *               type: string
+   *               example: "60"
+   *             description: 최대 허용 요청 수
+   *           X-RateLimit-Remaining:
+   *             schema:
+   *               type: string
+   *               example: "0"
+   *             description: 남은 요청 수
+   *           X-RateLimit-Reset:
+   *             schema:
+   *               type: string
+   *               format: date-time
+   *               example: "2025-06-24T00:00:00.000Z"
+   *             description: 다음 요청 가능 시간
    *         content:
    *           application/json:
    *             schema:

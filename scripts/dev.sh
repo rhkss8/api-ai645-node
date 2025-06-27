@@ -47,6 +47,16 @@ show_help() {
     echo "  help        이 도움말 표시"
 }
 
+# backend 빌드 함수
+build_backend() {
+    log_info "backend 의존성 설치 및 빌드 시작..."
+    cd backend
+    npm install
+    npm run build
+    cd ..
+    log_success "backend 빌드 완료!"
+}
+
 # 초기 설정
 setup() {
     log_info "초기 설정을 시작합니다..."
@@ -65,11 +75,14 @@ setup() {
     log_info "Docker 이미지를 빌드합니다..."
     docker compose build
     
+    build_backend
+    
     log_success "초기 설정이 완료되었습니다!"
 }
 
 # 개발 환경 시작
 start() {
+    build_backend
     log_info "개발 환경을 시작합니다..."
     docker compose up -d
     
@@ -90,8 +103,8 @@ stop() {
 
 # 개발 환경 재시작
 restart() {
-    log_info "개발 환경을 재시작합니다..."
     stop
+    build_backend
     start
 }
 

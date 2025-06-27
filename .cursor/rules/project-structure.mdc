@@ -1,0 +1,33 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# 프로젝트 구조 가이드
+
+## 🏗️ Clean Architecture 구조
+
+이 프로젝트는 TypeScript + Clean Architecture 패턴을 사용하는 로또 번호 추천 API입니다.
+
+### 주요 디렉토리 구조
+- **백엔드 진입점**: [backend/src/index.ts](mdc:backend/src/index.ts)
+- **API 라우트**: [backend/src/routes/](mdc:backend/src/routes/) 디렉토리
+- **데이터베이스 스키마**: [backend/prisma/schema.prisma](mdc:backend/prisma/schema.prisma)
+- **Docker 설정**: [docker-compose.yml](mdc:docker-compose.yml)
+- **개발 스크립트**: [scripts/dev.sh](mdc:scripts/dev.sh)
+
+### 핵심 API 엔드포인트
+- **무료 추천**: `POST /api/recommend/free` - GPT-3.5-turbo 사용
+- **프리미엄 추천**: `POST /api/recommend/premium` - GPT-4o 사용  
+- **이미지 추출**: `POST /api/image/extract` - GPT-4o Vision 사용
+- **회고 생성**: `POST /api/review/generate` - 추천 결과 분석
+
+### 개발 환경
+- **포트**: Backend API (3350), Database (3236)
+- **API 문서**: http://localhost:3350/api-docs
+- **Health Check**: http://localhost:3350/health
+
+### 주요 라우트 파일
+- [recommendationRoutes.ts](mdc:backend/src/routes/recommendationRoutes.ts) - 추천 관련 API
+- [reviewRoutes.ts](mdc:backend/src/routes/reviewRoutes.ts) - 회고 분석 API
+- [dataRoutes.ts](mdc:backend/src/routes/dataRoutes.ts) - 데이터 조회 API
