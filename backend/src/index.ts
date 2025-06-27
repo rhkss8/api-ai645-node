@@ -52,8 +52,8 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: `http://localhost:3350 (env.PORT=${env.PORT})`,
-        description: 'Docker Local (외부 접근용)',
+        url: `http://localhost:3350`,
+        description: 'Development server',
       },
     ],
     tags: [

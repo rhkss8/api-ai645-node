@@ -1,0 +1,89 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# 개발 워크플로우 가이드
+
+## 🐳 Docker 개발 환경
+
+### 편의 스크립트 사용
+주요 개발 명령어는 [scripts/dev.sh](mdc:scripts/dev.sh)를 통해 실행합니다:
+
+```bash
+# 초기 설정 및 시작
+./scripts/dev.sh setup    # 환경변수 설정 및 Docker 빌드
+./scripts/dev.sh start    # 서비스 시작
+./scripts/dev.sh health   # 상태 확인
+./scripts/dev.sh stop     # 서비스 중지
+./scripts/dev.sh restart  # 서비스 재시작
+./scripts/dev.sh logs     # 로그 확인
+```
+
+### Docker Compose 설정
+- **메인 설정**: [docker-compose.yml](mdc:docker-compose.yml)
+- **프로덕션 설정**: [docker-compose.prod.yml](mdc:docker-compose.prod.yml)
+- **백엔드 Dockerfile**: [backend/Dockerfile](mdc:backend/Dockerfile)
+
+### 서비스 포트
+- **Backend API**: 3350 → 4000 (외부:내부)
+- **PostgreSQL**: 3236 → 5432 (외부:내부)
+
+## 🔧 개발 환경 설정
+
+### 환경변수 설정
+1. [backend/env.example](mdc:backend/env.example)을 [backend/.env](mdc:backend/.env)로 복사
+2. OpenAI API 키 설정: `OPENAI_API_KEY=your-api-key`
+
+### 데이터베이스 관리
+```bash
+# Prisma 마이그레이션
+docker compose exec backend npx prisma migrate dev
+
+# Prisma Studio (DB 관리 UI)
+docker compose exec backend npx prisma studio
+
+# 데이터베이스 백업
+./scripts/dev.sh db-backup
+```
+
+## 📝 코드 작성 규칙
+
+### TypeScript 설정
+- **설정 파일**: [backend/tsconfig.json](mdc:backend/tsconfig.json)
+- **ESLint 설정**: [backend/.eslintrc.js](mdc:backend/.eslintrc.js)
+- **Prettier 설정**: [backend/.prettierrc](mdc:backend/.prettierrc)
+
+### API 응답 형식
+모든 API 응답은 다음 형식을 따릅니다:
+```typescript
+interface ApiResponse {
+  success: boolean;
+  message?: string;
+  data?: any;
+  error?: string;
+  timestamp: string;
+}
+```
+
+### 에러 처리
+- **글로벌 에러 핸들러**: [backend/src/index.ts](mdc:backend/src/index.ts)에서 정의
+- **비즈니스 로직 에러**: 400 상태 코드 사용
+- **서버 에러**: 500 상태 코드 사용
+- **Rate Limit**: 429 상태 코드 사용
+
+## 🚀 배포 및 운영
+
+### 프로덕션 빌드
+```bash
+# 프로덕션용 Docker Compose
+docker compose -f docker-compose.prod.yml up -d
+
+# 프로덕션용 Dockerfile 사용
+docker build -f backend/Dockerfile.prod -t api-backend-prod ./backend
+```
+
+### 모니터링
+- **Health Check**: `GET /health`
+- **API 문서**: `GET /api-docs`
+- **OpenAPI 스펙**: `GET /openapi.json`
