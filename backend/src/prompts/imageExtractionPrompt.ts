@@ -16,7 +16,7 @@ export const generateImageExtractionPrompt = (): string => {
 - 명확하지 않은 숫자는 제외
 
 ## 응답 형식
-정확히 아래 JSON 형식으로만 응답해주세요:
+정확히 아래 JSON 형식으로만 응답해주세요 (마크다운 코드블록 없이):
 
 {
   "numbers": [

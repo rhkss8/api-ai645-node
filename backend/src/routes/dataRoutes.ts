@@ -533,10 +533,18 @@ export const createDataRoutes = (controller: DataController): Router => {
    *                         type: integer
    *                         minimum: 1
    *                         maximum: 45
-   *                       minItems: 7
-   *                       maxItems: 7
-   *                       example: [1, 7, 14, 21, 28, 35, 42]
-   *                       description: 당첨번호 (보너스번호 포함)
+   *                       minItems: 6
+   *                       maxItems: 6
+   *                       example: [1, 7, 14, 21, 28, 35]
+   *                       description: 당첨번호 (보너스번호 제외)
+   *                     bonusNumber:
+   *                       type: integer
+   *                       example: 21
+   *                       description: 보너스 추첨번호
+   *                     firstWinningAmount:
+   *                       type: integer
+   *                       example: 4576672000
+   *                       description: 1등 당첨금(원)
    *                     drawDate:
    *                       type: string
    *                       format: date-time
@@ -651,10 +659,18 @@ export const createDataRoutes = (controller: DataController): Router => {
    *                         type: integer
    *                         minimum: 1
    *                         maximum: 45
-   *                       minItems: 7
-   *                       maxItems: 7
-   *                       example: [1, 7, 14, 21, 28, 35, 42]
-   *                       description: 당첨번호 (보너스번호 포함)
+   *                       minItems: 6
+   *                       maxItems: 6
+   *                       example: [1, 7, 14, 21, 28, 35]
+   *                       description: 당첨번호 (보너스번호 제외)
+   *                     bonusNumber:
+   *                       type: integer
+   *                       example: 21
+   *                       description: 보너스 추첨번호
+   *                     firstWinningAmount:
+   *                       type: integer
+   *                       example: 4576672000
+   *                       description: 1등 당첨금(원)
    *                     drawDate:
    *                       type: string
    *                       format: date-time
@@ -730,10 +746,17 @@ export const createDataRoutes = (controller: DataController): Router => {
    * @swagger
    * /api/data/winning-numbers/recent:
    *   get:
-   *     summary: 최근 당첨번호 목록 조회
-   *     description: 최근 당첨번호들을 조회 (기본 10개)
+   *     summary: 최근 당첨번호 목록 조회 (페이징)
+   *     description: 최근 당첨번호들을 페이징으로 조회
    *     tags: [Data]
    *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           default: 1
+   *         description: 페이지 번호
    *       - in: query
    *         name: limit
    *         schema:
@@ -741,7 +764,7 @@ export const createDataRoutes = (controller: DataController): Router => {
    *           minimum: 1
    *           maximum: 50
    *           default: 10
-   *         description: 조회할 개수
+   *         description: 페이지 크기
    *     responses:
    *       200:
    *         description: 조회 성공
@@ -768,7 +791,16 @@ export const createDataRoutes = (controller: DataController): Router => {
    *                         type: array
    *                         items:
    *                           type: integer
-   *                         example: [1, 7, 14, 21, 28, 35, 42]
+   *                         example: [1, 7, 14, 21, 28, 35]
+   *                         description: 당첨번호 (보너스번호 제외)
+   *                       bonusNumber:
+   *                         type: integer
+   *                         example: 21
+   *                         description: 보너스 추첨번호
+   *                       firstWinningAmount:
+   *                         type: integer
+   *                         example: 4576672000
+   *                         description: 1등 당첨금(원)
    *                       drawDate:
    *                         type: string
    *                         format: date-time
@@ -777,6 +809,25 @@ export const createDataRoutes = (controller: DataController): Router => {
    *                         type: string
    *                         format: date-time
    *                         example: "2025-06-21T20:30:00.000Z"
+   *                 pagination:
+   *                   type: object
+   *                   properties:
+   *                     page:
+   *                       type: integer
+   *                       example: 1
+   *                       description: 현재 페이지
+   *                     limit:
+   *                       type: integer
+   *                       example: 10
+   *                       description: 페이지 크기
+   *                     total:
+   *                       type: integer
+   *                       example: 1177
+   *                       description: 전체 데이터 수
+   *                     totalPages:
+   *                       type: integer
+   *                       example: 118
+   *                       description: 전체 페이지 수
    *                 message:
    *                   type: string
    *                   example: "최근 10개의 당첨번호입니다."

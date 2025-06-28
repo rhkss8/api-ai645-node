@@ -46,8 +46,10 @@ model RecommendationReview {
 
 model WinningNumbers {
   id        String   @id @default(cuid())
-  round     Int      @unique // 회차번호
+  round     Int      @unique // 당첨회차
   numbers   Json     // 당첨번호 [1,2,3,4,5,6,7] (보너스번호 포함)
+  bonusNumber Int    // 보너스추첨번호
+  firstWinningAmount BigInt  // 1등 당첨금
   drawDate  DateTime // 추첨일
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -85,6 +87,24 @@ model IPLimitRecord {
 
   @@index([ipAddress, lastRequestDate])
   @@map("ip_limit_records")
+}
+
+enum AuthProvider {
+  EMAIL
+  KAKAO
+  GOOGLE
+  NAVER
+}
+
+model User {
+  id          String      @id @default(cuid())
+  email       String?     @unique
+  nickname    String?
+  password    String?     // 이메일 가입 시만 사용
+  provider    AuthProvider
+  providerId  String?     // 소셜 가입 시 소셜 고유 ID
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 // 인덱스 최적화

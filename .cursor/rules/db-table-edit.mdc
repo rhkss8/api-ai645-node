@@ -1,0 +1,13 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# DB 테이블 필드 수정 규칙
+
+- DB 테이블(예: WinningNumbers) 필드에 변경이 있을 경우, 반드시 아래 3군데 파일을 모두 동기화/수정해야 한다.
+  1. [backend/prisma/schema.prisma](mdc:backend/prisma/schema.prisma) (Prisma 모델 정의)
+  2. [README.md](mdc:README.md) (주요 테이블 구조 요약)
+  3. [Readme.database.md](mdc:Readme.database.md) (전체 테이블/필드 상세)
+- 예시: 필드 추가/삭제/타입변경/설명 변경 등
+- 소스코드, 문서, 실제 DB 구조가 항상 일치하도록 관리할 것

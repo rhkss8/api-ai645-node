@@ -13,7 +13,6 @@ services:
       - NODE_ENV=development
       - PORT=4000
       - DATABASE_URL=postgres://postgres:postgres@db:5432/main
-      - OPENAI_API_KEY=test-key-for-development
       - JWT_SECRET=development-jwt-secret-key
       - API_VERSION=v1
       - LOG_LEVEL=debug
@@ -28,7 +27,7 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    command: npm run start
+    command: npm run dev
 
   # Database service (PostgreSQL)
   db:

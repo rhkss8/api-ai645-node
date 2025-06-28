@@ -5,6 +5,8 @@ export class WinningNumbers {
     public readonly id: string,
     public readonly round: number,
     public readonly numbers: WinningNumbersType,
+    public readonly bonusNumber: number,
+    public readonly firstWinningAmount: bigint,
     public readonly drawDate: Date,
     public readonly createdAt: Date,
     public readonly updatedAt: Date,
@@ -14,10 +16,12 @@ export class WinningNumbers {
     id: string,
     round: number,
     numbers: WinningNumbersType,
+    bonusNumber: number,
+    firstWinningAmount: bigint,
     drawDate: Date,
   ): WinningNumbers {
     const now = new Date();
-    return new WinningNumbers(id, round, numbers, drawDate, now, now);
+    return new WinningNumbers(id, round, numbers, bonusNumber, firstWinningAmount, drawDate, now, now);
   }
 
   public validate(): void {
@@ -29,8 +33,8 @@ export class WinningNumbers {
       throw new Error('회차는 1-9999 사이여야 합니다.');
     }
 
-    if (!this.numbers || this.numbers.length !== 7) {
-      throw new Error('당첨번호는 7개(보너스번호 포함)여야 합니다.');
+    if (!this.numbers || this.numbers.length !== 6) {
+      throw new Error('당첨번호는 6개여야 합니다.');
     }
 
     this.numbers.forEach((num, index) => {
@@ -43,8 +47,20 @@ export class WinningNumbers {
 
     // 중복 번호 확인
     const uniqueNumbers = new Set(this.numbers);
-    if (uniqueNumbers.size !== 7) {
+    if (uniqueNumbers.size !== 6) {
       throw new Error('당첨번호에 중복된 번호가 있습니다.');
+    }
+
+    if (this.bonusNumber < 1 || this.bonusNumber > 45) {
+      throw new Error('보너스 번호는 1-45 사이여야 합니다.');
+    }
+
+    if (this.numbers.includes(this.bonusNumber)) {
+      throw new Error('보너스 번호는 당첨번호와 중복될 수 없습니다.');
+    }
+
+    if (this.firstWinningAmount < 0n) {
+      throw new Error('1등 당첨금은 0 이상이어야 합니다.');
     }
 
     if (!this.drawDate) {
@@ -57,36 +73,31 @@ export class WinningNumbers {
   }
 
   public getMainNumbers(): number[] {
-    return this.numbers.slice(0, 6).sort((a, b) => a - b);
-  }
-
-  public getBonusNumber(): number {
-    const bonusNumber = this.numbers[6];
-    if (bonusNumber === undefined) {
-      throw new Error('보너스 번호가 없습니다.');
-    }
-    return bonusNumber;
-  }
-
-  public getAllNumbersSorted(): number[] {
     return [...this.numbers].sort((a, b) => a - b);
   }
 
+  public getBonusNumber(): number {
+    return this.bonusNumber;
+  }
+
+  public getAllNumbersSorted(): number[] {
+    return [...this.numbers, this.bonusNumber].sort((a, b) => a - b);
+  }
+
   public hasNumber(number: number): boolean {
-    return this.numbers.includes(number);
+    return this.numbers.includes(number) || this.bonusNumber === number;
   }
 
   public countMatches(userNumbers: number[]): number {
-    return userNumbers.filter(num => this.getMainNumbers().includes(num)).length;
+    return userNumbers.filter(num => this.numbers.includes(num)).length;
   }
 
   public countMatchesWithBonus(userNumbers: number[]): {
     mainMatches: number;
     bonusMatch: boolean;
   } {
-    const mainNumbers = this.getMainNumbers();
-    const mainMatches = userNumbers.filter(num => mainNumbers.includes(num)).length;
-    const bonusMatch = userNumbers.includes(this.getBonusNumber());
+    const mainMatches = userNumbers.filter(num => this.numbers.includes(num)).length;
+    const bonusMatch = userNumbers.includes(this.bonusNumber);
 
     return { mainMatches, bonusMatch };
   }
@@ -111,7 +122,6 @@ export class WinningNumbers {
 
   public getFormattedNumbers(): string {
     const mainNumbers = this.getMainNumbers();
-    const bonusNumber = this.getBonusNumber();
-    return `${mainNumbers.join(', ')} + ${bonusNumber}`;
+    return `${mainNumbers.join(', ')} + ${this.bonusNumber}`;
   }
 } 

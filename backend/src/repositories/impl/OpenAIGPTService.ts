@@ -12,6 +12,7 @@ import { generateFreeRecommendationPrompt } from '../../prompts/freeRecommendati
 import { generatePremiumRecommendationPrompt } from '../../prompts/premiumRecommendationPrompt';
 import { generateImageExtractionPrompt } from '../../prompts/imageExtractionPrompt';
 import { generateReviewPrompt } from '../../prompts/reviewPrompt';
+import { GPTResponseParser } from '../../utils/gptResponseParser';
 
 export class OpenAIGPTService implements IGPTService {
   private openai: OpenAI;
@@ -56,6 +57,9 @@ export class OpenAIGPTService implements IGPTService {
         throw new Error('GPT 응답을 받지 못했습니다.');
       }
 
+      console.log(`🤖 추천 GPT 응답 받음: ${response.substring(0, 100)}...`);
+      console.log(`🔍 추천 GPT 전체 응답:`, response);
+
       if (!this.validateResponse(response, gameCount)) {
         throw new Error('GPT 응답 형식이 올바르지 않습니다.');
       }
@@ -74,6 +78,8 @@ export class OpenAIGPTService implements IGPTService {
       // 이미지를 base64로 인코딩
       const base64Image = image.buffer.toString('base64');
       const mimeType = image.mimetype;
+
+      console.log(`🖼️ 이미지 분석 시작: ${image.originalname} (${image.size} bytes, ${mimeType})`);
 
       const completion = await this.openai.chat.completions.create({
         model: GPTModel.GPT_4O,
@@ -104,47 +110,38 @@ export class OpenAIGPTService implements IGPTService {
 
       const response = completion.choices[0]?.message.content;
       if (!response) {
-        throw new Error('이미지 분석 응답을 받지 못했습니다.');
+        throw new Error('GPT API에서 응답을 받지 못했습니다. (응답이 비어있음)');
       }
 
-      const parsed = JSON.parse(response);
+      console.log(`📝 GPT 응답 받음: ${response.substring(0, 100)}...`);
+      console.log(`🔍 GPT 전체 응답:`, response);
+      console.log(`🔍 GPT 응답 타입:`, typeof response);
+      console.log(`🔍 GPT 응답 길이:`, response.length);
+
+      // 새로운 파서를 사용하여 응답 파싱
+      const parsed = GPTResponseParser.parseImageExtractionResponse(response);
       
-      // 결과 검증
-      if (!parsed.numbers || !Array.isArray(parsed.numbers)) {
-        throw new Error('추출된 번호가 올바른 형식이 아닙니다.');
-      }
+      console.log(`✅ 이미지 분석 완료: ${parsed.numbers.length}개 유효한 게임 추출`);
 
-      // 여러 게임 번호 검증 및 정리
-      const validGameSets: LotteryNumberSets = [];
-      
-      for (const gameNumbers of parsed.numbers) {
-        if (!Array.isArray(gameNumbers)) {
-          continue; // 잘못된 형식 스킵
-        }
-        
-        // 번호 유효성 검증 및 정리
-        const validNumbers = gameNumbers
-          .filter((num: any) => typeof num === 'number' && num >= 1 && num <= 45)
-          .slice(0, 6); // 최대 6개까지만
-        
-        // 중복 제거
-        const uniqueNumbers = [...new Set(validNumbers)];
-        
-        // 6개가 되는 경우만 유효한 게임으로 인정
-        if (uniqueNumbers.length === 6) {
-          // 번호를 오름차순으로 정렬
-          validGameSets.push(uniqueNumbers.sort((a, b) => a - b));
-        }
-      }
-
+      // 유효한 번호가 없는 경우에도 정상 응답 반환
       return {
-        numbers: validGameSets,
+        numbers: parsed.numbers,
         confidence: parsed.confidence || 0,
         extractedText: parsed.extractedText || '',
-        notes: parsed.notes || `총 ${validGameSets.length}게임 추출됨`,
+        notes: parsed.notes || (parsed.numbers.length > 0 ? `총 ${parsed.numbers.length}게임 추출됨` : '유효한 로또 번호를 찾을 수 없습니다.'),
       };
     } catch (error) {
-      console.error('이미지 번호 추출 중 오류:', error);
+      console.error('이미지 번호 추출 중 상세 오류:', {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+        imageName: image.originalname,
+        imageSize: image.size,
+        imageType: image.mimetype,
+      });
+      
+      if (error instanceof Error) {
+        throw new Error(`이미지에서 번호 추출에 실패했습니다: ${error.message}`);
+      }
       throw new Error('이미지에서 번호 추출에 실패했습니다.');
     }
   }
@@ -184,6 +181,9 @@ export class OpenAIGPTService implements IGPTService {
         throw new Error('회고 분석 응답을 받지 못했습니다.');
       }
 
+      console.log(`📊 회고 GPT 응답 받음: ${response.substring(0, 100)}...`);
+      console.log(`🔍 회고 GPT 전체 응답:`, response);
+
       return response.trim();
     } catch (error) {
       console.error('회고 분석 생성 중 오류:', error);
@@ -193,38 +193,7 @@ export class OpenAIGPTService implements IGPTService {
 
   validateResponse(response: string, expectedGameCount?: number): boolean {
     try {
-      const parsed = JSON.parse(response);
-      
-      // 기본 구조 확인
-      if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
-        return false;
-      }
-
-      // 게임수 확인 (expectedGameCount가 제공된 경우)
-      if (expectedGameCount && parsed.recommendations.length !== expectedGameCount) {
-        return false;
-      }
-
-      // 각 세트가 6개 번호를 가지는지 확인
-      for (const set of parsed.recommendations) {
-        if (!Array.isArray(set) || set.length !== 6) {
-          return false;
-        }
-        
-        // 각 번호가 1-45 범위인지 확인
-        for (const num of set) {
-          if (typeof num !== 'number' || num < 1 || num > 45) {
-            return false;
-          }
-        }
-        
-        // 중복 번호 확인
-        const uniqueNumbers = new Set(set);
-        if (uniqueNumbers.size !== 6) {
-          return false;
-        }
-      }
-
+      const parsed = GPTResponseParser.parseRecommendationResponse(response, expectedGameCount);
       return true;
     } catch {
       return false;
@@ -233,8 +202,8 @@ export class OpenAIGPTService implements IGPTService {
 
   parseNumbersFromResponse(response: string): LotteryNumberSets {
     try {
-      const parsed = JSON.parse(response);
-      return parsed.recommendations;
+      const parsed = GPTResponseParser.parseRecommendationResponse(response);
+      return parsed.numbers;
     } catch (error) {
       console.error('응답 파싱 중 오류:', error);
       throw new Error('GPT 응답을 파싱할 수 없습니다.');
@@ -243,9 +212,9 @@ export class OpenAIGPTService implements IGPTService {
 
   parseRecommendationFromResponse(response: string): GPTRecommendationResult {
     try {
-      const parsed = JSON.parse(response);
+      const parsed = GPTResponseParser.parseRecommendationResponse(response);
       return {
-        numbers: parsed.recommendations,
+        numbers: parsed.numbers,
         analysis: parsed.analysis,
         strategies: parsed.strategies,
         confidence: parsed.confidence,

@@ -22,7 +22,7 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 
 export type LotteryNumbers = number[]; // [1, 2, 3, 4, 5, 6]
 export type LotteryNumberSets = LotteryNumbers[]; // [[1,2,3,4,5,6], [7,8,9,10,11,12], ...]
-export type WinningNumbers = number[]; // [1, 2, 3, 4, 5, 6, 7] (보너스번호 포함)
+export type WinningNumbers = number[]; // [1, 2, 3, 4, 5, 6] (보너스번호 제외)
 
 export enum RecommendationType {
   FREE = 'FREE',
