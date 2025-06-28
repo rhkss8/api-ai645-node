@@ -130,6 +130,15 @@ export const globalErrorHandler = (
     message = '데이터베이스 오류가 발생했습니다.';
     code = 'DATABASE_ERROR';
     details = process.env.NODE_ENV === 'development' ? error.details : undefined;
+  } else if (error.name === 'ImageProcessingError') {
+    statusCode = 400;
+    code = 'IMAGE_PROCESSING_ERROR';
+    // ImageProcessingError는 이미 상세한 메시지를 가지고 있음
+    details = process.env.NODE_ENV === 'development' ? {
+      originalError: error.message,
+      stack: error.stack,
+      ...error.details,
+    } : undefined;
   }
 
   // 프로덕션 환경에서는 민감한 정보 숨기기
@@ -138,6 +147,7 @@ export const globalErrorHandler = (
       message = '서버 내부 오류가 발생했습니다.';
       details = undefined;
     }
+    // ImageProcessingError는 프로덕션에서도 상세 메시지 유지 (사용자에게 유용)
   }
 
   const response: ApiResponse = {

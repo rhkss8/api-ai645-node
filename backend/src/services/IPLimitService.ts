@@ -39,8 +39,8 @@ export class IPLimitService {
       return record.requestCount < this.MAX_REQUESTS_PER_DAY;
     } catch (error) {
       console.error('[IPLimitService] canMakeRequest 오류:', error);
-      // 오류 시 요청 허용 (서비스 연속성)
-      return true;
+      // 오류 시 요청 거부 (보안 강화)
+      return false;
     }
   }
 

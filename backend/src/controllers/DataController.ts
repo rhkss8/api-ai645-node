@@ -205,6 +205,8 @@ export class DataController {
             id: winningNumbers.id,
             round: winningNumbers.round,
             numbers: winningNumbers.numbers,
+            bonusNumber: winningNumbers.bonusNumber,
+            firstWinningAmount: winningNumbers.firstWinningAmount,
             drawDate: winningNumbers.drawDate.toISOString(),
             createdAt: winningNumbers.createdAt.toISOString(),
           },
@@ -249,6 +251,8 @@ export class DataController {
             id: winningNumbers.id,
             round: winningNumbers.round,
             numbers: winningNumbers.numbers,
+            bonusNumber: winningNumbers.bonusNumber,
+            firstWinningAmount: winningNumbers.firstWinningAmount,
             drawDate: winningNumbers.drawDate.toISOString(),
             createdAt: winningNumbers.createdAt.toISOString(),
           },
@@ -264,29 +268,39 @@ export class DataController {
   );
 
   /**
-   * 최근 당첨번호 목록 조회 API
+   * 최근 당첨번호 목록 조회 API (페이징)
    */
   public getRecentWinningNumbers = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
       try {
+        const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
         
         if (limit > 50) {
           throw new BusinessLogicError('한 번에 최대 50개까지만 조회 가능합니다.');
         }
 
-        const winningNumbers = await this.winningNumbersRepository.findRecent(limit);
+        const result = await this.winningNumbersRepository.findAll(page, limit);
+        const totalPages = Math.ceil(result.total / limit);
 
-        const response: ApiResponse = {
+        const response: PaginatedResponse<any> = {
           success: true,
-          data: winningNumbers.map(wn => ({
+          data: result.data.map(wn => ({
             id: wn.id,
             round: wn.round,
             numbers: wn.numbers,
+            bonusNumber: wn.bonusNumber,
+            firstWinningAmount: wn.firstWinningAmount,
             drawDate: wn.drawDate.toISOString(),
             createdAt: wn.createdAt.toISOString(),
           })),
-          message: `최근 ${winningNumbers.length}개의 당첨번호입니다.`,
+          pagination: {
+            page,
+            limit,
+            total: result.total,
+            totalPages,
+          },
+          message: `최근 ${result.data.length}개의 당첨번호입니다.`,
           timestamp: new Date().toISOString(),
         };
 

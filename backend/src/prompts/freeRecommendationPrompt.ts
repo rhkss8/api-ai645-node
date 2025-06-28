@@ -71,7 +71,7 @@ export const generateFreeRecommendationPrompt = (
   prompt += `
 
 ## 응답 형식
-정확히 아래 JSON 형식으로만 응답해주세요. ${gameCount}개의 세트를 배열로 제공해주세요.
+정확히 아래 JSON 형식으로만 응답해주세요 (마크다운 코드블록 없이). ${gameCount}개의 세트를 배열로 제공해주세요.
 
 {
   "recommendations": [
@@ -84,4 +84,4 @@ export const generateFreeRecommendationPrompt = (
   return prompt.trim();
 };
 
-export default generateFreeRecommendationPrompt; 
+export default generateFreeRecommendationPrompt;

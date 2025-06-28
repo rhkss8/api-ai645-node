@@ -73,8 +73,16 @@ export const freeRecommendationIPLimit = (
       next();
     } catch (error) {
       console.error('[IP제한] 미들웨어 오류:', error);
-      // 오류 시 요청 허용 (서비스 연속성)
-      next();
+      // 오류 시 요청 거부 (보안 강화)
+      res.status(500).json({
+        success: false,
+        error: 'IP 제한 확인 중 오류가 발생했습니다.',
+        message: '잠시 후 다시 시도해주세요.',
+        data: {
+          code: 'IP_LIMIT_ERROR',
+        }
+      });
+      return;
     }
   };
 };

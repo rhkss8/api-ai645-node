@@ -83,7 +83,7 @@ export const generatePremiumRecommendationPrompt = (
   prompt += `
 
 ## 프리미엄 응답 형식
-정확히 아래 JSON 형식으로만 응답해주세요. ${gameCount}개의 세트와 각 세트별 상세 분석을 포함하세요.
+정확히 아래 JSON 형식으로만 응답해주세요 (마크다운 코드블록 없이). ${gameCount}개의 세트와 각 세트별 상세 분석을 포함하세요.
 
 {
   "recommendations": [
@@ -96,7 +96,8 @@ export const generatePremiumRecommendationPrompt = (
     // 예시: "세트 1 전략 설명"
   ],
   "confidence": 85
-}`;
+}
+`;
 
   return prompt.trim();
 };

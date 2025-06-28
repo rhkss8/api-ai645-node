@@ -98,6 +98,29 @@ npx prisma generate
 npm run dev
 ```
 
+### 🔥 Hot Reload (개발 모드)
+개발 환경에서는 코드 변경 시 자동으로 서버가 재시작됩니다.
+
+```bash
+# 개발 모드로 실행 (hot reload 활성화)
+docker compose up -d
+
+# 코드 변경 후 자동 재시작 확인
+# TypeScript 파일(.ts) 수정 시 자동으로 ts-node-dev가 재시작
+```
+
+**Hot Reload가 작동하는 경우:**
+- TypeScript 소스 코드 수정
+- 프롬프트 파일 수정
+- 유틸리티 함수 수정
+- 라우트 수정
+
+**Hot Reload가 작동하지 않는 경우 (서버 재시작 필요):**
+- package.json 의존성 변경
+- Dockerfile 수정
+- 환경변수 변경
+- 데이터베이스 스키마 변경
+
 ## 🔧 접속 정보
 
 | 서비스 | URL | 포트 |
@@ -185,10 +208,36 @@ curl -X POST http://localhost:3350/api/image/extract \
 ## 🗄️ 데이터베이스 구조
 
 ### 주요 테이블
+- `user`: 회원 정보 (이메일/소셜 가입 구분, provider, providerId 등)
 - `recommendation_history`: 추천 내역 저장
 - `recommendation_review`: 회고 분석 결과
 - `winning_numbers`: 당첨번호 데이터
 - `api_usage`: API 사용량 통계
+- `ip_limit_records`: IP별 요청 제한 기록
+
+### 회원(User) 테이블 구조
+| 필드명        | 타입      | 설명                         |
+|--------------|----------|------------------------------|
+| id           | String   | PK, 고유 식별자              |
+| email        | String?  | 이메일(이메일/소셜 공통)     |
+| nickname     | String?  | 닉네임(선택)                 |
+| password     | String?  | 이메일 가입 시 비밀번호(해시) |
+| provider     | Enum     | 가입 방식(EMAIL/KAKAO/GOOGLE/NAVER) |
+| providerId   | String?  | 소셜 가입 시 소셜 고유 ID     |
+| createdAt    | DateTime | 생성일                       |
+| updatedAt    | DateTime | 수정일                       |
+
+### 4. WinningNumbers (당첨번호)
+| 필드명            | 타입     | 설명               |
+|-------------------|----------|--------------------|
+| id                | String   | 고유 식별자        |
+| round             | Int      | 당첨회차           |
+| numbers           | Json     | 당첨번호(보너스 포함) |
+| bonusNumber       | Int      | 보너스추첨번호     |
+| firstWinningAmount| BigInt   | 1등 당첨금         |
+| drawDate          | DateTime | 추첨일             |
+| createdAt         | DateTime | 생성일             |
+| updatedAt         | DateTime | 수정일             |
 
 ### 데이터베이스 관리
 ```bash
@@ -255,6 +304,15 @@ docker compose logs -f
 # 특정 서비스 로그
 docker compose logs -f backend
 docker compose logs -f db
+
+# 실시간 로그 확인 (GPT 응답 포함)
+docker compose logs -f backend | grep -E "(GPT|🔍|🤖|📊|🖼️|📝|✅)"
+
+# 에러 로그만 확인
+docker compose logs -f backend | grep -i error
+
+# API 요청 로그만 확인
+docker compose logs -f backend | grep -E "(POST|GET|PUT|DELETE)"
 
 # 컨테이너 상태 확인
 docker compose ps
