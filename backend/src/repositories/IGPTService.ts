@@ -36,7 +36,7 @@ export interface IGPTService {
     conditions?: UserConditions,
   ): Promise<string>;
 
-  validateResponse(response: string): boolean;
-  parseNumbersFromResponse(response: string): LotteryNumberSets;
-  parseRecommendationFromResponse(response: string): GPTRecommendationResult;
+  validateResponse(response: string, expectedGameCount?: number): boolean;
+  parseNumbersFromResponse(response: string, expectedGameCount?: number): LotteryNumberSets;
+  parseRecommendationFromResponse(response: string, expectedGameCount?: number): GPTRecommendationResult;
 } 

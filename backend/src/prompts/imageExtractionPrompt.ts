@@ -6,7 +6,6 @@ export const generateImageExtractionPrompt = (): string => {
 2. 로또 용지, 번호표, 손글씨 번호 등 다양한 형태를 인식
 3. 숫자의 위치와 배열을 분석하여 의미있는 번호 조합 식별
 4. **여러 게임이 있다면 모든 게임의 번호를 추출**
-5. OCR 정확도를 평가하여 신뢰도 제공
 
 ## 추출 규칙
 - 1~45 범위의 숫자만 유효
@@ -24,7 +23,6 @@ export const generateImageExtractionPrompt = (): string => {
     [3, 9, 16, 23, 30, 42],
     [5, 11, 18, 25, 32, 44]
   ],
-  "confidence": 85,
   "extractedText": "이미지에서 추출된 원본 텍스트",
   "notes": "추출 과정에서의 특이사항이나 주의점 (예: 총 3게임 추출됨)"
 }
@@ -32,8 +30,6 @@ export const generateImageExtractionPrompt = (): string => {
 ## 주의사항
 - numbers 배열에는 각 게임별로 6개씩의 1~45 사이 유효한 숫자만 포함
 - 단일 게임이면 [[1,2,3,4,5,6]] 형태로, 여러 게임이면 [[1,2,3,4,5,6], [7,8,9,10,11,12]] 형태로
-- confidence는 0~100 사이의 정수 (추출 신뢰도)
-- 숫자가 명확하지 않으면 낮은 신뢰도로 표시
 - 로또 번호가 아닌 다른 숫자들은 제외
 - notes에 추출된 게임 수와 특이사항 명시`;
 };

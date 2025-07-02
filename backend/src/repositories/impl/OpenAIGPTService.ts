@@ -64,7 +64,7 @@ export class OpenAIGPTService implements IGPTService {
         throw new Error('GPT 응답 형식이 올바르지 않습니다.');
       }
 
-      return this.parseRecommendationFromResponse(response);
+      return this.parseRecommendationFromResponse(response, gameCount);
     } catch (error) {
       console.error('GPT 추천 생성 중 오류:', error);
       throw new Error('번호 추천 생성에 실패했습니다.');
@@ -126,7 +126,6 @@ export class OpenAIGPTService implements IGPTService {
       // 유효한 번호가 없는 경우에도 정상 응답 반환
       return {
         numbers: parsed.numbers,
-        confidence: parsed.confidence || 0,
         extractedText: parsed.extractedText || '',
         notes: parsed.notes || (parsed.numbers.length > 0 ? `총 ${parsed.numbers.length}게임 추출됨` : '유효한 로또 번호를 찾을 수 없습니다.'),
       };
@@ -200,9 +199,9 @@ export class OpenAIGPTService implements IGPTService {
     }
   }
 
-  parseNumbersFromResponse(response: string): LotteryNumberSets {
+  parseNumbersFromResponse(response: string, expectedGameCount?: number): LotteryNumberSets {
     try {
-      const parsed = GPTResponseParser.parseRecommendationResponse(response);
+      const parsed = GPTResponseParser.parseRecommendationResponse(response, expectedGameCount);
       return parsed.numbers;
     } catch (error) {
       console.error('응답 파싱 중 오류:', error);
@@ -210,9 +209,9 @@ export class OpenAIGPTService implements IGPTService {
     }
   }
 
-  parseRecommendationFromResponse(response: string): GPTRecommendationResult {
+  parseRecommendationFromResponse(response: string, expectedGameCount?: number): GPTRecommendationResult {
     try {
-      const parsed = GPTResponseParser.parseRecommendationResponse(response);
+      const parsed = GPTResponseParser.parseRecommendationResponse(response, expectedGameCount);
       return {
         numbers: parsed.numbers,
         analysis: parsed.analysis,

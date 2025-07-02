@@ -41,10 +41,11 @@ export const generateFreeRecommendationPrompt = (
     }
 
     if (conditions.recentPurchases && conditions.recentPurchases.length > 0) {
-      prompt += `\n\n## 최근 구매 번호\n사용자가 최근에 구매한 번호들입니다. 참고해주세요:`;
+      prompt += `\n\n## 최근 당첨 번호 (최근 ${conditions.recentPurchases.length}회차)\n과거 당첨 패턴 분석:`;
       conditions.recentPurchases.forEach((purchase, index) => {
         prompt += `\n${index + 1}. [${purchase.join(', ')}]`;
       });
+      prompt += `\n\n위 당첨 패턴을 분석하여 유사한 패턴을 피하거나 반대로 활용해주세요.`;
     }
 
     if (conditions.preferences) {

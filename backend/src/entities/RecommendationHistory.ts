@@ -51,8 +51,8 @@ export class RecommendationHistory {
       throw new Error('추천 번호가 필요합니다.');
     }
 
-    if (this.numbers.length !== 5) {
-      throw new Error('정확히 5세트의 번호가 필요합니다.');
+    if (this.numbers.length < 1) {
+      throw new Error('최소 1세트의 번호가 필요합니다.');
     }
 
     this.numbers.forEach((numberSet, index) => {

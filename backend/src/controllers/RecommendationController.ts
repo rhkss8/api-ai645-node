@@ -17,11 +17,17 @@ export class RecommendationController {
   public generateFreeRecommendation = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
       try {
+        // 디버깅: 요청 데이터 로깅
+        console.log('🔍 무료 추천 요청 데이터:', JSON.stringify(req.body, null, 2));
+        
         const request = {
           type: RecommendationType.FREE,
-          round: req.body.round,
+          round: req.body.round, // 프론트에서 전송한 round가 있으면 사용, 없으면 UseCase에서 자동 설정
           conditions: req.body.conditions,
+          gameCount: req.body.gameCount, // gameCount 추가
         };
+
+        console.log('🎯 무료 추천 처리할 데이터:', JSON.stringify(request, null, 2));
 
         const result = await this.generateRecommendationUseCase.execute(request);
 
@@ -48,37 +54,20 @@ export class RecommendationController {
   public generatePremiumRecommendation = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
       try {
-        let requestData;
-        let imageFile: UploadedFile | undefined;
-
-        // multipart/form-data 처리
-        if (req.file) {
-          imageFile = {
-            fieldname: req.file.fieldname,
-            originalname: req.file.originalname,
-            encoding: req.file.encoding,
-            mimetype: req.file.mimetype,
-            size: req.file.size,
-            buffer: req.file.buffer,
-          };
-
-          // data 필드에서 JSON 파싱
-          try {
-            requestData = req.body.data ? JSON.parse(req.body.data) : {};
-          } catch (parseError) {
-            throw new BusinessLogicError('잘못된 JSON 형식입니다.');
-          }
-        } else {
-          // 일반 JSON 요청
-          requestData = req.body;
-        }
+        const requestData = req.body;
+        
+        // 디버깅: 요청 데이터 로깅
+        console.log('🔍 프리미엄 추천 요청 데이터:', JSON.stringify(requestData, null, 2));
 
         const request = {
           type: RecommendationType.PREMIUM,
-          round: requestData.round,
+          round: requestData.round, // 프론트에서 전송한 round가 있으면 사용, 없으면 UseCase에서 자동 설정
           conditions: requestData.conditions,
-          image: imageFile,
+          imageNumbers: requestData.imageNumbers, // 이미지 분석 결과에서 추출된 번호들
+          gameCount: requestData.gameCount, // gameCount 추가
         };
+
+        console.log('🎯 프리미엄 추천 처리할 데이터:', JSON.stringify(request, null, 2));
 
         const result = await this.generateRecommendationUseCase.execute(request);
 

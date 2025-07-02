@@ -172,7 +172,6 @@ export class GPTResponseParser {
    */
   static parseImageExtractionResponse(response: string): {
     numbers: number[][];
-    confidence?: number;
     extractedText?: string;
     notes?: string;
   } {
@@ -231,7 +230,6 @@ export class GPTResponseParser {
 
     return {
       numbers: validGames,
-      confidence: parsed.confidence || 0,
       extractedText: parsed.extractedText || '',
       notes
     };
