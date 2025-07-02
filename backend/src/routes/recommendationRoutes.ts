@@ -373,7 +373,6 @@ export const createRecommendationRoutes = (
   router.post(
     '/premium',
     premiumRecommendationLimiter,
-    upload.single('image'),
     validatePremiumRecommendationRequest,
     controller.generatePremiumRecommendation,
   );

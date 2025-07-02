@@ -116,43 +116,20 @@ export class ExtractImageNumbersUseCase {
       throw new Error('이미지에서 유효한 로또 번호(1-45)를 찾을 수 없습니다.');
     }
 
-    // 신뢰도 검증 및 조정
-    let confidence = result.confidence || 0;
-    
-    if (confidence < 0 || confidence > 100) {
-      confidence = Math.max(0, Math.min(100, confidence));
-    }
-
-    // 게임 수에 따른 신뢰도 조정
-    if (validGames.length >= 3) {
-      confidence = Math.min(confidence + 10, 100); // 여러 게임이면 신뢰도 증가
-    }
-
     const finalResult = {
       numbers: validGames,
-      confidence: Math.round(confidence),
       extractedText: result.extractedText || '',
-      notes: this.generateNotes(validGames, confidence, result.extractedText),
+      notes: this.generateNotes(validGames, result.extractedText),
     };
 
     console.log(`🔍 [UseCase] 최종 결과:`, JSON.stringify(finalResult, null, 2));
     return finalResult;
   }
 
-  private generateNotes(games: number[][], confidence: number, extractedText?: string): string {
+  private generateNotes(games: number[][], extractedText?: string): string {
     const notes: string[] = [];
 
     notes.push(`총 ${games.length}게임이 추출되었습니다.`);
-
-    if (confidence >= 90) {
-      notes.push('매우 높은 신뢰도로 추출되었습니다.');
-    } else if (confidence >= 70) {
-      notes.push('높은 신뢰도로 추출되었습니다.');
-    } else if (confidence >= 50) {
-      notes.push('보통 신뢰도로 추출되었습니다.');
-    } else {
-      notes.push('낮은 신뢰도로 추출되었습니다. 확인이 필요합니다.');
-    }
 
     // 각 게임의 번호 개수 확인
     const incompleteGames = games.filter(game => game.length !== 6);

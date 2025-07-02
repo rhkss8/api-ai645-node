@@ -27,6 +27,9 @@ import { createRecommendationRoutes, createImageRoutes } from './recommendationR
 import { createReviewRoutes } from './reviewRoutes';
 import { createDataRoutes } from './dataRoutes';
 
+// Middleware
+import { resetIPLimits } from '../middleware/ipLimitMiddleware';
+
 // Dependency Injection Container
 class DIContainer {
   private static instance: DIContainer;
@@ -80,6 +83,7 @@ class DIContainer {
     // Use Cases
     this.generateRecommendationUseCase = new GenerateRecommendationUseCase(
       this.recommendationHistoryRepository,
+      this.winningNumbersRepository,
       this.gptService,
     );
     this.generateReviewUseCase = new GenerateReviewUseCase(
@@ -101,6 +105,7 @@ class DIContainer {
     this.dataController = new DataController(
       this.recommendationHistoryRepository,
       this.winningNumbersRepository,
+      this.ipLimitService,
     );
   }
 
@@ -129,6 +134,11 @@ class DIContainer {
 export const createApiRoutes = (): Router => {
   const router = Router();
   const container = DIContainer.getInstance();
+
+  // 개발용 IP 제한 초기화 라우트 (개발 환경에서만)
+  if (process.env.NODE_ENV === 'development') {
+    router.use('/dev/reset-ip-limits', resetIPLimits(container.getIPLimitService()));
+  }
 
   // 각 라우트 그룹 등록
   router.use('/recommend', createRecommendationRoutes(

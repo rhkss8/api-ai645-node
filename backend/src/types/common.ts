@@ -43,7 +43,6 @@ export interface UserConditions {
 
 export interface ImageExtractResult {
   numbers: LotteryNumberSets;
-  confidence: number;
   extractedText?: string;
   notes?: string;
 }
@@ -62,7 +61,7 @@ export interface RecommendationRequest {
   gameCount?: number;
   round?: number;
   conditions?: UserConditions;
-  image?: UploadedFile;
+  imageNumbers?: LotteryNumberSets; // 이미지 분석 결과에서 추출된 번호들
 }
 
 export interface RecommendationResponse {

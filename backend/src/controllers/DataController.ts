@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { IRecommendationHistoryRepository } from '../repositories/IRecommendationHistoryRepository';
 import { IWinningNumbersRepository } from '../repositories/IWinningNumbersRepository';
+import { IPLimitService } from '../services/IPLimitService';
 import { ApiResponse, PaginatedResponse, RecommendationType } from '../types/common';
 import { asyncHandler } from '../middlewares/errorHandler';
 import { BusinessLogicError, NotFoundError } from '../middlewares/errorHandler';
@@ -9,6 +10,7 @@ export class DataController {
   constructor(
     private readonly recommendationRepository: IRecommendationHistoryRepository,
     private readonly winningNumbersRepository: IWinningNumbersRepository,
+    private readonly ipLimitService?: IPLimitService,
   ) {}
 
   /**
@@ -58,52 +60,19 @@ export class DataController {
    */
   public getRecommendations = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
-      try {
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 10;
-        const type = req.query.type as RecommendationType;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
 
-        let result;
-        
-        if (type && Object.values(RecommendationType).includes(type)) {
-          // 타입별 조회
-          const recommendations = await this.recommendationRepository.findByType(type);
-          result = {
-            data: recommendations.slice((page - 1) * limit, page * limit),
-            total: recommendations.length,
-          };
-        } else {
-          // 전체 조회
-          result = await this.recommendationRepository.findAll(page, limit);
-        }
+      const result = await this.recommendationRepository.findAll(page, limit);
 
-        const totalPages = Math.ceil(result.total / limit);
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+        message: '추천 이력 조회가 완료되었습니다.',
+        timestamp: new Date().toISOString(),
+      };
 
-        const response: PaginatedResponse<any> = {
-          success: true,
-          data: result.data.map(recommendation => ({
-            id: recommendation.id,
-            type: recommendation.type,
-            round: recommendation.round,
-            numbers: recommendation.numbers,
-            conditions: recommendation.conditions,
-            imageData: recommendation.imageData,
-            gptModel: recommendation.gptModel,
-            createdAt: recommendation.createdAt.toISOString(),
-          })),
-          pagination: {
-            page,
-            limit,
-            total: result.total,
-            totalPages,
-          },
-          timestamp: new Date().toISOString(),
-        };
-
-        res.status(200).json(response);
-      } catch (error) {
-        throw error;
-      }
+      res.status(200).json(response);
     },
   );
 
@@ -308,6 +277,41 @@ export class DataController {
       } catch (error) {
         throw error;
       }
+    },
+  );
+
+  /**
+   * 개발용: IP 제한 초기화
+   */
+  public resetIPLimits = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      if (process.env.NODE_ENV !== 'development') {
+        res.status(403).json({
+          success: false,
+          error: '개발 환경에서만 사용 가능합니다.',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (!this.ipLimitService) {
+        res.status(500).json({
+          success: false,
+          error: 'IP 제한 서비스가 초기화되지 않았습니다.',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      await this.ipLimitService.clearAllRecords();
+
+      const response: ApiResponse = {
+        success: true,
+        message: '모든 IP 제한이 초기화되었습니다.',
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
     },
   );
 } 

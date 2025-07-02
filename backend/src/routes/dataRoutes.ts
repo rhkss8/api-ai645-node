@@ -10,6 +10,52 @@ import { dataQueryLimiter } from '../middlewares/rateLimiter';
 export const createDataRoutes = (controller: DataController): Router => {
   const router = Router();
 
+  // 개발용 IP 제한 초기화 라우트 (개발 환경에서만)
+  if (process.env.NODE_ENV === 'development') {
+    /**
+     * @swagger
+     * /api/data/dev/reset-ip-limits:
+     *   post:
+     *     summary: IP 제한 초기화 (개발용)
+     *     description: 모든 IP 제한 기록을 초기화합니다. 개발 환경에서만 사용 가능합니다.
+     *     tags: [Data]
+     *     responses:
+     *       200:
+     *         description: 초기화 성공
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 success:
+     *                   type: boolean
+     *                   example: true
+     *                 message:
+     *                   type: string
+     *                   example: "모든 IP 제한이 초기화되었습니다."
+     *                 timestamp:
+     *                   type: string
+     *                   format: date-time
+     *       403:
+     *         description: 개발 환경에서만 사용 가능
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 success:
+     *                   type: boolean
+     *                   example: false
+     *                 error:
+     *                   type: string
+     *                   example: "개발 환경에서만 사용 가능합니다."
+     *                 timestamp:
+     *                   type: string
+     *                   format: date-time
+     */
+    router.post('/dev/reset-ip-limits', controller.resetIPLimits);
+  }
+
   // 추천 관련 라우트
   /**
    * @swagger
