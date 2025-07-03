@@ -67,7 +67,7 @@ export class DataController {
 
       const response: ApiResponse = {
         success: true,
-        data: result,
+        data: result.data,
         message: '추천 이력 조회가 완료되었습니다.',
         timestamp: new Date().toISOString(),
       };
@@ -175,7 +175,7 @@ export class DataController {
             round: winningNumbers.round,
             numbers: winningNumbers.numbers,
             bonusNumber: winningNumbers.bonusNumber,
-            firstWinningAmount: winningNumbers.firstWinningAmount,
+            firstWinningAmount: winningNumbers.firstWinningAmount.toString(),
             drawDate: winningNumbers.drawDate.toISOString(),
             createdAt: winningNumbers.createdAt.toISOString(),
           },
@@ -221,7 +221,7 @@ export class DataController {
             round: winningNumbers.round,
             numbers: winningNumbers.numbers,
             bonusNumber: winningNumbers.bonusNumber,
-            firstWinningAmount: winningNumbers.firstWinningAmount,
+            firstWinningAmount: winningNumbers.firstWinningAmount.toString(),
             drawDate: winningNumbers.drawDate.toISOString(),
             createdAt: winningNumbers.createdAt.toISOString(),
           },
@@ -259,7 +259,7 @@ export class DataController {
             round: wn.round,
             numbers: wn.numbers,
             bonusNumber: wn.bonusNumber,
-            firstWinningAmount: wn.firstWinningAmount,
+            firstWinningAmount: wn.firstWinningAmount.toString(),
             drawDate: wn.drawDate.toISOString(),
             createdAt: wn.createdAt.toISOString(),
           })),
