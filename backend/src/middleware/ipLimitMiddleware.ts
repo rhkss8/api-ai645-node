@@ -35,7 +35,7 @@ export const freeRecommendationIPLimit = (
 
       console.log(`[IP제한] 무료 추천 요청 - IP: ${clientIP}`);
 
-      // IP가 오늘 요청 가능한지 확인
+      // IP가 오늘 요청 가능한지 확인 (기록하지 않고 체크만)
       const canRequest = await ipLimitService.canMakeRequest(clientIP);
 
       if (!canRequest) {
@@ -55,18 +55,13 @@ export const freeRecommendationIPLimit = (
         return;
       }
 
-      // 요청 기록
-      await ipLimitService.recordRequest(clientIP);
-
-      // 남은 요청 횟수 확인
-      const remainingRequests = await ipLimitService.getRemainingRequests(clientIP);
-      
-      console.log(`[IP제한] 무료 추천 허용 - IP: ${clientIP}, 남은 횟수: ${remainingRequests}`);
+      // 요청 기록하지 않고 체크만 완료
+      console.log(`[IP제한] 무료 추천 허용 - IP: ${clientIP}, 체크 완료`);
 
       // 응답 헤더에 제한 정보 추가
       res.set({
         'X-RateLimit-Limit': '1',
-        'X-RateLimit-Remaining': remainingRequests.toString(),
+        'X-RateLimit-Remaining': '1',
         'X-RateLimit-Reset': (await ipLimitService.getNextAllowedTime(clientIP)).toISOString(),
       });
 

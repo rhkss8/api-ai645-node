@@ -99,12 +99,21 @@ export class GenerateRecommendationUseCase {
       targetRound, // 자동 설정된 회차 사용
       request.conditions,
       imageData,
+      gptResult.analysis, // GPT 분석 결과 추가
     );
 
     recommendation.validate();
 
     // 11. 데이터베이스 저장
-    const savedRecommendation = await this.recommendationRepository.create(recommendation);
+    console.log('💾 데이터베이스 저장 시작:', JSON.stringify(recommendation, null, 2));
+    let savedRecommendation;
+    try {
+      savedRecommendation = await this.recommendationRepository.create(recommendation);
+      console.log('✅ 데이터베이스 저장 성공:', savedRecommendation.id);
+    } catch (dbError) {
+      console.error('❌ 데이터베이스 저장 실패:', dbError);
+      throw dbError;
+    }
 
     // 12. 응답 변환 (GPT 분석 결과 포함)
     return this.toResponse(savedRecommendation, gameCount, gptResult.analysis);

@@ -1,5 +1,5 @@
 import { RecommendationHistory } from '@/entities/RecommendationHistory';
-import { RecommendationType } from '@/types/common';
+import { RecommendationType, WinStatus } from '@/types/common';
 
 export interface IRecommendationHistoryRepository {
   create(recommendation: RecommendationHistory): Promise<RecommendationHistory>;
@@ -8,6 +8,15 @@ export interface IRecommendationHistoryRepository {
   findByType(type: RecommendationType): Promise<RecommendationHistory[]>;
   findRecent(limit: number): Promise<RecommendationHistory[]>;
   findAll(page: number, limit: number): Promise<{
+    data: RecommendationHistory[];
+    total: number;
+  }>;
+  findAllWithFilters(
+    page: number, 
+    limit: number, 
+    type?: RecommendationType,
+    winStatus?: WinStatus
+  ): Promise<{
     data: RecommendationHistory[];
     total: number;
   }>;

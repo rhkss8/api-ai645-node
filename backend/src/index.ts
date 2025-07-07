@@ -14,6 +14,7 @@ import { ApiResponse, HealthCheckResponse } from './types/common';
 import { createApiRoutes, DIContainer } from './routes/index';
 import { globalErrorHandler, notFoundHandler } from './middlewares/errorHandler';
 import { generalLimiter } from './middlewares/rateLimiter';
+import { LottoScheduler } from './batch/LottoScheduler';
 
 const app = express();
 
@@ -184,6 +185,10 @@ const startServer = async (): Promise<void> => {
   try {
     // Connect to database - 임시로 비활성화
     // await connectDatabase();
+    
+    // Start lotto scheduler
+    const lottoScheduler = new LottoScheduler();
+    lottoScheduler.startScheduler();
     
     // Start server
     const server = app.listen(env.PORT, '0.0.0.0', () => {

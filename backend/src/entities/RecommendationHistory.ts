@@ -15,6 +15,7 @@ export class RecommendationHistory {
     public readonly conditions: UserConditions | null,
     public readonly imageData: ImageExtractResult | null,
     public readonly gptModel: GPTModel,
+    public readonly analysis: string | null,
     public readonly createdAt: Date,
     public readonly updatedAt: Date,
   ) {}
@@ -27,6 +28,7 @@ export class RecommendationHistory {
     round?: number,
     conditions?: UserConditions,
     imageData?: ImageExtractResult,
+    analysis?: string,
   ): RecommendationHistory {
     const now = new Date();
     return new RecommendationHistory(
@@ -37,6 +39,7 @@ export class RecommendationHistory {
       conditions ?? null,
       imageData ?? null,
       gptModel,
+      analysis ?? null,
       now,
       now,
     );

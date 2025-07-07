@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { GenerateRecommendationUseCase } from '../usecases/GenerateRecommendationUseCase';
 import { ExtractImageNumbersUseCase } from '../usecases/ExtractImageNumbersUseCase';
+import { IPLimitService } from '../services/IPLimitService';
 import { ApiResponse, RecommendationType, UploadedFile } from '../types/common';
 import { asyncHandler } from '../middlewares/errorHandler';
 import { BusinessLogicError, ImageProcessingError } from '../middlewares/errorHandler';
@@ -9,7 +10,26 @@ export class RecommendationController {
   constructor(
     private readonly generateRecommendationUseCase: GenerateRecommendationUseCase,
     private readonly extractImageNumbersUseCase: ExtractImageNumbersUseCase,
+    private readonly ipLimitService: IPLimitService,
   ) {}
+
+  /**
+   * 클라이언트의 실제 IP 주소를 추출
+   */
+  private getClientIP(req: Request): string {
+    const forwarded = req.get('X-Forwarded-For');
+    const realIP = req.get('X-Real-IP');
+    
+    if (forwarded) {
+      return forwarded.split(',')[0]?.trim() || 'unknown';
+    }
+    
+    if (realIP) {
+      return realIP;
+    }
+    
+    return req.ip ?? 'unknown';
+  }
 
   /**
    * 무료 번호 추천 API
@@ -31,6 +51,16 @@ export class RecommendationController {
 
         const result = await this.generateRecommendationUseCase.execute(request);
 
+        // 추천 성공 후 IP 제한 기록
+        try {
+          const clientIP = this.getClientIP(req);
+          await this.ipLimitService.recordRequest(clientIP);
+          console.log(`[IP제한] 무료 추천 성공 - IP: ${clientIP} 제한 기록 완료`);
+        } catch (ipError) {
+          console.error('[IP제한] 무료 추천 성공 후 IP 제한 기록 실패:', ipError);
+          // IP 제한 기록 실패해도 추천 결과는 반환
+        }
+
         const response: ApiResponse = {
           success: true,
           data: result,
@@ -40,10 +70,34 @@ export class RecommendationController {
 
         res.status(200).json(response);
       } catch (error) {
-        if (error instanceof Error) {
-          throw new BusinessLogicError(error.message);
+        const err = error as Error;
+        // 이미 커스텀 에러인 경우 그대로 전달
+        if (err instanceof BusinessLogicError || 
+            err instanceof ImageProcessingError ||
+            err.name === 'BusinessLogicError' ||
+            err.name === 'ImageProcessingError') {
+          throw err;
         }
-        throw error;
+        // GPT 서비스 관련 오류
+        if (
+          err.message.includes('OpenAI') ||
+          err.message.includes('GPT') ||
+          err.message.includes('API key') ||
+          err.message.includes('rate limit')
+        ) {
+          throw new Error('AI 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        }
+        // 데이터베이스 관련 오류
+        if (
+          err.message.includes('database') ||
+          err.message.includes('connection') ||
+          err.message.includes('Prisma')
+        ) {
+          throw new Error('데이터 저장에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        }
+        // 기타 예상치 못한 오류
+        console.error('무료 추천 API 예상치 못한 오류:', err);
+        throw new Error('번호 추천 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
       }
     },
   );
@@ -80,10 +134,34 @@ export class RecommendationController {
 
         res.status(200).json(response);
       } catch (error) {
-        if (error instanceof Error) {
-          throw new BusinessLogicError(error.message);
+        const err = error as Error;
+        // 이미 커스텀 에러인 경우 그대로 전달
+        if (err instanceof BusinessLogicError || 
+            err instanceof ImageProcessingError ||
+            err.name === 'BusinessLogicError' ||
+            err.name === 'ImageProcessingError') {
+          throw err;
         }
-        throw error;
+        // GPT 서비스 관련 오류
+        if (
+          err.message.includes('OpenAI') ||
+          err.message.includes('GPT') ||
+          err.message.includes('API key') ||
+          err.message.includes('rate limit')
+        ) {
+          throw new Error('AI 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        }
+        // 데이터베이스 관련 오류
+        if (
+          err.message.includes('database') ||
+          err.message.includes('connection') ||
+          err.message.includes('Prisma')
+        ) {
+          throw new Error('데이터 저장에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        }
+        // 기타 예상치 못한 오류
+        console.error('무료 추천 API 예상치 못한 오류:', err);
+        throw new Error('번호 추천 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
       }
     },
   );

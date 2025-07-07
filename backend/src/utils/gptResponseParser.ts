@@ -159,7 +159,7 @@ export class GPTResponseParser {
 
     return {
       numbers: validGames,
-      analysis: parsed.analysis,
+      analysis: parsed.analysis ?? '',
       strategies: parsed.strategies,
       confidence: parsed.confidence
     };

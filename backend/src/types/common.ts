@@ -34,6 +34,12 @@ export enum GPTModel {
   GPT_4O = 'gpt-4o',
 }
 
+export enum WinStatus {
+  WIN = 'WIN',        // 당첨
+  LOSE = 'LOSE',      // 미당첨
+  PENDING = 'PENDING' // 미추첨
+}
+
 export interface UserConditions {
   excludeNumbers?: number[];
   includeNumbers?: number[];
