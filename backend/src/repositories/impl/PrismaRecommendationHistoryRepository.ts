@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { RecommendationHistory } from '../../entities/RecommendationHistory';
 import { IRecommendationHistoryRepository } from '../IRecommendationHistoryRepository';
-import { RecommendationType } from '../../types/common';
+import { RecommendationType, WinStatus } from '../../types/common';
 
 export class PrismaRecommendationHistoryRepository implements IRecommendationHistoryRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -16,6 +16,7 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
         conditions: recommendation.conditions ? JSON.parse(JSON.stringify(recommendation.conditions)) : undefined,
         imageData: recommendation.imageData ? JSON.parse(JSON.stringify(recommendation.imageData)) : undefined,
         gptModel: recommendation.gptModel,
+        analysis: recommendation.analysis,
         createdAt: recommendation.createdAt,
         updatedAt: recommendation.updatedAt,
       },
@@ -90,6 +91,7 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
         conditions: recommendation.conditions ? JSON.parse(JSON.stringify(recommendation.conditions)) : undefined,
         imageData: recommendation.imageData ? JSON.parse(JSON.stringify(recommendation.imageData)) : undefined,
         gptModel: recommendation.gptModel,
+        analysis: recommendation.analysis,
         updatedAt: new Date(),
       },
     });
@@ -110,6 +112,41 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
     return count > 0;
   }
 
+  async findAllWithFilters(
+    page: number, 
+    limit: number, 
+    type?: RecommendationType,
+    winStatus?: WinStatus
+  ): Promise<{
+    data: RecommendationHistory[];
+    total: number;
+  }> {
+    const skip = (page - 1) * limit;
+
+    // type 필터 조건
+    const whereCondition: any = {};
+    if (type) {
+      whereCondition.type = type;
+    }
+
+    const [recommendations, total] = await Promise.all([
+      this.prisma.recommendationHistory.findMany({
+        where: whereCondition,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.recommendationHistory.count({
+        where: whereCondition,
+      }),
+    ]);
+
+    return {
+      data: recommendations.map(this.toDomain),
+      total,
+    };
+  }
+
   private toDomain(prismaModel: any): RecommendationHistory {
     return new RecommendationHistory(
       prismaModel.id,
@@ -119,6 +156,7 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
       prismaModel.conditions,
       prismaModel.imageData,
       prismaModel.gptModel,
+      prismaModel.analysis,
       prismaModel.createdAt,
       prismaModel.updatedAt,
     );

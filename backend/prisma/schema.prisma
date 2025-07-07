@@ -19,6 +19,7 @@ model RecommendationHistory {
   conditions  Json?    // 사용자 입력 조건 (최근 구매번호, 제외번호 등)
   imageData   Json?    // 이미지에서 추출한 번호 정보 (premium only)
   gptModel    String   // 사용된 GPT 모델 (gpt-3.5-turbo, gpt-4o)
+  analysis    String?  // GPT 분석 결과
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   

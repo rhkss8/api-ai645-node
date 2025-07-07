@@ -97,6 +97,7 @@ class DIContainer {
     this.recommendationController = new RecommendationController(
       this.generateRecommendationUseCase,
       this.extractImageNumbersUseCase,
+      this.ipLimitService,
     );
     this.reviewController = new ReviewController(
       this.generateReviewUseCase,

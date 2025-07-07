@@ -125,6 +125,14 @@ export const globalErrorHandler = (
     statusCode = 401;
     message = '토큰이 만료되었습니다.';
     code = 'TOKEN_EXPIRED';
+  } else if (error.name === 'PrismaClientInitializationError') {
+    statusCode = 503;
+    message = '서비스가 일시적으로 사용할 수 없습니다.';
+    code = 'SERVICE_UNAVAILABLE';
+    details = process.env.NODE_ENV === 'development' ? {
+      originalError: error.message,
+      hint: '데이터베이스 연결 문제'
+    } : undefined;
   } else if (error.name === 'MongoServerError' || error.name === 'PrismaClientKnownRequestError') {
     statusCode = 500;
     message = '데이터베이스 오류가 발생했습니다.';
