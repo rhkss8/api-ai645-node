@@ -6,6 +6,10 @@ export interface IRecommendationHistoryRepository {
   findById(id: string): Promise<RecommendationHistory | null>;
   findByRound(round: number): Promise<RecommendationHistory[]>;
   findByType(type: RecommendationType): Promise<RecommendationHistory[]>;
+  findByUserId(userId: string, page?: number, limit?: number): Promise<{
+    data: RecommendationHistory[];
+    total: number;
+  }>;
   findRecent(limit: number): Promise<RecommendationHistory[]>;
   findAll(page: number, limit: number): Promise<{
     data: RecommendationHistory[];

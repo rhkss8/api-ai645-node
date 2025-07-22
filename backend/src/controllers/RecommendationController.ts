@@ -40,11 +40,16 @@ export class RecommendationController {
         // 디버깅: 요청 데이터 로깅
         console.log('🔍 무료 추천 요청 데이터:', JSON.stringify(req.body, null, 2));
         
+        // 로그인된 사용자 정보 확인 (인증 미들웨어에서 이미 확인됨)
+        const user = (req as any).user;
+        console.log(`👤 무료 추천 요청 - 사용자: ${user?.sub} (${user?.nickname})`);
+        
         const request = {
           type: RecommendationType.FREE,
           round: req.body.round, // 프론트에서 전송한 round가 있으면 사용, 없으면 UseCase에서 자동 설정
           conditions: req.body.conditions,
           gameCount: req.body.gameCount, // gameCount 추가
+          userId: user?.sub, // 로그인된 사용자 ID
         };
 
         console.log('🎯 무료 추천 처리할 데이터:', JSON.stringify(request, null, 2));
@@ -63,7 +68,14 @@ export class RecommendationController {
 
         const response: ApiResponse = {
           success: true,
-          data: result,
+          data: {
+            ...result,
+            userInfo: {
+              userId: user?.sub,
+              nickname: user?.nickname,
+              message: '무료 추천이 완료되었습니다. 프리미엄 추천도 이용 가능합니다.',
+            },
+          },
           message: '무료 번호 추천이 완료되었습니다.',
           timestamp: new Date().toISOString(),
         };
@@ -113,12 +125,17 @@ export class RecommendationController {
         // 디버깅: 요청 데이터 로깅
         console.log('🔍 프리미엄 추천 요청 데이터:', JSON.stringify(requestData, null, 2));
 
+        // 로그인된 사용자 정보 확인 (인증 미들웨어에서 이미 확인됨)
+        const user = (req as any).user;
+        console.log(`👤 프리미엄 추천 요청 - 사용자: ${user?.sub} (${user?.nickname})`);
+
         const request = {
           type: RecommendationType.PREMIUM,
           round: requestData.round, // 프론트에서 전송한 round가 있으면 사용, 없으면 UseCase에서 자동 설정
           conditions: requestData.conditions,
           imageNumbers: requestData.imageNumbers, // 이미지 분석 결과에서 추출된 번호들
           gameCount: requestData.gameCount, // gameCount 추가
+          userId: user?.sub, // 로그인된 사용자 ID
         };
 
         console.log('🎯 프리미엄 추천 처리할 데이터:', JSON.stringify(request, null, 2));
@@ -127,7 +144,14 @@ export class RecommendationController {
 
         const response: ApiResponse = {
           success: true,
-          data: result,
+          data: {
+            ...result,
+            userInfo: {
+              userId: user?.sub,
+              nickname: user?.nickname,
+              message: '프리미엄 추천이 완료되었습니다.',
+            },
+          },
           message: '프리미엄 번호 추천이 완료되었습니다.',
           timestamp: new Date().toISOString(),
         };

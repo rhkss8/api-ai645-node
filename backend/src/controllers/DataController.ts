@@ -350,6 +350,104 @@ export class DataController {
   );
 
   /**
+   * 사용자별 추천 이력 조회 API
+   */
+  public getUserRecommendations = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        // 로그인된 사용자 정보 확인
+        const user = (req as any).user;
+        if (!user) {
+          throw new BusinessLogicError('로그인이 필요합니다.');
+        }
+
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const type = req.query.type as RecommendationType;
+
+        // limit 검증
+        if (limit > 50) {
+          throw new BusinessLogicError('한 번에 최대 50개까지만 조회 가능합니다.');
+        }
+
+        // type 파라미터 검증
+        if (type && !Object.values(RecommendationType).includes(type)) {
+          throw new BusinessLogicError('유효하지 않은 추천 타입입니다.');
+        }
+
+        // 사용자별 추천 이력 조회
+        const result = await this.recommendationRepository.findByUserId(user.sub, page, limit);
+
+        // 각 추천에 해당 회차의 당첨번호 정보와 당첨상태 추가
+        const recommendationsWithWinningNumbers = await Promise.all(
+          result.data.map(async (recommendation) => {
+            const winningNumbers = recommendation.round 
+              ? await this.winningNumbersRepository.findByRound(recommendation.round)
+              : null;
+
+            const winDetails = getWinDetails(
+              { numbers: recommendation.numbers },
+              winningNumbers ? {
+                numbers: winningNumbers.numbers,
+                bonusNumber: winningNumbers.bonusNumber
+              } : null
+            );
+
+            return {
+              id: recommendation.id,
+              type: recommendation.type,
+              round: recommendation.round,
+              numbers: recommendation.numbers,
+              conditions: recommendation.conditions,
+              imageData: recommendation.imageData,
+              winningNumbers: winningNumbers ? {
+                id: winningNumbers.id,
+                round: winningNumbers.round,
+                numbers: winningNumbers.numbers,
+                bonusNumber: winningNumbers.bonusNumber,
+                firstWinningAmount: winningNumbers.firstWinningAmount.toString(),
+                drawDate: winningNumbers.drawDate.toISOString(),
+              } : null,
+              winStatus: winDetails.status,
+              matchCounts: winDetails.matchCounts,
+              maxMatchCount: winDetails.maxMatchCount,
+              bestRank: winDetails.bestRank,
+              createdAt: recommendation.createdAt.toISOString(),
+            };
+          })
+        );
+
+        // type 필터링 (DB에서 필터링할 수 없으므로 메모리에서 필터링)
+        let filteredRecommendations = recommendationsWithWinningNumbers;
+        if (type) {
+          filteredRecommendations = recommendationsWithWinningNumbers.filter(
+            rec => rec.type === type
+          );
+        }
+
+        const totalPages = Math.ceil(result.total / limit);
+
+        const response: PaginatedResponse<any> = {
+          success: true,
+          data: filteredRecommendations,
+          pagination: {
+            page,
+            limit,
+            total: result.total,
+            totalPages,
+          },
+          message: `내 추천 이력 ${filteredRecommendations.length}개를 조회했습니다.`,
+          timestamp: new Date().toISOString(),
+        };
+
+        res.status(200).json(response);
+      } catch (error) {
+        throw error;
+      }
+    },
+  );
+
+  /**
    * 개발용: IP 제한 초기화
    */
   public resetIPLimits = asyncHandler(

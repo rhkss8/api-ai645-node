@@ -1,0 +1,350 @@
+import { Request, Response } from 'express';
+import passport from 'passport';
+import { prisma } from '../config/database';
+import { signAccessToken, signRefreshToken, extractJTI } from '../lib/jwt';
+import { asyncHandler } from '../middlewares/errorHandler';
+
+export class AuthController {
+  /**
+   * 소셜 로그인 콜백 처리
+   */
+  public handleSocialCallback = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const provider = req.params.provider;
+      if (!provider) {
+        res.status(400).json({
+          success: false,
+          error: '프로바이더가 지정되지 않았습니다.',
+          message: '올바른 로그인 URL을 사용해주세요.',
+        });
+        return;
+      }
+
+      passport.authenticate(provider, { session: false }, async (err: any, user: any) => {
+        if (err) {
+          console.error('소셜 로그인 오류:', err);
+          res.status(500).json({
+            success: false,
+            error: '소셜 로그인에 실패했습니다.',
+            message: '다시 시도해주세요.',
+          });
+          return;
+        }
+
+        if (!user) {
+          res.status(401).json({
+            success: false,
+            error: '사용자 정보를 가져올 수 없습니다.',
+            message: '다시 시도해주세요.',
+          });
+          return;
+        }
+
+        try {
+          console.log('🔑 토큰 발급 시작 - 사용자 ID:', user.id, '닉네임:', user.nickname);
+          
+          // JWT 토큰 발급
+          const accessToken = await signAccessToken({
+            sub: user.id,
+            nickname: user.nickname,
+          });
+
+          const refreshToken = await signRefreshToken({
+            sub: user.id,
+            nickname: user.nickname,
+          });
+
+          console.log('✅ 토큰 발급 완료 - 액세스 토큰 길이:', accessToken.length);
+
+          // 리프레시 토큰 해시 저장
+          const jti = extractJTI(refreshToken);
+          if (jti) {
+            console.log('🔐 리프레시 토큰 저장 시작 - JTI:', jti);
+            const bcrypt = await import('bcryptjs');
+            const tokenHash = await bcrypt.hash(jti, 10);
+            
+            if (prisma?.refreshToken) {
+              await prisma.refreshToken.create({
+                data: {
+                  userId: user.id,
+                  tokenHash,
+                  expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14일
+                },
+              });
+              console.log('✅ 리프레시 토큰 저장 완료');
+            } else {
+              console.error('❌ prisma.refreshToken이 undefined입니다!');
+            }
+          }
+
+          // 쿠키 설정
+          res.cookie('refresh_token', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            domain: process.env.NODE_ENV === 'production' ? '.ai645.com' : 'localhost', // 서브도메인 공유
+            maxAge: 14 * 24 * 60 * 60 * 1000, // 14일
+          });
+
+          // 프론트엔드로 리다이렉트 (토큰을 URL 파라미터로 전달)
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          const redirectUrl = `${frontendUrl}/auth/callback?success=true&user=${encodeURIComponent(user.nickname)}&access_token=${accessToken}`;
+          
+          res.redirect(redirectUrl);
+        } catch (error) {
+          console.error('JWT 토큰 발급 오류:', error);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          const redirectUrl = `${frontendUrl}/auth/callback?success=false&error=token_error`;
+          res.redirect(redirectUrl);
+        }
+      })(req, res);
+    }
+  );
+
+  /**
+   * 로그아웃
+   */
+  public logout = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const token = authHeader.substring(7);
+          const jti = extractJTI(token);
+          
+          if (jti) {
+            // 액세스 토큰을 블랙리스트에 추가
+            await prisma?.accessTokenBlacklist?.create({
+              data: {
+                jti,
+                expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15분 후 만료
+              },
+            });
+          }
+        }
+
+        // 리프레시 토큰 삭제
+        const refreshToken = req.cookies?.refresh_token;
+        if (refreshToken) {
+          const jti = extractJTI(refreshToken);
+          if (jti) {
+            const bcrypt = await import('bcryptjs');
+            const tokenHash = await bcrypt.hash(jti, 10);
+            
+            await prisma?.refreshToken?.deleteMany({
+              where: { tokenHash },
+            });
+          }
+        }
+
+        // 쿠키 삭제
+        res.clearCookie('refresh_token', {
+          domain: process.env.NODE_ENV === 'production' ? '.ai645.com' : undefined,
+        });
+
+        res.json({
+          success: true,
+          message: '로그아웃이 완료되었습니다.',
+        });
+      } catch (error) {
+        console.error('로그아웃 오류:', error);
+        res.status(500).json({
+          success: false,
+          error: '로그아웃 처리에 실패했습니다.',
+          message: '다시 시도해주세요.',
+        });
+      }
+    }
+  );
+
+  /**
+   * 사용자 정보 조회
+   */
+  public getProfile = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          error: '인증이 필요합니다.',
+          message: '다시 로그인해주세요.',
+        });
+        return;
+      }
+
+      const userData = await prisma?.user?.findUnique({
+        where: { id: user.sub },
+        include: {
+          socialAccounts: {
+            select: {
+              provider: true,
+              providerUid: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+
+      if (!userData) {
+        res.status(404).json({
+          success: false,
+          error: '사용자를 찾을 수 없습니다.',
+          message: '다시 로그인해주세요.',
+        });
+        return;
+      }
+
+      // 소셜 인증 타입 정보 추가
+      const primarySocialAccount = userData.socialAccounts[0];
+      const authType = primarySocialAccount ? primarySocialAccount.provider : null;
+
+              res.json({
+          success: true,
+          data: {
+            id: userData.id,
+            nickname: userData.nickname,
+            role: userData.role,
+            termsAgreed: userData.termsAgreed,
+            privacyAgreed: userData.privacyAgreed,
+            marketingAgreed: userData.marketingAgreed,
+            authType, // 주요 소셜 인증 타입 (KAKAO, GOOGLE, NAVER)
+            socialAccounts: userData.socialAccounts.map((account: any) => ({
+              provider: account.provider,
+              providerUid: account.providerUid,
+              connectedAt: account.createdAt,
+            })),
+            createdAt: userData.createdAt,
+          },
+          message: '사용자 정보를 조회했습니다.',
+        });
+    }
+  );
+
+  /**
+   * 계정 탈퇴
+   */
+  public deleteAccount = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          error: '인증이 필요합니다.',
+          message: '다시 로그인해주세요.',
+        });
+        return;
+      }
+
+      try {
+        // 소셜 계정 연결 해제 (실제로는 각 제공자의 API 호출 필요)
+        // 여기서는 DB에서만 삭제
+        
+        // 사용자 삭제 (CASCADE로 관련 데이터 모두 삭제)
+        await prisma?.user?.delete({
+          where: { id: user.sub },
+        });
+
+        // 쿠키 삭제
+        res.clearCookie('refresh_token', {
+          domain: process.env.NODE_ENV === 'production' ? '.ai645.com' : undefined,
+        });
+
+        res.json({
+          success: true,
+          message: '계정이 삭제되었습니다.',
+        });
+      } catch (error) {
+        console.error('계정 삭제 오류:', error);
+        res.status(500).json({
+          success: false,
+          error: '계정 삭제에 실패했습니다.',
+          message: '다시 시도해주세요.',
+        });
+      }
+    }
+  );
+
+  /**
+   * 동의항목 업데이트
+   */
+  public updateConsent = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const userId = (req as any).user?.sub;
+      
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: '로그인이 필요합니다.',
+          message: '다시 로그인해주세요.',
+        });
+        return;
+      }
+
+      const { termsAgreed, privacyAgreed, marketingAgreed } = req.body;
+
+      // 필수 동의항목 검증
+      if (termsAgreed !== true || privacyAgreed !== true) {
+        res.status(400).json({
+          success: false,
+          error: '필수 동의항목에 동의해야 합니다.',
+          message: '이용약관과 개인정보 수집·이용에 동의해주세요.',
+        });
+        return;
+      }
+
+      try {
+        const user = await prisma?.user?.update({
+          where: { id: userId },
+          data: {
+            termsAgreed: termsAgreed || false,
+            privacyAgreed: privacyAgreed || false,
+            marketingAgreed: marketingAgreed || false,
+          },
+          select: {
+            id: true,
+            nickname: true,
+            role: true,
+            termsAgreed: true,
+            privacyAgreed: true,
+            marketingAgreed: true,
+            createdAt: true,
+          },
+        });
+
+        if (!user) {
+          res.status(404).json({
+            success: false,
+            error: '사용자를 찾을 수 없습니다.',
+            message: '다시 로그인해주세요.',
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          data: {
+            user: {
+              id: user.id,
+              nickname: user.nickname,
+              role: user.role,
+              termsAgreed: user.termsAgreed,
+              privacyAgreed: user.privacyAgreed,
+              marketingAgreed: user.marketingAgreed,
+              createdAt: user.createdAt,
+            },
+          },
+          message: '동의항목이 업데이트되었습니다.',
+        });
+      } catch (error) {
+        console.error('동의항목 업데이트 오류:', error);
+        res.status(500).json({
+          success: false,
+          error: '동의항목 업데이트에 실패했습니다.',
+          message: '잠시 후 다시 시도해주세요.',
+        });
+      }
+    }
+  );
+} 

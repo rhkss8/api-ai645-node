@@ -6,6 +6,7 @@ import {
   validatePaginationQuery,
 } from '../middlewares/validation';
 import { dataQueryLimiter } from '../middlewares/rateLimiter';
+import { authenticateAccess } from '../middlewares/auth';
 import { LottoScheduler } from '../batch/LottoScheduler';
 import { ApiResponse } from '../types/common';
 
@@ -152,6 +153,297 @@ export const createDataRoutes = (controller: DataController): Router => {
    *                           type: string
    *                           format: date-time
    *                           example: "2025-06-23T07:45:28.502Z"
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   *       404:
+   *         description: 추천을 찾을 수 없음
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "추천 내역을 찾을 수 없습니다."
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   *       429:
+   *         description: 요청 한도 초과
+   *         headers:
+   *           X-RateLimit-Limit:
+   *             schema:
+   *               type: string
+   *               example: "60"
+   *             description: 최대 허용 요청 수
+   *           X-RateLimit-Remaining:
+   *             schema:
+   *               type: string
+   *               example: "0"
+   *             description: 남은 요청 수
+   *           X-RateLimit-Reset:
+   *             schema:
+   *               type: string
+   *               format: date-time
+   *               example: "2025-06-24T00:00:00.000Z"
+   *             description: 다음 요청 가능 시간
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "데이터 조회 요청 한도를 초과했습니다."
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   */
+  /**
+   * @swagger
+   * /api/data/recommendations/my:
+   *   get:
+   *     summary: 내 추천 이력 조회
+   *     description: 로그인한 사용자의 추천 이력을 조회합니다.
+   *     tags: [Data]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           default: 1
+   *         description: 페이지 번호
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           minimum: 1
+   *           maximum: 50
+   *           default: 10
+   *         description: 페이지 크기
+   *       - in: query
+   *         name: type
+   *         schema:
+   *           type: string
+   *           enum: [FREE, PREMIUM]
+   *         description: 추천 타입 필터
+   *     responses:
+   *       200:
+   *         description: 조회 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                         example: "rec_abc123"
+   *                         description: 추천 ID
+   *                       type:
+   *                         type: string
+   *                         enum: [FREE, PREMIUM]
+   *                         example: "PREMIUM"
+   *                         description: 추천 타입
+   *                       round:
+   *                         type: integer
+   *                         example: 1150
+   *                         description: 대상 회차
+   *                       numbers:
+   *                         type: array
+   *                         items:
+   *                           type: array
+   *                           items:
+   *                             type: integer
+   *                       example: [[1, 7, 14, 21, 28, 35], [3, 12, 19, 26, 33, 40]]
+   *                       description: 추천된 번호 세트들
+   *                       conditions:
+   *                         type: object
+   *                         description: 사용자 조건 (선택사항)
+   *                       imageData:
+   *                         type: object
+   *                         description: 이미지 분석 결과 (선택사항)
+   *                       winningNumbers:
+   *                         type: object
+   *                         nullable: true
+   *                         description: 해당 회차의 당첨번호 정보
+   *                       winStatus:
+   *                         type: string
+   *                         enum: [WIN, LOSE, PENDING]
+   *                         description: 당첨상태
+   *                       matchCounts:
+   *                         type: array
+   *                         items:
+   *                           type: integer
+   *                         description: 각 세트별 맞은 개수
+   *                       maxMatchCount:
+   *                         type: integer
+   *                         description: 최대 맞은 개수
+   *                       bestRank:
+   *                         type: integer
+   *                         description: 최고 등수
+   *                       createdAt:
+   *                         type: string
+   *                         format: date-time
+   *                         description: 생성일
+   *                 pagination:
+   *                   type: object
+   *                   properties:
+   *                     page:
+   *                       type: integer
+   *                       example: 1
+   *                       description: 현재 페이지
+   *                     limit:
+   *                       type: integer
+   *                       example: 10
+   *                       description: 페이지 크기
+   *                     total:
+   *                       type: integer
+   *                       example: 25
+   *                       description: 전체 데이터 수
+   *                     totalPages:
+   *                       type: integer
+   *                       example: 3
+   *                       description: 전체 페이지 수
+   *                 message:
+   *                   type: string
+   *                   example: "내 추천 이력 10개를 조회했습니다."
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   *       401:
+   *         description: 인증 필요
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "로그인이 필요합니다."
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   *       429:
+   *         description: 요청 한도 초과
+   *         headers:
+   *           X-RateLimit-Limit:
+   *             schema:
+   *               type: string
+   *               example: "60"
+   *             description: 최대 허용 요청 수
+   *           X-RateLimit-Remaining:
+   *             schema:
+   *               type: string
+   *               example: "0"
+   *             description: 남은 요청 수
+   *           X-RateLimit-Reset:
+   *             schema:
+   *               type: string
+   *               format: date-time
+   *               example: "2025-06-24T00:00:00.000Z"
+   *             description: 다음 요청 가능 시간
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "데이터 조회 요청 한도를 초과했습니다."
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
+   */
+  router.get(
+    '/recommendations/my',
+    authenticateAccess,
+    dataQueryLimiter,
+    controller.getUserRecommendations,
+  );
+
+  /**
+   * @swagger
+   * /api/data/recommendations/{id}:
+   *   get:
+   *     summary: 특정 추천 조회
+   *     description: ID로 특정 추천 내역 조회
+   *     tags: [Data]
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 추천 ID
+   *     responses:
+   *       200:
+   *         description: 조회 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                       example: "rec_abc123"
+   *                       description: 추천 ID
+   *                     type:
+   *                       type: string
+   *                       enum: [FREE, PREMIUM]
+   *                       example: "PREMIUM"
+   *                       description: 추천 타입
+   *                     round:
+   *                       type: integer
+   *                       example: 1150
+   *                       description: 대상 회차
+   *                     numbers:
+   *                       type: array
+   *                       items:
+   *                         type: array
+   *                         items:
+   *                           type: integer
+   *                       example: [[1, 7, 14, 21, 28, 35], [3, 12, 19, 26, 33, 40]]
+   *                       description: 추천된 번호 세트들
+   *                     conditions:
+   *                       type: object
+   *                       description: 사용자 조건 (선택사항)
+   *                     imageData:
+   *                       type: object
+   *                       description: 이미지 분석 결과 (선택사항)
+   *                     winningNumbers:
+   *                       type: object
+   *                       nullable: true
+   *                       description: 해당 회차의 당첨번호 정보
    *                 timestamp:
    *                   type: string
    *                   format: date-time

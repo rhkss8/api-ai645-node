@@ -13,6 +13,7 @@ import {
   imageExtractionLimiter,
 } from '../middlewares/rateLimiter';
 import { freeRecommendationIPLimit } from '../middleware/ipLimitMiddleware';
+import { authenticateAccess } from '../middlewares/auth';
 
 // Multer 설정 (메모리 저장)
 const upload = multer({
@@ -41,8 +42,10 @@ export const createRecommendationRoutes = (
    * /api/recommend/free:
    *   post:
    *     summary: 무료 번호 추천
-   *     description: GPT-3.5-turbo를 사용한 로또 번호 추천
+   *     description: GPT-3.5-turbo를 사용한 로또 번호 추천 - 로그인 필요
    *     tags: [Recommendations]
+   *     security:
+   *       - bearerAuth: []
    *     requestBody:
    *       required: false
    *       content:
@@ -149,6 +152,25 @@ export const createRecommendationRoutes = (
    *                 timestamp:
    *                   type: string
    *                   format: date-time
+   *       401:
+   *         description: 인증 필요
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "로그인이 필요합니다."
+   *                 message:
+   *                   type: string
+   *                   example: "무료 추천을 사용하려면 로그인이 필요합니다."
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
    *       429:
    *         description: 일일 요청 한도 초과 (IP별 하루 1회 제한)
    *         headers:
@@ -205,6 +227,7 @@ export const createRecommendationRoutes = (
    */
   router.post(
     '/free',
+    authenticateAccess, // 인증 미들웨어 추가
     freeRecommendationLimiter,
     freeRecommendationIPLimit(ipLimitService),
     validateFreeRecommendationRequest,
@@ -216,8 +239,10 @@ export const createRecommendationRoutes = (
    * /api/recommend/premium:
    *   post:
    *     summary: 프리미엄 번호 추천
-   *     description: GPT-4o를 사용한 고급 로또 번호 추천 (이미지 지원)
+   *     description: GPT-4o를 사용한 고급 로또 번호 추천 (이미지 지원) - 로그인 필요
    *     tags: [Recommendations]
+   *     security:
+   *       - bearerAuth: []
    *     requestBody:
    *       required: false
    *       content:
@@ -314,6 +339,25 @@ export const createRecommendationRoutes = (
    *                   type: string
    *                   format: date-time
    *                   example: "2025-06-23T07:45:28.502Z"
+   *       401:
+   *         description: 인증 필요
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "로그인이 필요합니다."
+   *                 message:
+   *                   type: string
+   *                   example: "프리미엄 추천을 사용하려면 로그인이 필요합니다."
+   *                 timestamp:
+   *                   type: string
+   *                   format: date-time
    *       400:
    *         description: 잘못된 요청
    *         content:
@@ -372,6 +416,7 @@ export const createRecommendationRoutes = (
    */
   router.post(
     '/premium',
+    authenticateAccess, // 인증 미들웨어 추가
     premiumRecommendationLimiter,
     validatePremiumRecommendationRequest,
     controller.generatePremiumRecommendation,

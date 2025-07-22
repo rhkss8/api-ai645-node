@@ -100,6 +100,7 @@ export class GenerateRecommendationUseCase {
       request.conditions,
       imageData,
       gptResult.analysis, // GPT 분석 결과 추가
+      request.userId, // 사용자 ID 추가
     );
 
     recommendation.validate();
