@@ -7,6 +7,8 @@ import compression from 'compression';
 import morgan from 'morgan';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
+import passport from 'passport';
+import cookieParser from 'cookie-parser';
 
 import env from './config/env';
 // import { connectDatabase, disconnectDatabase } from './config/database';
@@ -15,6 +17,8 @@ import { createApiRoutes, DIContainer } from './routes/index';
 import { globalErrorHandler, notFoundHandler } from './middlewares/errorHandler';
 import { generalLimiter } from './middlewares/rateLimiter';
 import { LottoScheduler } from './batch/LottoScheduler';
+import { initPassportStrategies } from './auth/providers';
+import { startTokenRefreshWorker } from './jobs/providerTokenRefresh';
 
 const app = express();
 
@@ -34,6 +38,13 @@ app.use(cors({
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Cookie parser
+app.use(cookieParser());
+
+// Passport initialization
+app.use(passport.initialize());
+initPassportStrategies();
 
 // Logging middleware
 if (env.NODE_ENV !== 'production') {
@@ -58,6 +69,10 @@ const swaggerOptions = {
       },
     ],
     tags: [
+      {
+        name: 'Authentication',
+        description: '인증 관련 API',
+      },
       {
         name: 'Recommendations',
         description: '로또 번호 추천 관련 API',
