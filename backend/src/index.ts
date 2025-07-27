@@ -89,6 +89,10 @@ const swaggerOptions = {
         name: 'Data',
         description: '데이터 조회 관련 API',
       },
+      {
+        name: 'Payment',
+        description: '결제 관련 API',
+      },
     ],
     components: {
       securitySchemes: {

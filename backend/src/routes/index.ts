@@ -16,6 +16,7 @@ import { IPLimitService } from '../services/IPLimitService';
 import { GenerateRecommendationUseCase } from '../usecases/GenerateRecommendationUseCase';
 import { GenerateReviewUseCase } from '../usecases/GenerateReviewUseCase';
 import { ExtractImageNumbersUseCase } from '../usecases/ExtractImageNumbersUseCase';
+import { PaymentUseCase } from '../usecases/PaymentUseCase';
 
 // Controllers
 import { RecommendationController } from '../controllers/RecommendationController';
@@ -23,6 +24,7 @@ import { ReviewController } from '../controllers/ReviewController';
 import { DataController } from '../controllers/DataController';
 import { AuthController } from '../controllers/AuthController';
 import { BoardController } from '../controllers/BoardController';
+import { PaymentController } from '../controllers/PaymentController';
 
 // Routes
 import { createRecommendationRoutes, createImageRoutes } from './recommendationRoutes';
@@ -30,6 +32,7 @@ import { createReviewRoutes } from './reviewRoutes';
 import { createDataRoutes } from './dataRoutes';
 import { createAuthRoutes } from './authRoutes';
 import { createBoardRoutes } from './boardRoutes';
+import { createPaymentRoutes } from './paymentRoutes';
 import adminRoutes from './adminRoutes';
 
 // Middleware
@@ -55,6 +58,7 @@ class DIContainer {
   private generateReviewUseCase!: GenerateReviewUseCase;
   private extractImageNumbersUseCase!: ExtractImageNumbersUseCase;
   private boardPostUseCase!: any; // BoardPostUseCase
+  private paymentUseCase!: PaymentUseCase;
   
   // Controllers
   private recommendationController!: RecommendationController;
@@ -62,6 +66,7 @@ class DIContainer {
   private dataController!: DataController;
   private authController!: AuthController;
   private boardController!: BoardController;
+  private paymentController!: PaymentController;
 
   private constructor() {
     this.initializeDependencies();
@@ -106,6 +111,9 @@ class DIContainer {
     const { PrismaBoardPostRepository } = require('../repositories/impl/PrismaBoardPostRepository');
     this.boardPostUseCase = new BoardPostUseCase(new PrismaBoardPostRepository(this.prisma));
 
+    // Payment Use Case
+    this.paymentUseCase = new PaymentUseCase(this.generateRecommendationUseCase);
+
     // Controllers
     this.recommendationController = new RecommendationController(
       this.generateRecommendationUseCase,
@@ -123,6 +131,7 @@ class DIContainer {
     );
     this.authController = new AuthController();
     this.boardController = new BoardController(this.boardPostUseCase);
+    this.paymentController = new PaymentController(this.paymentUseCase);
   }
 
   public getRecommendationController(): RecommendationController {
@@ -143,6 +152,10 @@ class DIContainer {
 
   public getBoardController(): BoardController {
     return this.boardController;
+  }
+
+  public getPaymentController(): PaymentController {
+    return this.paymentController;
   }
 
   public getIPLimitService(): IPLimitService {
@@ -175,6 +188,7 @@ export const createApiRoutes = (): Router => {
   router.use('/data', createDataRoutes(container.getDataController()));
   router.use('/board', createBoardRoutes(container.getBoardController()));
   router.use('/admin', adminRoutes);
+  router.use('/payment', createPaymentRoutes(container.getPaymentController()));
 
   return router;
 };

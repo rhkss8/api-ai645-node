@@ -62,4 +62,23 @@ export class IdGenerator {
       return v.toString(16);
     });
   }
+}
+
+/**
+ * merchant_uid 생성 (PortOne 형식)
+ * 형식: AI645_{timestamp}_{random}
+ */
+export function generateMerchantUid(): string {
+  const timestamp = Date.now();
+  const random = randomBytes(4).toString('hex').toUpperCase();
+  return `AI645_${timestamp}_${random}`;
+}
+
+/**
+ * 주문 ID 생성
+ */
+export function generateOrderId(): string {
+  const timestamp = Date.now();
+  const random = randomBytes(3).toString('hex').toUpperCase();
+  return `ORDER_${timestamp}_${random}`;
 } 
