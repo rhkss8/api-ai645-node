@@ -26,9 +26,6 @@ RUN npx prisma generate
 # TypeScript 컴파일
 RUN npm run build
 
-# 스크립트 실행 권한 부여
-RUN chmod +x scripts/init-data.sh
-
 # 비특권 사용자로 실행 (보안 강화)
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
