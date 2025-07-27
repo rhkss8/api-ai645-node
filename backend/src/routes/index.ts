@@ -21,11 +21,13 @@ import { ExtractImageNumbersUseCase } from '../usecases/ExtractImageNumbersUseCa
 import { RecommendationController } from '../controllers/RecommendationController';
 import { ReviewController } from '../controllers/ReviewController';
 import { DataController } from '../controllers/DataController';
+import { AuthController } from '../controllers/AuthController';
 
 // Routes
 import { createRecommendationRoutes, createImageRoutes } from './recommendationRoutes';
 import { createReviewRoutes } from './reviewRoutes';
 import { createDataRoutes } from './dataRoutes';
+import { createAuthRoutes } from './authRoutes';
 
 // Middleware
 import { resetIPLimits } from '../middleware/ipLimitMiddleware';
@@ -54,6 +56,7 @@ class DIContainer {
   private recommendationController!: RecommendationController;
   private reviewController!: ReviewController;
   private dataController!: DataController;
+  private authController!: AuthController;
 
   private constructor() {
     this.initializeDependencies();
@@ -108,6 +111,7 @@ class DIContainer {
       this.winningNumbersRepository,
       this.ipLimitService,
     );
+    this.authController = new AuthController();
   }
 
   public getRecommendationController(): RecommendationController {
@@ -120,6 +124,10 @@ class DIContainer {
 
   public getDataController(): DataController {
     return this.dataController;
+  }
+
+  public getAuthController(): AuthController {
+    return this.authController;
   }
 
   public getIPLimitService(): IPLimitService {
@@ -142,6 +150,7 @@ export const createApiRoutes = (): Router => {
   }
 
   // 각 라우트 그룹 등록
+  router.use('/auth', createAuthRoutes(container.getAuthController()));
   router.use('/recommend', createRecommendationRoutes(
     container.getRecommendationController(),
     container.getIPLimitService()
