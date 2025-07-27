@@ -148,14 +148,15 @@ export function initPassportStrategies() {
     )
   );
 
-  // 구글 전략
-  passport.use(
-    new GoogleStrategy(
-      {
-        clientID: process.env.GOOGLE_CLIENT_ID!,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        callbackURL: `${process.env.OAUTH_REDIRECT_URI}/google/callback`,
-      },
+  // 구글 전략 (환경변수가 설정된 경우에만)
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          callbackURL: `${process.env.OAUTH_REDIRECT_URI}/google/callback`,
+        },
       async (accessToken: string, refreshToken: string | undefined, profile: any, done: any) => {
         try {
           console.log('🔐 구글 로그인 시도:', profile.id);
@@ -183,6 +184,9 @@ export function initPassportStrategies() {
       }
     )
   );
+  } else {
+    console.log('⚠️ Google OAuth 환경변수가 설정되지 않아 Google 로그인이 비활성화됩니다.');
+  }
 
   // 네이버 전략
   passport.use(
