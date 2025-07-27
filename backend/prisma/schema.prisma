@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
@@ -12,82 +9,191 @@ datasource db {
 }
 
 model RecommendationHistory {
-  id          String   @id @default(cuid())
-  round       Int?     // 회차 정보 (optional)
-  numbers     Json     // 추천된 번호들 5세트 [[1,2,3,4,5,6], [7,8,9,10,11,12], ...]
-  type        RecommendationType
-  conditions  Json?    // 사용자 입력 조건 (최근 구매번호, 제외번호 등)
-  imageData   Json?    // 이미지에서 추출한 번호 정보 (premium only)
-  gptModel    String   // 사용된 GPT 모델 (gpt-3.5-turbo, gpt-4o)
-  analysis    String?  // GPT 분석 결과
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // 관계
-  reviews     RecommendationReview[]
-  
+  id         String                 @id @default(cuid())
+  round      Int?
+  numbers    Json
+  type       RecommendationType
+  conditions Json?
+  imageData  Json?
+  gptModel   String
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  analysis   String?
+  userId     String?
+  user       User?                  @relation(fields: [userId], references: [id])
+  reviews    RecommendationReview[]
+
   @@map("recommendation_history")
 }
 
 model RecommendationReview {
-  id               String   @id @default(cuid())
+  id               String                @id @default(cuid())
   recommendationId String
-  winningNumbers   Json     // 실제 당첨번호 [1,2,3,4,5,6,7] (보너스번호 포함)
-  matchedCounts    Json     // 각 세트별 맞은 개수 [2, 1, 3, 0, 1]
-  reviewText       String   // GPT가 생성한 회고문
-  analysisPrompt   String   // 분석에 사용된 프롬프트
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  
-  // 관계
+  winningNumbers   Json
+  matchedCounts    Json
+  reviewText       String
+  analysisPrompt   String
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   recommendation   RecommendationHistory @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
-  
+
   @@map("recommendation_review")
 }
 
 model WinningNumbers {
-  id        String   @id @default(cuid())
-  round     Int      @unique // 당첨회차
-  numbers   Json     // 당첨번호 [1,2,3,4,5,6,7] (보너스번호 포함)
-  bonusNumber Int    // 보너스추첨번호
-  firstWinningAmount BigInt  // 1등 당첨금
-  drawDate  DateTime // 추첨일
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
+  id                 String   @id @default(cuid())
+  round              Int      @unique
+  numbers            Json
+  drawDate           DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  bonusNumber        Int
+  firstWinningAmount BigInt
+
   @@map("winning_numbers")
 }
 
 model ApiUsage {
   id           String   @id @default(cuid())
-  endpoint     String   // API 엔드포인트
-  gptModel     String?  // 사용된 GPT 모델
-  tokenUsed    Int?     // 사용된 토큰 수
-  cost         Float?   // 비용 (USD)
-  responseTime Int?     // 응답 시간 (ms)
+  endpoint     String
+  gptModel     String?
+  tokenUsed    Int?
+  cost         Float?
+  responseTime Int?
   success      Boolean  @default(true)
-  errorMessage String?  // 에러 메시지
-  userIp       String?  // 사용자 IP
+  errorMessage String?
+  userIp       String?
   createdAt    DateTime @default(now())
-  
+
   @@map("api_usage")
+}
+
+model IPLimitRecord {
+  id              String   @id @default(cuid())
+  ipAddress       String   @unique
+  lastRequestDate String
+  requestCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ipAddress, lastRequestDate])
+  @@map("ip_limit_records")
+}
+
+model User {
+  id              String                  @id @default(cuid())
+  nickname        String                  @db.VarChar(40)
+  createdAt       DateTime                @default(now())
+  deletedAt       DateTime?
+  role            UserRole                @default(USER)
+  termsAgreed     Boolean                 @default(false)
+  privacyAgreed   Boolean                 @default(false)
+  marketingAgreed Boolean                 @default(false)
+  posts           BoardPost[]
+  payments        Payment[]
+  recommendations RecommendationHistory[]
+  refreshTokens   RefreshToken[]
+  socialAccounts  SocialAccount[]
+  subscriptions   Subscription[]
+
+  @@map("users")
+}
+
+model SocialAccount {
+  id           String       @id @default(cuid())
+  userId       String
+  provider     AuthProvider
+  providerUid  String
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUid])
+  @@map("social_accounts")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model AccessTokenBlacklist {
+  jti       String   @id
+  expiresAt DateTime
+
+  @@map("access_token_blacklist")
+}
+
+model Payment {
+  id                   String           @id @default(cuid())
+  userId               String
+  amount               Int
+  currency             String           @default("KRW")
+  paymentMethod        String
+  status               PaymentStatus    @default(PENDING)
+  subscriptionType     SubscriptionType
+  subscriptionDuration Int
+  externalPaymentId    String?
+  description          String?
+  metadata             Json?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription         Subscription?
+
+  @@map("payments")
+}
+
+model Subscription {
+  id        String           @id @default(cuid())
+  userId    String
+  paymentId String?          @unique
+  type      SubscriptionType
+  status    String           @default("active")
+  startDate DateTime         @default(now())
+  endDate   DateTime
+  autoRenew Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  payment   Payment?         @relation(fields: [paymentId], references: [id])
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model BoardPost {
+  id          String        @id @default(cuid())
+  category    BoardCategory
+  title       String        @db.VarChar(200)
+  content     String
+  authorName  String        @db.VarChar(40)
+  authorId    String?
+  isImportant Boolean       @default(false)
+  viewCount   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+  author      User?         @relation(fields: [authorId], references: [id])
+
+  @@index([category])
+  @@index([isImportant])
+  @@index([createdAt])
+  @@index([authorId])
+  @@map("board_posts")
 }
 
 enum RecommendationType {
   FREE
   PREMIUM
-}
-
-model IPLimitRecord {
-  id                String      @id @default(cuid())
-  ipAddress         String      @unique
-  lastRequestDate   String      // YYYY-MM-DD 형식
-  requestCount      Int         @default(0)
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-
-  @@index([ipAddress, lastRequestDate])
-  @@map("ip_limit_records")
 }
 
 enum AuthProvider {
@@ -97,18 +203,27 @@ enum AuthProvider {
   NAVER
 }
 
-model User {
-  id          String      @id @default(cuid())
-  email       String?     @unique
-  nickname    String?
-  password    String?     // 이메일 가입 시만 사용
-  provider    AuthProvider
-  providerId  String?     // 소셜 가입 시 소셜 고유 ID
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+enum UserRole {
+  USER
+  ADMIN
 }
 
-// 인덱스 최적화
-// @@index([createdAt])
-// @@index([type])
-// @@index([round]) 
+enum BoardCategory {
+  NOTICE
+  SUGGESTION
+  PARTNERSHIP
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum SubscriptionType {
+  MONTHLY
+  YEARLY
+  LIFETIME
+}
