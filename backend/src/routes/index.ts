@@ -7,7 +7,6 @@ import { PrismaRecommendationHistoryRepository } from '../repositories/impl/Pris
 import { PrismaRecommendationReviewRepository } from '../repositories/impl/PrismaRecommendationReviewRepository';
 import { PrismaWinningNumbersRepository } from '../repositories/impl/PrismaWinningNumbersRepository';
 import { PrismaIPLimitRepository } from '../repositories/impl/PrismaIPLimitRepository';
-import { PrismaBoardPostRepository } from '../repositories/impl/PrismaBoardPostRepository';
 import { OpenAIGPTService } from '../repositories/impl/OpenAIGPTService';
 
 // Services
@@ -17,21 +16,18 @@ import { IPLimitService } from '../services/IPLimitService';
 import { GenerateRecommendationUseCase } from '../usecases/GenerateRecommendationUseCase';
 import { GenerateReviewUseCase } from '../usecases/GenerateReviewUseCase';
 import { ExtractImageNumbersUseCase } from '../usecases/ExtractImageNumbersUseCase';
-import { BoardPostUseCase } from '../usecases/BoardPostUseCase';
 
 // Controllers
 import { RecommendationController } from '../controllers/RecommendationController';
 import { ReviewController } from '../controllers/ReviewController';
 import { DataController } from '../controllers/DataController';
 import { AuthController } from '../controllers/AuthController';
-import { BoardController } from '../controllers/BoardController';
 
 // Routes
 import { createRecommendationRoutes, createImageRoutes } from './recommendationRoutes';
 import { createReviewRoutes } from './reviewRoutes';
 import { createDataRoutes } from './dataRoutes';
 import { createAuthRoutes } from './authRoutes';
-import { createBoardRoutes } from './boardRoutes';
 
 // Middleware
 import { resetIPLimits } from '../middleware/ipLimitMiddleware';
@@ -55,14 +51,12 @@ class DIContainer {
   private generateRecommendationUseCase!: GenerateRecommendationUseCase;
   private generateReviewUseCase!: GenerateReviewUseCase;
   private extractImageNumbersUseCase!: ExtractImageNumbersUseCase;
-  private boardPostUseCase!: BoardPostUseCase;
   
   // Controllers
   private recommendationController!: RecommendationController;
   private reviewController!: ReviewController;
   private dataController!: DataController;
   private authController!: AuthController;
-  private boardController!: BoardController;
 
   private constructor() {
     this.initializeDependencies();
@@ -101,7 +95,6 @@ class DIContainer {
       this.gptService,
     );
     this.extractImageNumbersUseCase = new ExtractImageNumbersUseCase(this.gptService);
-    this.boardPostUseCase = new BoardPostUseCase(new PrismaBoardPostRepository(this.prisma));
 
     // Controllers
     this.recommendationController = new RecommendationController(
@@ -119,7 +112,6 @@ class DIContainer {
       this.ipLimitService,
     );
     this.authController = new AuthController();
-    this.boardController = new BoardController(this.boardPostUseCase);
   }
 
   public getRecommendationController(): RecommendationController {
@@ -136,10 +128,6 @@ class DIContainer {
 
   public getAuthController(): AuthController {
     return this.authController;
-  }
-
-  public getBoardController(): BoardController {
-    return this.boardController;
   }
 
   public getIPLimitService(): IPLimitService {
@@ -163,7 +151,6 @@ export const createApiRoutes = (): Router => {
 
   // 각 라우트 그룹 등록
   router.use('/auth', createAuthRoutes(container.getAuthController()));
-  router.use('/board', createBoardRoutes(container.getBoardController()));
   router.use('/recommend', createRecommendationRoutes(
     container.getRecommendationController(),
     container.getIPLimitService()
