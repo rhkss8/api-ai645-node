@@ -119,7 +119,7 @@ export class BoardController {
         category as BoardCategory,
         page,
         limit,
-        userId
+        userId || undefined
       );
 
       if (!result.success) {
