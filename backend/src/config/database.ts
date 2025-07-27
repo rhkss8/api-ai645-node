@@ -1,15 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 
-let prisma: PrismaClient;
+let prismaInstance: PrismaClient;
 
 export const createPrismaClient = (): PrismaClient => {
-  if (!prisma) {
-    prisma = new PrismaClient({
+  if (!prismaInstance) {
+    prismaInstance = new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
       errorFormat: 'pretty',
     });
   }
-  return prisma;
+  return prismaInstance;
 };
 
 export const connectDatabase = async (): Promise<void> => {
@@ -25,8 +25,8 @@ export const connectDatabase = async (): Promise<void> => {
 
 export const disconnectDatabase = async (): Promise<void> => {
   try {
-    if (prisma) {
-      await prisma.$disconnect();
+    if (prismaInstance) {
+      await prismaInstance.$disconnect();
       console.log('✅ 데이터베이스 연결 종료');
     }
   } catch (error) {
@@ -35,5 +35,5 @@ export const disconnectDatabase = async (): Promise<void> => {
   }
 };
 
-export { prisma };
+export const prisma = createPrismaClient();
 export default createPrismaClient; 
