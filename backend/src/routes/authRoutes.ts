@@ -303,6 +303,8 @@ export const createAuthRoutes = (controller: AuthController): Router => {
   router.get('/:provider', (req, res, next) => {
     try {
       console.log('🔐 소셜 로그인 요청:', req.params.provider);
+      console.log('🔍 쿼리 파라미터:', req.query);
+      
       const provider = req.params.provider;
       
       // 카카오 전용 스코프 설정
@@ -310,7 +312,13 @@ export const createAuthRoutes = (controller: AuthController): Router => {
         ? ['profile_nickname', 'profile_image'] 
         : ['profile', 'email'];
       
-      passport.authenticate(provider, { scope: scopes })(req, res, next);
+      // 쿼리 파라미터를 state로 전달 (선택사항)
+      const state = req.query.redirect_uri ? encodeURIComponent(req.query.redirect_uri as string) : undefined;
+      
+      passport.authenticate(provider, { 
+        scope: scopes,
+        state: state
+      })(req, res, next);
     } catch (error) {
       console.error('❌ 소셜 로그인 라우터 오류:', error);
       res.status(500).json({
