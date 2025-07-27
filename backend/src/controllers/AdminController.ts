@@ -300,7 +300,7 @@ export class AdminController {
       // 데이터베이스 크기 (대략적)
       const dbSize = await prisma.$queryRaw`
         SELECT pg_size_pretty(pg_database_size(current_database())) as size
-      `;
+      ` as any;
 
       res.json({
         success: true,

@@ -70,6 +70,14 @@ export class BoardController {
       const { id } = req.params;
       const userId = (req as any).user?.sub;
 
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: '로그인이 필요합니다.',
+        });
+        return;
+      }
+
       const result = await this.boardPostUseCase.getPost(id, userId);
 
       if (!result.success) {
@@ -138,6 +146,14 @@ export class BoardController {
       const userId = (req as any).user?.sub;
       const { title, content, isImportant } = req.body;
 
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: '로그인이 필요합니다.',
+        });
+        return;
+      }
+
       // 최소 하나의 필드는 수정되어야 함
       if (!title && !content && isImportant === undefined) {
         res.status(400).json({
@@ -181,6 +197,14 @@ export class BoardController {
     async (req: Request, res: Response): Promise<void> => {
       const { id } = req.params;
       const userId = (req as any).user?.sub;
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: '로그인이 필요합니다.',
+        });
+        return;
+      }
 
       const result = await this.boardPostUseCase.deletePost(id, userId);
 
