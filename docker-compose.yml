@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Backend service (Node.js + Express)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: api-backend
+    ports:
+      - "3350:3350"  # 외부:내부 포트 매핑
+      - "5556:5556"  # Prisma Studio 포트 매핑
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+    networks:
+      - app-network
+    command: npm run dev
+
+  # Database service (PostgreSQL)
+  db:
+    image: postgres:15
+    container_name: api-database
+    ports:
+      - "3236:5432"  # 외부:내부 포트 매핑
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: main
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d  # 초기화 스크립트 (선택사항)
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Docker 볼륨 정의 (데이터 영구 저장)
+volumes:
+  postgres_data:
+    driver: local
+
+# 네트워크 정의
+networks:
+  app-network:
+    driver: bridge

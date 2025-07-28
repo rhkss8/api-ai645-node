@@ -55,7 +55,7 @@ git clone <repository-url>
 cd api-ai645-node
 
 # 환경변수 설정 (OpenAI API 키 필요)
-cp backend/env.example backend/.env
+cp backend/.env
 # backend/.env 파일에서 OPENAI_API_KEY 설정
 ```
 
@@ -620,7 +620,7 @@ API_VERSION=v1
 ### 프로덕션 배포
 ```bash
 # 프로덕션 환경변수 설정
-cp backend/env.example backend/.env.production
+cp backend/.env backend/.env.production
 
 # 프로덕션 배포
 docker compose -f docker-compose.prod.yml up -d
