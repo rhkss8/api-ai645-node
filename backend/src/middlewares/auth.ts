@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../config/database';
-import { verifyJWT, extractJTI, JWTPayloadWithUser } from '../lib/jwt';
+import {NextFunction, Request, Response} from 'express';
+import {prisma} from '@/config/database';
+import {extractJTI, JWTPayloadWithUser, verifyJWT} from '@/lib/jwt';
 
 export interface AuthenticatedRequest extends Request {
   user?: any; // JWT 페이로드 또는 User 객체
@@ -26,7 +26,7 @@ export const authenticateAccess = async (
     }
 
     const token = authHeader.substring(7);
-    
+
     // JTI 추출
     const jti = extractJTI(token);
     if (!jti) {
@@ -55,7 +55,7 @@ export const authenticateAccess = async (
     try {
       // JWT 검증
       const payload = await verifyJWT<JWTPayloadWithUser>(token);
-      
+
       // 사용자 존재 확인
       const user = await prisma?.user?.findUnique({
         where: { id: payload.sub },
@@ -76,12 +76,12 @@ export const authenticateAccess = async (
       // 토큰 만료 시 자동 갱신 시도
       if (jwtError.code === 'ERR_JWT_EXPIRED') {
         console.log('액세스 토큰 만료, 새 토큰 발급 시도');
-        
+
         // 현재 액세스 토큰에서 사용자 정보 추출 (만료된 토큰이므로 검증 없이 디코딩)
         try {
           const { decodeJwt } = await import('jose');
           const payload = await decodeJwt(token) as JWTPayloadWithUser;
-          
+
           // 사용자 존재 확인
           const user = await prisma?.user?.findUnique({
             where: { id: payload.sub },
@@ -98,7 +98,7 @@ export const authenticateAccess = async (
 
           // 새 토큰 발급
           const { signAccessToken, signRefreshToken } = await import('../lib/jwt');
-          
+
           const newAccessToken = await signAccessToken({
             sub: user.id,
             nickname: user.nickname,
@@ -138,19 +138,18 @@ export const authenticateAccess = async (
           });
 
           // 새 액세스 토큰으로 사용자 정보 설정
-          const newPayload = await verifyJWT<JWTPayloadWithUser>(newAccessToken);
-          req.user = newPayload;
-          
+          req.user = await verifyJWT<JWTPayloadWithUser>(newAccessToken);
+
           // 응답 헤더에 새 액세스 토큰 포함
           res.setHeader('X-New-Access-Token', newAccessToken);
-          
+
           next();
           return;
         } catch (refreshError) {
           console.error('토큰 갱신 실패:', refreshError);
         }
       }
-      
+
       // 기타 JWT 오류
       res.status(401).json({
         success: false,
@@ -185,7 +184,7 @@ export const optionalAuthenticateAccess = async (
     }
 
     const token = authHeader.substring(7);
-    
+
     // JTI 추출
     const jti = extractJTI(token);
     if (!jti) {
@@ -207,7 +206,7 @@ export const optionalAuthenticateAccess = async (
 
     // JWT 검증
     const payload = await verifyJWT<JWTPayloadWithUser>(token);
-    
+
     // 사용자 존재 확인
     const user = await prisma?.user?.findUnique({
       where: { id: payload.sub },
@@ -250,7 +249,7 @@ export const refreshToken = async (
     }
 
     const accessToken = authHeader.substring(7);
-    
+
     if (!accessToken) {
       res.status(401).json({
         success: false,
@@ -264,7 +263,7 @@ export const refreshToken = async (
     try {
       // 액세스 토큰에서 사용자 정보 추출 (만료된 토큰도 페이로드는 읽을 수 있음)
       const payload = await verifyJWT<JWTPayloadWithUser>(accessToken);
-      
+
       // 사용자 존재 확인
       const user = await prisma?.user?.findUnique({
         where: { id: payload.sub },
@@ -281,7 +280,7 @@ export const refreshToken = async (
 
       // 새 토큰 발급
       const { signAccessToken, signRefreshToken } = await import('../lib/jwt');
-      
+
       const newAccessToken = await signAccessToken({
         sub: user.id,
         nickname: user.nickname,
@@ -335,10 +334,10 @@ export const refreshToken = async (
     } catch (jwtError: any) {
       // JWT 검증 실패 시
       console.error('JWT 검증 실패:', jwtError);
-      
+
       let errorCode = 'TOKEN_INVALID';
       let errorMessage = '유효하지 않은 토큰입니다.';
-      
+
       if (jwtError.code === 'ERR_JWT_EXPIRED') {
         errorCode = 'TOKEN_EXPIRED';
         errorMessage = '토큰이 만료되었습니다.';
@@ -349,7 +348,7 @@ export const refreshToken = async (
         errorCode = 'TOKEN_SIGNATURE_INVALID';
         errorMessage = '토큰 서명이 유효하지 않습니다.';
       }
-      
+
       res.status(401).json({
         success: false,
         errorCode: errorCode,
@@ -476,4 +475,4 @@ export const requireRole = (requiredRole: 'USER' | 'ADMIN') => {
       });
     }
   };
-}; 
+};

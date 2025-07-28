@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import passport from 'passport';
-import { AuthController } from '../controllers/AuthController';
-import { authenticateAccess, refreshToken } from '../middlewares/auth';
+import { AuthController } from '@/controllers/AuthController';
+import { authenticateAccess, refreshToken } from '@/middlewares/auth';
 
 export const createAuthRoutes = (controller: AuthController): Router => {
   const router = Router();
@@ -211,15 +211,15 @@ export const createAuthRoutes = (controller: AuthController): Router => {
    *             properties:
    *               termsAgreed:
    *                 type: boolean
-   *                 description: 이용약관 동의 (필수)
+   *                 description: "이용약관 동의 (필수)"
    *                 example: true
    *               privacyAgreed:
    *                 type: boolean
-   *                 description: 개인정보 수집·이용 동의 (필수)
+   *                 description: "개인정보 수집·이용 동의 (필수)"
    *                 example: true
    *               marketingAgreed:
    *                 type: boolean
-   *                 description: 광고·이벤트 수신 동의 (선택)
+   *                 description: "광고·이벤트 수신 동의 (선택)"
    *                 example: false
    *     responses:
    *       200:
@@ -304,12 +304,12 @@ export const createAuthRoutes = (controller: AuthController): Router => {
     try {
       console.log('🔐 소셜 로그인 요청:', req.params.provider);
       const provider = req.params.provider;
-      
+
       // 카카오 전용 스코프 설정
-      const scopes = provider === 'kakao' 
-        ? ['profile_nickname', 'profile_image'] 
+      const scopes = provider === 'kakao'
+        ? ['profile_nickname', 'profile_image']
         : ['profile', 'email'];
-      
+
       passport.authenticate(provider, { scope: scopes })(req, res, next);
     } catch (error) {
       console.error('❌ 소셜 로그인 라우터 오류:', error);
@@ -374,4 +374,4 @@ export const createAuthRoutes = (controller: AuthController): Router => {
   router.get('/:provider/callback', controller.handleSocialCallback);
 
   return router;
-}; 
+};

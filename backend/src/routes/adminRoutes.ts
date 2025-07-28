@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { AdminController } from '../controllers/AdminController';
-import { authenticateAccess, requireAdmin } from '../middlewares/auth';
+import { AdminController } from '@/controllers/AdminController';
+import { authenticateAccess, requireAdmin } from '@/middlewares/auth';
 
 const router = Router();
 const adminController = new AdminController();
@@ -148,13 +148,13 @@ router.put('/users/:userId/role', adminController.updateUserRole);
  *         schema:
  *           type: string
  *           format: date
- *         description: 시작 날짜 (기본값: 30일 전)
+ *         description: "시작 날짜 (기본값: 30일 전)"
  *       - in: query
  *         name: endDate
  *         schema:
  *           type: string
  *           format: date
- *         description: 종료 날짜 (기본값: 오늘)
+ *         description: "종료 날짜 (기본값: 오늘)"
  *     responses:
  *       200:
  *         description: API 통계 조회 성공
@@ -283,4 +283,4 @@ router.get('/stats/api', adminController.getApiStats);
  */
 router.get('/status', adminController.getSystemStatus);
 
-export default router; 
+export default router;
