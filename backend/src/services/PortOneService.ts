@@ -1,4 +1,4 @@
-import { PaymentClient, GetPaymentError } from '@portone/server-sdk/payment';
+import { PaymentClient } from '@portone/server-sdk';
 import { prisma } from '../config/database';
 
 export interface PortOneV2PaymentResponse {
@@ -22,7 +22,7 @@ export class PortOneService {
   private client: any;
 
   constructor() {
-    this.client = PaymentClient({ secret: process.env.V2_API_SECRET });
+    this.client = PaymentClient({ secret: process.env.V2_API_SECRET ?? '' });
   }
 
   /**
@@ -33,7 +33,7 @@ export class PortOneService {
       const payment = await this.client.getPayment({ paymentId });
       return payment;
     } catch (error) {
-      if (error instanceof GetPaymentError) {
+      if (error instanceof Error && error.message.includes('payment')) {
         throw new Error('결제 정보를 찾을 수 없습니다.');
       }
       console.error('❌ PortOne V2 결제 조회 실패:', error);

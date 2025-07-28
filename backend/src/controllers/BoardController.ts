@@ -70,7 +70,7 @@ export class BoardController {
       const { id } = req.params;
       const userId = (req as any).user?.sub;
 
-      const result = await this.boardPostUseCase.getPost(id, userId);
+      const result = await this.boardPostUseCase.getPost(id, userId as string | undefined);
 
       if (!result.success) {
         res.status(404).json({
@@ -149,7 +149,7 @@ export class BoardController {
       }
 
       const result = await this.boardPostUseCase.updatePost(
-        id,
+        id ?? '',
         {
           ...(title && { title }),
           ...(content && { content }),
@@ -182,7 +182,7 @@ export class BoardController {
       const { id } = req.params;
       const userId = (req as any).user?.sub;
 
-      const result = await this.boardPostUseCase.deletePost(id, userId);
+      const result = await this.boardPostUseCase.deletePost(id ?? '', userId ?? '');
 
       if (!result.success) {
         res.status(400).json({

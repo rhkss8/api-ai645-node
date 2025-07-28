@@ -106,7 +106,7 @@ export class PaymentService {
         // 기존 활성 구독 비활성화
         await tx.subscription.updateMany({
           where: {
-            userId: payment.userId,
+            userId: payment.order.user.id,
             status: 'active',
           },
           data: {
@@ -115,15 +115,14 @@ export class PaymentService {
           },
         });
 
-        // 새 구독 생성
+        // 새 구독 생성 (기본 30일)
         const endDate = new Date();
-        endDate.setDate(endDate.getDate() + payment.subscriptionDuration);
+        endDate.setDate(endDate.getDate() + 30);
 
         const subscription = await tx.subscription.create({
           data: {
-            userId: payment.userId,
-            paymentId: payment.id,
-            type: payment.subscriptionType,
+            userId: payment.order.user.id,
+            type: 'MONTHLY',
             endDate,
             status: 'active',
             autoRenew: false, // 기본값
@@ -180,7 +179,7 @@ export class PaymentService {
           status: 'active',
         },
         include: {
-          payment: true,
+          user: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -200,9 +199,9 @@ export class PaymentService {
   async getUserPayments(userId: string, limit = 10, offset = 0) {
     try {
       const payments = await prisma.payment.findMany({
-        where: { userId },
+        where: { order: { userId } },
         include: {
-          subscription: true,
+          order: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -212,7 +211,7 @@ export class PaymentService {
       });
 
       const total = await prisma.payment.count({
-        where: { userId },
+        where: { order: { userId } },
       });
 
       return {

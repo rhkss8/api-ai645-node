@@ -319,7 +319,7 @@ export class AdminController {
             completionRate: totalPayments > 0 ? (completedPayments / totalPayments * 100).toFixed(2) : 0,
           },
           system: {
-            databaseSize: dbSize[0]?.size || 'Unknown',
+            databaseSize: (dbSize as any[])[0]?.size || 'Unknown',
             uptime: process.uptime(),
             memoryUsage: process.memoryUsage(),
           },
