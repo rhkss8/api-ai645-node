@@ -1,4 +1,4 @@
-import { PrismaClient, PaymentStatus, SubscriptionType } from '@prisma/client';
+import { PrismaClient, PaymentStatus, SubscriptionType, OrderStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -27,16 +27,28 @@ export class PaymentService {
       // 구독 기간 계산
       const subscriptionDuration = this.getSubscriptionDuration(data.subscriptionType);
       
+      // 주문 생성
+      const order = await prisma.order.create({
+        data: {
+          userId: data.userId,
+          merchantUid: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          amount: data.amount,
+          currency: 'KRW',
+          status: OrderStatus.PENDING,
+          description: data.description,
+          metadata: data.metadata,
+        },
+      });
+
       // 결제 생성
       const payment = await prisma.payment.create({
         data: {
-          userId: data.userId,
+          orderId: order.id,
+          impUid: `imp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          pgProvider: 'portone',
+          payMethod: data.paymentMethod,
           amount: data.amount,
-          subscriptionType: data.subscriptionType,
-          subscriptionDuration,
-          paymentMethod: data.paymentMethod,
-          description: data.description,
-          metadata: data.metadata,
+          currency: 'KRW',
           status: PaymentStatus.PENDING,
         },
       });
@@ -62,7 +74,7 @@ export class PaymentService {
       // 결제 정보 조회
       const payment = await prisma.payment.findUnique({
         where: { id: paymentId },
-        include: { user: true },
+        include: { order: { include: { user: true } } },
       });
 
       if (!payment) {

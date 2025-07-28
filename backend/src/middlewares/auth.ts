@@ -1,6 +1,6 @@
 import {NextFunction, Request, Response} from 'express';
-import {prisma} from '@/config/database';
-import {extractJTI, JWTPayloadWithUser, verifyJWT} from '@/lib/jwt';
+import {prisma} from '../config/database';
+import {extractJTI, JWTPayloadWithUser, verifyJWT} from '../lib/jwt';
 
 export interface AuthenticatedRequest extends Request {
   user?: any; // JWT 페이로드 또는 User 객체
