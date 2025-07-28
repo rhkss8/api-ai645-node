@@ -90,6 +90,7 @@ model User {
   privacyAgreed   Boolean                 @default(false)
   marketingAgreed Boolean                 @default(false)
   posts           BoardPost[]
+  orders          Order[]
   payments        Payment[]
   recommendations RecommendationHistory[]
   refreshTokens   RefreshToken[]
@@ -133,8 +134,28 @@ model AccessTokenBlacklist {
   @@map("access_token_blacklist")
 }
 
+model Order {
+  id            String      @id @default(cuid())
+  userId        String
+  merchantUid   String      @unique
+  amount        Int
+  currency      String      @default("KRW")
+  orderName     String
+  description   String?
+  status        OrderStatus @default(PENDING)
+  customData    Json?
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment       Payment?
+
+  @@map("orders")
+}
+
 model Payment {
   id                   String           @id @default(cuid())
+  orderId              String?          @unique
   userId               String
   amount               Int
   currency             String           @default("KRW")
@@ -148,6 +169,7 @@ model Payment {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order                Order?           @relation(fields: [orderId], references: [id])
   subscription         Subscription?
 
   @@map("payments")
@@ -212,6 +234,15 @@ enum BoardCategory {
   NOTICE
   SUGGESTION
   PARTNERSHIP
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+  USER_CANCELLED
 }
 
 enum PaymentStatus {

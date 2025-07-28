@@ -16,18 +16,21 @@ import { IPLimitService } from '../services/IPLimitService';
 import { GenerateRecommendationUseCase } from '../usecases/GenerateRecommendationUseCase';
 import { GenerateReviewUseCase } from '../usecases/GenerateReviewUseCase';
 import { ExtractImageNumbersUseCase } from '../usecases/ExtractImageNumbersUseCase';
+import { PaymentUseCase } from '../usecases/PaymentUseCase';
 
 // Controllers
 import { RecommendationController } from '../controllers/RecommendationController';
 import { ReviewController } from '../controllers/ReviewController';
 import { DataController } from '../controllers/DataController';
 import { AuthController } from '../controllers/AuthController';
+import { PaymentController } from '../controllers/PaymentController';
 
 // Routes
 import { createRecommendationRoutes, createImageRoutes } from './recommendationRoutes';
 import { createReviewRoutes } from './reviewRoutes';
 import { createDataRoutes } from './dataRoutes';
 import { createAuthRoutes } from './authRoutes';
+import { createPaymentRoutes } from './paymentRoutes';
 
 // Middleware
 import { resetIPLimits } from '../middleware/ipLimitMiddleware';
@@ -51,12 +54,14 @@ class DIContainer {
   private generateRecommendationUseCase!: GenerateRecommendationUseCase;
   private generateReviewUseCase!: GenerateReviewUseCase;
   private extractImageNumbersUseCase!: ExtractImageNumbersUseCase;
+  private paymentUseCase!: PaymentUseCase;
   
   // Controllers
   private recommendationController!: RecommendationController;
   private reviewController!: ReviewController;
   private dataController!: DataController;
   private authController!: AuthController;
+  private paymentController!: PaymentController;
 
   private constructor() {
     this.initializeDependencies();
@@ -95,6 +100,7 @@ class DIContainer {
       this.gptService,
     );
     this.extractImageNumbersUseCase = new ExtractImageNumbersUseCase(this.gptService);
+    this.paymentUseCase = new PaymentUseCase(this.generateRecommendationUseCase);
 
     // Controllers
     this.recommendationController = new RecommendationController(
@@ -112,6 +118,7 @@ class DIContainer {
       this.ipLimitService,
     );
     this.authController = new AuthController();
+    this.paymentController = new PaymentController(this.paymentUseCase);
   }
 
   public getRecommendationController(): RecommendationController {
@@ -128,6 +135,10 @@ class DIContainer {
 
   public getAuthController(): AuthController {
     return this.authController;
+  }
+
+  public getPaymentController(): PaymentController {
+    return this.paymentController;
   }
 
   public getIPLimitService(): IPLimitService {
@@ -151,6 +162,7 @@ export const createApiRoutes = (): Router => {
 
   // 각 라우트 그룹 등록
   router.use('/auth', createAuthRoutes(container.getAuthController()));
+  router.use('/payment', createPaymentRoutes(container.getPaymentController()));
   router.use('/recommend', createRecommendationRoutes(
     container.getRecommendationController(),
     container.getIPLimitService()
