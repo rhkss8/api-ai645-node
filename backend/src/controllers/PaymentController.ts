@@ -242,7 +242,7 @@ export class PaymentController {
         return;
       }
 
-      const result = await this.paymentUseCase.getOrder(id, userId);
+      const result = await this.paymentUseCase.getOrder(id ?? '', userId ?? '');
 
       if (!result.success) {
         res.status(404).json({
