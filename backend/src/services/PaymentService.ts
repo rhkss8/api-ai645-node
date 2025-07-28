@@ -37,6 +37,7 @@ export class PaymentService {
           status: OrderStatus.PENDING,
           description: data.description,
           metadata: data.metadata,
+          // orderName: data.description || '로또 추천 서비스',
         },
       });
 
@@ -106,7 +107,7 @@ export class PaymentService {
         // 기존 활성 구독 비활성화
         await tx.subscription.updateMany({
           where: {
-            userId: payment.order.user.id,
+            userId: payment.order?.user?.id || '',
             status: 'active',
           },
           data: {
@@ -121,7 +122,7 @@ export class PaymentService {
 
         const subscription = await tx.subscription.create({
           data: {
-            userId: payment.order.user.id,
+            userId: payment.order?.user?.id || '',
             type: 'MONTHLY',
             endDate,
             status: 'active',

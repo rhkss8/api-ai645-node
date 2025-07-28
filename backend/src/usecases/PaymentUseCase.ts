@@ -45,6 +45,7 @@ export class PaymentUseCase {
           description: data.description,
           metadata: data.metadata,
           status: OrderStatus.PENDING,
+          // orderName: data.description || '로또 추천 서비스',
         },
         include: {
           user: {
