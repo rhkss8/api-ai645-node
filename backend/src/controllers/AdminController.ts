@@ -38,7 +38,7 @@ export class AdminController {
           _count: {
             select: {
               recommendations: true,
-              payments: true,
+              orders: true,
             },
           },
         },
@@ -67,7 +67,7 @@ export class AdminController {
             hasActiveSubscription: user.subscriptions.length > 0,
             subscriptionEndDate: user.subscriptions[0]?.endDate || null,
             recommendationCount: user._count.recommendations,
-            paymentCount: user._count.payments,
+            paymentCount: user._count.orders,
           })),
           pagination: {
             page,
