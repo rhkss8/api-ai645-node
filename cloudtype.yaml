@@ -5,7 +5,7 @@ version: 1
 app:
   name: api-ai645-backend
   type: web
-  port: 8080
+  port: 3350
   env: production
 
 # 빌드 설정
@@ -13,10 +13,20 @@ build:
   dockerfile: Dockerfile
   context: .
 
+# 데이터베이스 설정
+database:
+  type: postgresql
+  version: "15"
+  env:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_DB: main
+
 # 환경변수 설정 (CloudType 대시보드에서 설정)
 env:
   NODE_ENV: production
-  PORT: 8080
+  PORT: 3350
+  DATABASE_URL: postgresql://postgres:postgres@${DATABASE_HOST}:5432/main
 
 # 헬스체크 설정
 healthcheck:

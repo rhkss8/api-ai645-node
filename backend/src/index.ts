@@ -64,8 +64,12 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: `http://localhost:3350`,
-        description: 'Development server',
+        url: process.env.NODE_ENV === 'production' 
+          ? 'https://api.ai645.com' 
+          : 'http://localhost:3350',
+        description: process.env.NODE_ENV === 'production' 
+          ? 'Production server' 
+          : 'Development server',
       },
     ],
     tags: [
