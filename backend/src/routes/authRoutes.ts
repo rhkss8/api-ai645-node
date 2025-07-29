@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import passport from 'passport';
-import { AuthController } from '@/controllers/AuthController';
-import { authenticateAccess, refreshToken } from '@/middlewares/auth';
+import { AuthController } from '../controllers/AuthController';
+import { authenticateAccess, refreshToken } from '../middlewares/auth';
 
 export const createAuthRoutes = (controller: AuthController): Router => {
   const router = Router();
