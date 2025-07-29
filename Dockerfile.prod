@@ -5,7 +5,7 @@ FROM node:18-alpine
 RUN apk add --no-cache openssl libc6-compat
 
 # 작업 디렉토리 생성 및 이동
-WORKDIR /app
+WORKDIR /app/backend
 
 # backend/package.json과 tsconfig.json 등 복사
 COPY ./backend/package*.json ./
@@ -15,7 +15,7 @@ COPY ./backend/tsconfig.json ./
 RUN npm ci && npm cache clean --force
 
 # backend 전체 복사
-COPY ./backend/ .
+COPY backend/ .
 
 # Prisma Client 생성
 RUN npx prisma generate
@@ -37,4 +37,4 @@ USER nodejs
 EXPOSE 3350
 
 # CMD 실행 시 script + app 시작
-CMD ["/bin/sh", "-c", "./scripts/init-data-prod.sh && npm run start"]
+CMD ["sh", "-c", "./scripts/init-data-prod.sh && npm run start"]
