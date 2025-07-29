@@ -13,15 +13,6 @@ build:
   dockerfile: Dockerfile
   context: .
 
-# 데이터베이스 설정
-database:
-  type: postgresql
-  version: "15"
-  env:
-    POSTGRES_USER: postgres
-    POSTGRES_PASSWORD: postgres
-    POSTGRES_DB: main
-
 # 환경변수 설정 (CloudType 대시보드에서 설정)
 env:
   NODE_ENV: production
