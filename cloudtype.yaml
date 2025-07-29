@@ -26,7 +26,7 @@ database:
 env:
   NODE_ENV: production
   PORT: 3350
-  DATABASE_URL: postgresql://root:tarscase12%21%40@svc.sel5.cloudtype.app:31473/main
+  DATABASE_URL: postgresql://root:tarscase12%21%40@svc.sel5.cloudtype.app:5432/main
 
 # 헬스체크 설정
 healthcheck:
