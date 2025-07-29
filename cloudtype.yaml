@@ -10,7 +10,7 @@ app:
 
 # 빌드 설정
 build:
-  dockerfile: Dockerfile
+  dockerfile: backend/Dockerfile.prod
   context: .
 
 # 환경변수 설정 (CloudType 대시보드에서 설정)
