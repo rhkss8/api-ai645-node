@@ -37,4 +37,4 @@ USER nodejs
 EXPOSE 3350
 
 # 프로덕션 데이터 초기화 스크립트 실행 후 애플리케이션 시작
-CMD ["/bin/sh", "-c", "/app/scripts/init-data-prod.sh && npm run start"]
+CMD ["/bin/sh", "-c", "/backend/scripts/init-data-prod.sh && npm run start"]
