@@ -15,8 +15,9 @@ async function initializeKeys() {
     // 환경변수에서 JWT 키 확인
     if (process.env.JWT_PRIVATE_KEY && process.env.JWT_PUBLIC_KEY) {
       // 환경변수에서 키 사용 (클라우드타입 등)
-      privateKeyString = process.env.JWT_PRIVATE_KEY;
-      publicKeyString = process.env.JWT_PUBLIC_KEY;
+      // 줄바꿈 문자를 올바르게 처리
+      privateKeyString = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
+      publicKeyString = process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
       console.log('🔑 JWT 키를 환경변수에서 로드합니다.');
     } else if (process.env.JWT_PRIVATE_KEY_PATH && process.env.JWT_PUBLIC_KEY_PATH) {
       // 파일에서 키 읽기 (로컬 개발 환경)
@@ -30,6 +31,12 @@ async function initializeKeys() {
       }
     } else {
       throw new Error('JWT 키가 설정되지 않았습니다. 환경변수 JWT_PRIVATE_KEY와 JWT_PUBLIC_KEY를 설정하거나 키 파일 경로를 설정해주세요.');
+    }
+
+    // 키 형식 검증
+    if (!privateKeyString.includes('-----BEGIN PRIVATE KEY-----') || 
+        !publicKeyString.includes('-----BEGIN PUBLIC KEY-----')) {
+      throw new Error('JWT 키 형식이 올바르지 않습니다. PEM 형식의 키를 사용해주세요.');
     }
 
     privateKey = await importPKCS8(privateKeyString, 'RS256');
