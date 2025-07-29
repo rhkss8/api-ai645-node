@@ -70,7 +70,17 @@ export class BoardController {
       const { id } = req.params;
       const userId = (req as any).user?.sub;
 
-      const result = await this.boardPostUseCase.getPost(id, userId as string | undefined);
+      // id가 없으면 오류 리턴
+      if (!id) {
+        res.status(400).json({
+          success: false,
+          error: '게시글 ID가 필요합니다.',
+          message: '게시글 ID를 제공해주세요.',
+        });
+        return;
+      }
+
+      const result = await this.boardPostUseCase.getPost(id, userId as any);
 
       if (!result.success) {
         res.status(404).json({

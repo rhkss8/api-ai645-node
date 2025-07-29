@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    command: ./scripts/init-data.sh npm run dev
+    command: npm run dev
 
   # Database service (PostgreSQL) - 개발 모드
   db:
