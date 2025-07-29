@@ -7,15 +7,18 @@ RUN apk add --no-cache openssl libc6-compat
 # 작업 디렉토리 설정
 WORKDIR /app
 
+# backend 폴더로 이동
+WORKDIR /app/backend
+
 # package.json과 package-lock.json 복사 (캐싱 최적화)
-COPY package*.json ./
-COPY tsconfig.json ./
+COPY backend/package*.json ./
+COPY backend/tsconfig.json ./
 
 # 의존성 설치 (dev dependencies 포함, TypeScript 빌드를 위해)
 RUN npm ci && npm cache clean --force
 
 # 소스 코드 복사
-COPY . .
+COPY backend/ .
 
 # Prisma 클라이언트 생성
 RUN npx prisma generate
@@ -37,4 +40,4 @@ USER nodejs
 EXPOSE 3350
 
 # 프로덕션 데이터 초기화 스크립트 실행 후 애플리케이션 시작
-CMD ["scripts/init-data-prod.sh", "npm", "run", "start"] 
+CMD ["scripts/init-data-prod.sh", "npm", "run", "start"]
