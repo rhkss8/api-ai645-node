@@ -23,6 +23,7 @@ import { RecommendationController } from '../controllers/RecommendationControlle
 import { ReviewController } from '../controllers/ReviewController';
 import { DataController } from '../controllers/DataController';
 import { AuthController } from '../controllers/AuthController';
+import { BoardController } from '../controllers/BoardController';
 import { PaymentController } from '../controllers/PaymentController';
 
 // Routes
@@ -30,7 +31,9 @@ import { createRecommendationRoutes, createImageRoutes } from './recommendationR
 import { createReviewRoutes } from './reviewRoutes';
 import { createDataRoutes } from './dataRoutes';
 import { createAuthRoutes } from './authRoutes';
+import { createBoardRoutes } from './boardRoutes';
 import { createPaymentRoutes } from './paymentRoutes';
+import adminRoutes from './adminRoutes';
 
 // Middleware
 import { resetIPLimits } from '../middleware/ipLimitMiddleware';
@@ -54,6 +57,7 @@ class DIContainer {
   private generateRecommendationUseCase!: GenerateRecommendationUseCase;
   private generateReviewUseCase!: GenerateReviewUseCase;
   private extractImageNumbersUseCase!: ExtractImageNumbersUseCase;
+  private boardPostUseCase!: any; // BoardPostUseCase
   private paymentUseCase!: PaymentUseCase;
   
   // Controllers
@@ -61,6 +65,7 @@ class DIContainer {
   private reviewController!: ReviewController;
   private dataController!: DataController;
   private authController!: AuthController;
+  private boardController!: BoardController;
   private paymentController!: PaymentController;
 
   private constructor() {
@@ -100,6 +105,13 @@ class DIContainer {
       this.gptService,
     );
     this.extractImageNumbersUseCase = new ExtractImageNumbersUseCase(this.gptService);
+    
+    // Board Use Case
+    const { BoardPostUseCase } = require('../usecases/BoardPostUseCase');
+    const { PrismaBoardPostRepository } = require('../repositories/impl/PrismaBoardPostRepository');
+    this.boardPostUseCase = new BoardPostUseCase(new PrismaBoardPostRepository(this.prisma));
+
+    // Payment Use Case
     this.paymentUseCase = new PaymentUseCase(this.generateRecommendationUseCase);
 
     // Controllers
@@ -118,6 +130,7 @@ class DIContainer {
       this.ipLimitService,
     );
     this.authController = new AuthController();
+    this.boardController = new BoardController(this.boardPostUseCase);
     this.paymentController = new PaymentController(this.paymentUseCase);
   }
 
@@ -135,6 +148,10 @@ class DIContainer {
 
   public getAuthController(): AuthController {
     return this.authController;
+  }
+
+  public getBoardController(): BoardController {
+    return this.boardController;
   }
 
   public getPaymentController(): PaymentController {
@@ -162,7 +179,6 @@ export const createApiRoutes = (): Router => {
 
   // 각 라우트 그룹 등록
   router.use('/auth', createAuthRoutes(container.getAuthController()));
-  router.use('/payment', createPaymentRoutes(container.getPaymentController()));
   router.use('/recommend', createRecommendationRoutes(
     container.getRecommendationController(),
     container.getIPLimitService()
@@ -170,6 +186,9 @@ export const createApiRoutes = (): Router => {
   router.use('/image', createImageRoutes(container.getRecommendationController()));
   router.use('/review', createReviewRoutes(container.getReviewController()));
   router.use('/data', createDataRoutes(container.getDataController()));
+  router.use('/board', createBoardRoutes(container.getBoardController()));
+  router.use('/admin', adminRoutes);
+  router.use('/payment', createPaymentRoutes(container.getPaymentController()));
 
   return router;
 };

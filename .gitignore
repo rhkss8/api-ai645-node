@@ -76,6 +76,7 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
 .env.example
 
 # parcel-bundler cache (https://parceljs.org/)
@@ -218,4 +219,4 @@ config/secrets.json
 .clinic/
 
 # Webpack
-.webpack/ 
+.webpack/

@@ -2,18 +2,56 @@ import { readFileSync } from 'fs';
 import { SignJWT, jwtVerify, JWTPayload, importPKCS8, importSPKI } from 'jose';
 import { v4 as uuid } from 'uuid';
 
-// 키를 KeyObject로 변환
-const privateKeyBuffer = readFileSync(process.env.JWT_PRIVATE_KEY_PATH!);
-const publicKeyBuffer = readFileSync(process.env.JWT_PUBLIC_KEY_PATH!);
-
 let privateKey: any;
 let publicKey: any;
 
 // 키 초기화 함수
 async function initializeKeys() {
   try {
-    privateKey = await importPKCS8(privateKeyBuffer.toString(), 'RS256');
-    publicKey = await importSPKI(publicKeyBuffer.toString(), 'RS256');
+    // 환경변수에서 JWT 키를 가져오거나 파일에서 읽어오기
+    let privateKeyString: string;
+    let publicKeyString: string;
+
+    // 환경변수에서 JWT 키 확인
+    if (process.env.JWT_PRIVATE_KEY_B64 && process.env.JWT_PUBLIC_KEY_B64) {
+      // 환경변수에서 키 사용 (클라우드타입 등)
+      // Base64로 인코딩된 키를 디코딩
+      try {
+        privateKeyString = Buffer.from(process.env.JWT_PRIVATE_KEY_B64, 'base64').toString('utf8');
+        publicKeyString = Buffer.from(process.env.JWT_PUBLIC_KEY_B64, 'base64').toString('utf8');
+        console.log('🔑 JWT 키를 환경변수(Base64)에서 로드합니다.');
+      } catch (error) {
+        console.error('Base64 디코딩 실패:', error);
+        throw new Error('JWT 키 Base64 디코딩에 실패했습니다.');
+      }
+    } else if (process.env.JWT_PRIVATE_KEY && process.env.JWT_PUBLIC_KEY) {
+      // 일반 문자열로 저장된 키 사용
+      privateKeyString = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
+      publicKeyString = process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
+      console.log('🔑 JWT 키를 환경변수(문자열)에서 로드합니다.');
+    } else if (process.env.JWT_PRIVATE_KEY_PATH && process.env.JWT_PUBLIC_KEY_PATH) {
+      // 파일에서 키 읽기 (로컬 개발 환경)
+      try {
+        privateKeyString = readFileSync(process.env.JWT_PRIVATE_KEY_PATH, 'utf8');
+        publicKeyString = readFileSync(process.env.JWT_PUBLIC_KEY_PATH, 'utf8');
+        console.log('🔑 JWT 키를 파일에서 로드합니다.');
+      } catch (error) {
+        console.error('JWT 키 파일을 읽을 수 없습니다:', error);
+        throw new Error('JWT 키 파일을 찾을 수 없습니다. 환경변수 JWT_PRIVATE_KEY와 JWT_PUBLIC_KEY를 설정하거나 키 파일을 생성해주세요.');
+      }
+    } else {
+      throw new Error('JWT 키가 설정되지 않았습니다. 환경변수 JWT_PRIVATE_KEY와 JWT_PUBLIC_KEY를 설정하거나 키 파일 경로를 설정해주세요.');
+    }
+
+    // 키 형식 검증
+    if (!privateKeyString.includes('-----BEGIN PRIVATE KEY-----') || 
+        !publicKeyString.includes('-----BEGIN PUBLIC KEY-----')) {
+      throw new Error('JWT 키 형식이 올바르지 않습니다. PEM 형식의 키를 사용해주세요.');
+    }
+
+    privateKey = await importPKCS8(privateKeyString, 'RS256');
+    publicKey = await importSPKI(publicKeyString, 'RS256');
+    console.log('✅ JWT 키 초기화 완료');
   } catch (error) {
     console.error('JWT 키 초기화 오류:', error);
     throw error;

@@ -1,0 +1,53 @@
+services:
+  # Backend service (Node.js + Express) - 개발 모드
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: api-backend-dev
+    ports:
+      - "3350:3350"  # 외부:내부 포트 매핑
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+      - /app/node_modules  # node_modules는 컨테이너 내부 사용
+    restart: unless-stopped
+    networks:
+      - app-network
+    command: npm run dev
+
+  # Database service (PostgreSQL) - 개발 모드
+  db:
+    image: postgres:15
+    container_name: api-database-dev
+    ports:
+      - "3236:5432"  # 외부:내부 포트 매핑
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: main
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d  # 초기화 스크립트
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Docker 볼륨 정의 (데이터 영구 저장) - 개발용
+volumes:
+  postgres_data_dev:
+    driver: local
+
+# 네트워크 정의
+networks:
+  app-network:
+    driver: bridge

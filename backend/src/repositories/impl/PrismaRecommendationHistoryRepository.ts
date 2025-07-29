@@ -10,6 +10,7 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
     const created = await this.prisma.recommendationHistory.create({
       data: {
         id: recommendation.id,
+        userId: recommendation.userId,
         round: recommendation.round,
         numbers: recommendation.numbers,
         type: recommendation.type,
@@ -49,6 +50,30 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
     });
 
     return recommendations.map(this.toDomain);
+  }
+
+  async findByUserId(userId: string, page: number = 1, limit: number = 10): Promise<{
+    data: RecommendationHistory[];
+    total: number;
+  }> {
+    const skip = (page - 1) * limit;
+
+    const [recommendations, total] = await Promise.all([
+      this.prisma.recommendationHistory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.recommendationHistory.count({
+        where: { userId },
+      }),
+    ]);
+
+    return {
+      data: recommendations.map(this.toDomain),
+      total,
+    };
   }
 
   async findRecent(limit: number): Promise<RecommendationHistory[]> {
@@ -150,6 +175,7 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
   private toDomain(prismaModel: any): RecommendationHistory {
     return new RecommendationHistory(
       prismaModel.id,
+      prismaModel.userId,
       prismaModel.round,
       prismaModel.numbers,
       prismaModel.type,

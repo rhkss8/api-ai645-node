@@ -1,0 +1,248 @@
+{
+  "info": {
+    "name": "Auth API Tests",
+    "description": "소셜 로그인 및 인증 API 테스트 컬렉션",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3350",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "서버 상태 확인"
+      },
+      "response": []
+    },
+    {
+      "name": "소셜 로그인",
+      "item": [
+        {
+          "name": "카카오 로그인 시작",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/kakao",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "kakao"]
+            },
+            "description": "카카오 소셜 로그인 시작 (브라우저에서 실행 필요)"
+          },
+          "response": []
+        },
+        {
+          "name": "구글 로그인 시작",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/google",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "google"]
+            },
+            "description": "구글 소셜 로그인 시작 (브라우저에서 실행 필요)"
+          },
+          "response": []
+        },
+        {
+          "name": "네이버 로그인 시작",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/naver",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "naver"]
+            },
+            "description": "네이버 소셜 로그인 시작 (브라우저에서 실행 필요)"
+          },
+          "response": []
+        },
+        {
+          "name": "소셜 로그인 콜백 (카카오)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/kakao/callback?code=test_code",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "kakao", "callback"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "test_code"
+                }
+              ]
+            },
+            "description": "카카오 로그인 콜백 (실제 코드 필요)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "토큰 관리",
+      "item": [
+        {
+          "name": "토큰 갱신",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refresh"]
+            },
+            "description": "리프레시 토큰으로 새로운 액세스 토큰 발급"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "사용자 정보",
+      "item": [
+        {
+          "name": "프로필 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "profile"]
+            },
+            "description": "현재 로그인한 사용자의 프로필 정보 조회"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "로그아웃",
+      "item": [
+        {
+          "name": "로그아웃",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "현재 세션 종료 및 토큰 무효화"
+          },
+          "response": []
+        },
+        {
+          "name": "계정 탈퇴",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/account",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "account"]
+            },
+            "description": "사용자 계정 완전 삭제"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "보호된 API 테스트",
+      "item": [
+        {
+          "name": "무료 추천 (인증 필요)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"gameCount\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/recommend/free",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "recommend", "free"]
+            },
+            "description": "인증이 필요한 무료 추천 API 테스트"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// 토큰 갱신 응답에서 액세스 토큰 추출",
+          "if (pm.response.code === 200) {",
+          "    const response = pm.response.json();",
+          "    if (response.data && response.data.accessToken) {",
+          "        pm.collectionVariables.set('accessToken', response.data.accessToken);",
+          "        console.log('액세스 토큰이 설정되었습니다.');",
+          "    }",
+          "}",
+          "",
+          "// 에러 응답 로깅",
+          "if (pm.response.code >= 400) {",
+          "    console.error('API 오류:', pm.response.json());",
+          "}"
+        ]
+      }
+    }
+  ]
+} 

@@ -1,0 +1,38 @@
+# CloudType 배포 설정
+version: 1
+
+# 애플리케이션 설정
+app:
+  name: api-ai645-backend
+  type: web
+  port: 3350
+  env: production
+
+# 빌드 설정
+build:
+  dockerfile: Dockerfile.prod
+  context: .
+
+# 환경변수 설정 (CloudType 대시보드에서 설정)
+env:
+  NODE_ENV: production
+  PORT: 3350
+  DATABASE_URL: postgresql://root:tarscase12%21%40@svc.sel5.cloudtype.app:31473/main
+
+# 헬스체크 설정
+healthcheck:
+  path: /health
+  interval: 30s
+  timeout: 10s
+  retries: 3
+
+# 리소스 설정
+resources:
+  cpu: 0.5
+  memory: 512Mi
+
+# 스케일링 설정
+scaling:
+  min: 1
+  max: 3
+  target_cpu: 70

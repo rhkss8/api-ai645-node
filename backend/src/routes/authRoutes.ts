@@ -211,15 +211,15 @@ export const createAuthRoutes = (controller: AuthController): Router => {
    *             properties:
    *               termsAgreed:
    *                 type: boolean
-   *                 description: 이용약관 동의 (필수)
+   *                 description: "이용약관 동의 (필수)"
    *                 example: true
    *               privacyAgreed:
    *                 type: boolean
-   *                 description: 개인정보 수집·이용 동의 (필수)
+   *                 description: "개인정보 수집·이용 동의 (필수)"
    *                 example: true
    *               marketingAgreed:
    *                 type: boolean
-   *                 description: 광고·이벤트 수신 동의 (선택)
+   *                 description: "광고·이벤트 수신 동의 (선택)"
    *                 example: false
    *     responses:
    *       200:
@@ -303,22 +303,14 @@ export const createAuthRoutes = (controller: AuthController): Router => {
   router.get('/:provider', (req, res, next) => {
     try {
       console.log('🔐 소셜 로그인 요청:', req.params.provider);
-      console.log('🔍 쿼리 파라미터:', req.query);
-      
       const provider = req.params.provider;
-      
+
       // 카카오 전용 스코프 설정
-      const scopes = provider === 'kakao' 
-        ? ['profile_nickname', 'profile_image'] 
+      const scopes = provider === 'kakao'
+        ? ['profile_nickname', 'profile_image']
         : ['profile', 'email'];
-      
-      // 쿼리 파라미터를 state로 전달 (선택사항)
-      const state = req.query.redirect_uri ? encodeURIComponent(req.query.redirect_uri as string) : undefined;
-      
-      passport.authenticate(provider, { 
-        scope: scopes,
-        state: state
-      })(req, res, next);
+
+      passport.authenticate(provider, { scope: scopes })(req, res, next);
     } catch (error) {
       console.error('❌ 소셜 로그인 라우터 오류:', error);
       res.status(500).json({
@@ -382,4 +374,4 @@ export const createAuthRoutes = (controller: AuthController): Router => {
   router.get('/:provider/callback', controller.handleSocialCallback);
 
   return router;
-}; 
+};

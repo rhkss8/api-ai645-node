@@ -9,6 +9,7 @@ import {
 export class RecommendationHistory {
   constructor(
     public readonly id: string,
+    public readonly userId: string | null,
     public readonly round: number | null,
     public readonly numbers: LotteryNumberSets,
     public readonly type: RecommendationType,
@@ -29,10 +30,12 @@ export class RecommendationHistory {
     conditions?: UserConditions,
     imageData?: ImageExtractResult,
     analysis?: string,
+    userId?: string,
   ): RecommendationHistory {
     const now = new Date();
     return new RecommendationHistory(
       id,
+      userId ?? null,
       round ?? null,
       numbers,
       type,

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { asyncHandler } from '../middlewares/errorHandler';
 import { PaymentUseCase } from '../usecases/PaymentUseCase';
+import { asyncHandler } from '../middlewares/errorHandler';
+import { portOneService } from '../services/PortOneService';
 
 export class PaymentController {
   constructor(private paymentUseCase: PaymentUseCase) {}
@@ -11,7 +12,7 @@ export class PaymentController {
   public createOrder = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
       const userId = (req as any).user?.sub;
-      const { amount, currency, orderName, description, metadata } = req.body;
+      const { amount, currency, description, metadata } = req.body;
 
       if (!userId) {
         res.status(401).json({
@@ -31,20 +32,10 @@ export class PaymentController {
         return;
       }
 
-      if (!orderName) {
-        res.status(400).json({
-          success: false,
-          error: '주문명이 필요합니다.',
-          message: '주문명을 확인해주세요.',
-        });
-        return;
-      }
-
       const result = await this.paymentUseCase.createOrder({
         userId,
         amount,
         currency,
-        orderName,
         description,
         metadata,
       });
@@ -68,24 +59,24 @@ export class PaymentController {
   );
 
   /**
-   * 결제 검증 (기본 버전)
+   * 결제 검증 (V2)
    */
   public verifyPayment = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
-      const { paymentId, merchantUid } = req.body;
+      const { paymentId } = req.body;
 
-      if (!paymentId || !merchantUid) {
+      if (!paymentId) {
         res.status(400).json({
           success: false,
           error: '필수 파라미터가 누락되었습니다.',
-          message: 'paymentId와 merchantUid를 확인해주세요.',
+          message: 'paymentId를 확인해주세요.',
         });
         return;
       }
 
       const result = await this.paymentUseCase.verifyPayment({
         impUid: paymentId,
-        merchantUid,
+        merchantUid: '', // V2에서는 사용하지 않음
       });
 
       if (!result.success) {
@@ -108,14 +99,25 @@ export class PaymentController {
   );
 
   /**
-   * Webhook 처리 (기본 버전)
+   * Webhook 처리
    */
   public handleWebhook = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
-      const { paymentId, merchantUid } = req.body;
+      const clientIp = req.ip || req.connection.remoteAddress || '';
       
-      if (!paymentId || !merchantUid) {
-        console.warn('⚠️ Webhook 요청에 필수 파라미터가 없습니다:', { paymentId, merchantUid });
+      // IP 화이트리스트 검증
+      if (!portOneService.isWebhookFromPortOne(clientIp)) {
+        console.warn('⚠️ 허용되지 않은 IP에서의 webhook 요청:', clientIp);
+        res.status(403).json({
+          success: false,
+          error: '허용되지 않은 요청입니다.',
+        });
+        return;
+      }
+
+      const { imp_uid, merchant_uid, status } = req.body;
+
+      if (!imp_uid || !merchant_uid) {
         res.status(400).json({
           success: false,
           error: '필수 파라미터가 누락되었습니다.',
@@ -123,29 +125,40 @@ export class PaymentController {
         return;
       }
 
-      try {
+      console.log('🔔 PortOne Webhook 수신:', {
+        imp_uid,
+        merchant_uid,
+        status,
+        clientIp,
+      });
+
+      // 결제 성공 시에만 처리
+      if (status === 'paid') {
         const result = await this.paymentUseCase.verifyPayment({
-          impUid: paymentId,
-          merchantUid,
+          impUid: imp_uid,
+          merchantUid: merchant_uid,
         });
 
-        if (result.success) {
-          console.log('✅ Webhook 처리 성공:', { paymentId, merchantUid });
-          res.status(200).json({ success: true });
-        } else {
-          console.error('❌ Webhook 처리 실패:', result.error);
+        if (!result.success) {
+          console.error('❌ Webhook 결제 검증 실패:', result.error);
           res.status(400).json({
             success: false,
             error: result.error,
           });
+          return;
         }
-      } catch (error) {
-        console.error('❌ Webhook 처리 중 오류:', error);
-        res.status(500).json({
-          success: false,
-          error: 'Webhook 처리 중 오류가 발생했습니다.',
+
+        console.log('✅ Webhook 결제 처리 완료:', {
+          imp_uid,
+          merchant_uid,
+          amount: result.payment?.amount,
         });
       }
+
+      res.json({
+        success: true,
+        message: 'Webhook 처리 완료',
+      });
     }
   );
 
@@ -229,7 +242,7 @@ export class PaymentController {
         return;
       }
 
-      const result = await this.paymentUseCase.getOrder(id, userId);
+      const result = await this.paymentUseCase.getOrder(id ?? '', userId ?? '');
 
       if (!result.success) {
         res.status(404).json({

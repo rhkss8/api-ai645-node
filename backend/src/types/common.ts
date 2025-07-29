@@ -68,6 +68,7 @@ export interface RecommendationRequest {
   round?: number;
   conditions?: UserConditions;
   imageNumbers?: LotteryNumberSets; // 이미지 분석 결과에서 추출된 번호들
+  userId?: string; // 사용자 ID (로그인한 경우에만)
 }
 
 export interface RecommendationResponse {

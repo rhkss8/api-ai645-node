@@ -97,28 +97,18 @@ async function verifyToken(hashedToken: string, plainToken: string): Promise<boo
  * Passport 전략 초기화
  */
 export function initPassportStrategies() {
-  // 환경에 따른 콜백 URL 설정
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const baseUrl = isDevelopment 
-    ? 'http://localhost:3350' 
-    : 'https://api.ai645.com';
-  
-  const oauthRedirectUri = `${baseUrl}/api/auth`;
-  
   // 환경변수 로드 확인
   console.log('🔧 OAuth 환경변수 확인:');
-  console.log('  NODE_ENV:', process.env.NODE_ENV || 'development');
-  console.log('  BASE_URL:', baseUrl);
   console.log('  KAKAO_CLIENT_ID:', process.env.KAKAO_CLIENT_ID || '❌ 미설정');
   console.log('  KAKAO_CLIENT_SECRET:', process.env.KAKAO_CLIENT_SECRET ? '✅ 설정됨' : '❌ 미설정');
   console.log('  GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID || '❌ 미설정');
   console.log('  GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✅ 설정됨' : '❌ 미설정');
   console.log('  NAVER_CLIENT_ID:', process.env.NAVER_CLIENT_ID || '❌ 미설정');
   console.log('  NAVER_CLIENT_SECRET:', process.env.NAVER_CLIENT_SECRET ? '✅ 설정됨' : '❌ 미설정');
-  console.log('  OAUTH_REDIRECT_URI:', oauthRedirectUri);
-  console.log('  카카오 콜백 URL:', `${oauthRedirectUri}/kakao/callback`);
-  console.log('  구글 콜백 URL:', `${oauthRedirectUri}/google/callback`);
-  console.log('  네이버 콜백 URL:', `${oauthRedirectUri}/naver/callback`);
+  console.log('  OAUTH_REDIRECT_URI:', process.env.OAUTH_REDIRECT_URI || '❌ 미설정');
+  console.log('  카카오 콜백 URL:', `${process.env.OAUTH_REDIRECT_URI}/kakao/callback`);
+  console.log('  구글 콜백 URL:', `${process.env.OAUTH_REDIRECT_URI}/google/callback`);
+  console.log('  네이버 콜백 URL:', `${process.env.OAUTH_REDIRECT_URI}/naver/callback`);
 
   // 카카오 전략
   passport.use(
@@ -126,7 +116,7 @@ export function initPassportStrategies() {
       {
         clientID: process.env.KAKAO_CLIENT_ID!,
         clientSecret: process.env.KAKAO_CLIENT_SECRET!,
-        callbackURL: `${oauthRedirectUri}/kakao/callback`,
+        callbackURL: `${process.env.OAUTH_REDIRECT_URI}/kakao/callback`,
       },
       async (accessToken: string, refreshToken: string | undefined, profile: any, done: any) => {
         try {
@@ -158,15 +148,14 @@ export function initPassportStrategies() {
     )
   );
 
-  // 구글 전략 (환경변수가 설정된 경우에만)
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    passport.use(
-      new GoogleStrategy(
-        {
-          clientID: process.env.GOOGLE_CLIENT_ID,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-          callbackURL: `${oauthRedirectUri}/google/callback`,
-        },
+  // 구글 전략
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        callbackURL: `${process.env.OAUTH_REDIRECT_URI}/google/callback`,
+      },
       async (accessToken: string, refreshToken: string | undefined, profile: any, done: any) => {
         try {
           console.log('🔐 구글 로그인 시도:', profile.id);
@@ -194,18 +183,15 @@ export function initPassportStrategies() {
       }
     )
   );
-  } else {
-    console.log('⚠️ Google OAuth 환경변수가 설정되지 않아 Google 로그인이 비활성화됩니다.');
-  }
 
   // 네이버 전략
   passport.use(
     new NaverStrategy(
-          {
-      clientID: process.env.NAVER_CLIENT_ID!,
-      clientSecret: process.env.NAVER_CLIENT_SECRET!,
-      callbackURL: `${oauthRedirectUri}/naver/callback`,
-    },
+      {
+        clientID: process.env.NAVER_CLIENT_ID!,
+        clientSecret: process.env.NAVER_CLIENT_SECRET!,
+        callbackURL: `${process.env.OAUTH_REDIRECT_URI}/naver/callback`,
+      },
       async (accessToken: string, refreshToken: string | undefined, profile: any, done: any) => {
         try {
           console.log('🔐 네이버 로그인 시도:', profile.id);

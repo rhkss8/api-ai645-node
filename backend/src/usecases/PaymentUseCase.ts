@@ -1,4 +1,6 @@
 import { OrderStatus, PaymentStatus } from '@prisma/client';
+import { RecommendationType } from '../types/common';
+import { portOneService, PortOneV2PaymentResponse } from '../services/PortOneService';
 import { prisma } from '../config/database';
 import { generateMerchantUid } from '../utils/idGenerator';
 import { GenerateRecommendationUseCase } from './GenerateRecommendationUseCase';
@@ -7,7 +9,6 @@ export interface CreateOrderData {
   userId: string;
   amount: number;
   currency?: string;
-  orderName: string;
   description?: string;
   metadata?: any;
 }
@@ -41,10 +42,10 @@ export class PaymentUseCase {
           merchantUid,
           amount: data.amount,
           currency: data.currency || 'KRW',
-          orderName: data.orderName,
           description: data.description,
           metadata: data.metadata,
           status: OrderStatus.PENDING,
+          orderName: data.description || '로또 추천 서비스',
         },
         include: {
           user: {
@@ -77,21 +78,42 @@ export class PaymentUseCase {
   }
 
   /**
-   * 결제 검증 및 처리 (기본 버전)
+   * 결제 검증 및 처리
    */
   async verifyPayment(data: VerifyPaymentData): Promise<{ success: boolean; payment?: any; recommendation?: any; error?: string }> {
     try {
-      // 주문 조회
-      const order = await prisma?.order?.findFirst({
-        where: {
-          OR: [
-            { merchantUid: data.merchantUid },
-            { id: data.merchantUid } // merchantUid가 아닌 경우 orderId로 조회
-          ]
-        },
+      // 1. PortOne V2 API로 결제 정보 조회
+      const paymentData = await portOneService.getPayment(data.impUid);
+
+      // 2. customData에서 주문 ID 추출
+      if (!paymentData.customData) {
+        return {
+          success: false,
+          error: '결제 정보에 주문 ID가 없습니다.',
+        };
+      }
+
+      const customData = JSON.parse(paymentData.customData);
+      const orderId = customData.orderId;
+
+      if (!orderId) {
+        return {
+          success: false,
+          error: '결제 정보에 주문 ID가 없습니다.',
+        };
+      }
+
+      // 3. 주문 조회
+      const order = await prisma?.order?.findUnique({
+        where: { id: orderId },
         include: {
-          user: true,
           payment: true,
+          user: {
+            select: {
+              id: true,
+              nickname: true,
+            },
+          },
         },
       });
 
@@ -102,12 +124,13 @@ export class PaymentUseCase {
         };
       }
 
-      // 이미 처리된 주문인지 확인
+      // 4. 이미 처리된 주문인지 확인 - 성공 응답 반환
       if (order.status === OrderStatus.PAID) {
         console.log('✅ 이미 처리된 주문 - 성공 응답 반환:', {
           orderId: order.id,
           status: order.status,
         });
+        
         return {
           success: true,
           payment: order.payment,
@@ -115,53 +138,87 @@ export class PaymentUseCase {
         };
       }
 
-      // 주문 상태를 PAID로 업데이트
-      const updatedOrder = await prisma?.order?.update({
-        where: { id: order.id },
-        data: { status: OrderStatus.PAID },
-        include: {
-          user: true,
-          payment: true,
-        },
+      // 5. V2 결제 검증
+      const isValidPayment = portOneService.verifyPayment(paymentData, order.amount, order.currency);
+      if (!isValidPayment) {
+        return {
+          success: false,
+          error: '결제 정보가 주문과 일치하지 않습니다.',
+        };
+      }
+
+      // 5. 트랜잭션으로 주문 및 결제 정보 업데이트
+      const result = await prisma?.$transaction(async (tx) => {
+        // 주문 상태 업데이트
+        const updatedOrder = await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: OrderStatus.PAID,
+          },
+        });
+
+        // 결제 정보 저장
+        const payment = await tx.payment.create({
+          data: {
+            orderId: order.id,
+            impUid: data.impUid,
+            pgProvider: paymentData.channel?.type || 'portone',
+            payMethod: 'card',
+            amount: paymentData.amount?.total || 0,
+            currency: paymentData.amount?.currency || 'KRW',
+            status: PaymentStatus.COMPLETED,
+            paidAt: paymentData.paidAt ? new Date(paymentData.paidAt) : new Date(),
+            rawResponse: paymentData as any,
+          },
+        });
+
+        return { order: updatedOrder, payment };
       });
 
-      // 결제 정보 생성
-      const payment = await prisma?.payment?.create({
-        data: {
-          orderId: order.id,
-          userId: order.userId,
-          amount: order.amount,
-          currency: order.currency,
-          paymentMethod: 'PORTONE',
-          status: PaymentStatus.COMPLETED,
-          subscriptionType: 'MONTHLY',
-          subscriptionDuration: 30,
-          externalPaymentId: data.impUid,
-          description: order.orderName,
-        },
+      if (!result) {
+        return {
+          success: false,
+          error: '결제 처리에 실패했습니다.',
+        };
+      }
+
+      console.log('✅ 결제 검증 및 처리 완료:', {
+        orderId: result.order.id,
+        impUid: data.impUid,
+        amount: result.payment.amount,
       });
 
-      // 추천 생성 (선택사항)
+      // 6. 결제 완료 후 추천 번호 생성 (프리미엄 추천)
       let recommendation = null;
       if (this.generateRecommendationUseCase) {
         try {
           const recommendationResult = await this.generateRecommendationUseCase.execute({
             userId: order.userId,
-            type: 'PREMIUM' as any,
-            conditions: {},
+            type: 'PREMIUM' as RecommendationType,
+            // userInput: '결제 완료 후 프리미엄 추천',
+            // metadata: {
+            //   orderId: result.order.id,
+            //   paymentId: result.payment.id,
+            //   amount: result.payment.amount,
+            // },
           });
-          
-          if (recommendationResult && (recommendationResult as any).success) {
-            recommendation = (recommendationResult as any).data;
+
+          if (recommendationResult) {
+            recommendation = recommendationResult;
+            console.log('✅ 결제 완료 후 추천 번호 생성 완료:', {
+              orderId: result.order.id,
+              recommendationId: 'generated',
+            });
           }
         } catch (error) {
-          console.error('추천 생성 오류:', error);
+          console.error('❌ 결제 완료 후 추천 번호 생성 실패:', error);
+          // 추천 번호 생성 실패는 결제 성공에 영향을 주지 않음
         }
       }
 
       return {
         success: true,
-        payment,
+        payment: result.payment,
         recommendation,
       };
     } catch (error) {
@@ -174,18 +231,21 @@ export class PaymentUseCase {
   }
 
   /**
-   * 결제 상태 업데이트
+   * 결제 상태 변경
    */
   async updatePaymentStatus(data: UpdatePaymentStatusData): Promise<{ success: boolean; order?: any; payment?: any; error?: string }> {
     try {
-      // 주문 조회
-      const order = await prisma?.order?.findFirst({
-        where: {
-          id: data.orderId,
-          userId: data.userId,
-        },
+      // 1. 주문 조회 및 권한 확인
+      const order = await prisma?.order?.findUnique({
+        where: { id: data.orderId },
         include: {
           payment: true,
+          user: {
+            select: {
+              id: true,
+              nickname: true,
+            },
+          },
         },
       });
 
@@ -196,36 +256,139 @@ export class PaymentUseCase {
         };
       }
 
-      // 주문 상태 업데이트
-      const updatedOrder = await prisma?.order?.update({
-        where: { id: order.id },
-        data: { status: data.status },
-        include: {
-          payment: true,
-        },
+      // 2. 사용자 권한 확인
+      if (order.userId !== data.userId) {
+        return {
+          success: false,
+          error: '주문을 수정할 권한이 없습니다.',
+        };
+      }
+
+      // 3. 상태 변경 가능 여부 확인
+      if (order.status === OrderStatus.PAID && data.status === OrderStatus.USER_CANCELLED) {
+        return {
+          success: false,
+          error: '이미 결제 완료된 주문은 사용자 취소할 수 없습니다.',
+        };
+      }
+
+      // 4. 트랜잭션으로 상태 변경
+      const result = await prisma?.$transaction(async (tx) => {
+        // 주문 상태 업데이트
+        const updatedOrder = await tx.order.update({
+          where: { id: data.orderId },
+          data: {
+            status: data.status,
+            updatedAt: new Date(),
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                nickname: true,
+              },
+            },
+          },
+        });
+
+        // 결제 정보가 있으면 결제 상태도 업데이트
+        let updatedPayment = null;
+        if (order.payment) {
+          updatedPayment = await tx.payment.update({
+            where: { orderId: data.orderId },
+            data: {
+              status: this.mapOrderStatusToPaymentStatus(data.status),
+              updatedAt: new Date(),
+            },
+          });
+        }
+
+        return {
+          order: updatedOrder,
+          payment: updatedPayment,
+        };
       });
 
-      // 결제 정보도 업데이트
-      let updatedPayment = null;
-      if (order.payment) {
-        updatedPayment = await prisma?.payment?.update({
-          where: { id: order.payment.id },
-          data: { status: this.mapOrderStatusToPaymentStatus(data.status) },
-        });
-      }
+      console.log('✅ 결제 상태 변경 완료:', {
+        orderId: data.orderId,
+        oldStatus: order.status,
+        newStatus: data.status,
+        reason: data.reason,
+      });
 
       return {
         success: true,
-        order: updatedOrder,
-        payment: updatedPayment,
+        order: result.order,
+        payment: result.payment,
       };
     } catch (error) {
-      console.error('결제 상태 업데이트 오류:', error);
+      console.error('결제 상태 변경 오류:', error);
       return {
         success: false,
-        error: '결제 상태 업데이트에 실패했습니다.',
+        error: '결제 상태 변경에 실패했습니다.',
       };
     }
+  }
+
+  /**
+   * OrderStatus를 PaymentStatus로 매핑
+   */
+  private mapOrderStatusToPaymentStatus(orderStatus: OrderStatus): PaymentStatus {
+    switch (orderStatus) {
+      case OrderStatus.PENDING:
+        return PaymentStatus.PENDING;
+      case OrderStatus.PAID:
+        return PaymentStatus.COMPLETED;
+      case OrderStatus.FAILED:
+        return PaymentStatus.FAILED;
+      case OrderStatus.CANCELLED:
+        return PaymentStatus.CANCELLED;
+      case OrderStatus.USER_CANCELLED:
+        return PaymentStatus.USER_CANCELLED;
+      case OrderStatus.REFUNDED:
+        return PaymentStatus.REFUNDED;
+      default:
+        return PaymentStatus.PENDING;
+    }
+  }
+
+  /**
+   * 결제 검증 로직
+   */
+  private validatePayment(order: any, paymentData: any): { isValid: boolean; error?: string } {
+    // 1. 결제 상태 확인
+    if (paymentData.status !== 'paid') {
+      return {
+        isValid: false,
+        error: `결제가 완료되지 않았습니다. (상태: ${paymentData.status})`,
+      };
+    }
+
+    // 2. 주문번호 일치 확인
+    if (paymentData.merchant_uid !== order.merchantUid) {
+      return {
+        isValid: false,
+        error: '주문번호가 일치하지 않습니다.',
+      };
+    }
+
+    // 3. 결제 금액 확인
+    if (paymentData.amount !== order.amount) {
+      return {
+        isValid: false,
+        error: `결제 금액이 일치하지 않습니다. (주문: ${order.amount}, 결제: ${paymentData.amount})`,
+      };
+    }
+
+    // 4. 통화 확인
+    if (paymentData.currency !== order.currency) {
+      return {
+        isValid: false,
+        error: '결제 통화가 일치하지 않습니다.',
+      };
+    }
+
+    return { isValid: true };
   }
 
   /**
@@ -233,13 +396,8 @@ export class PaymentUseCase {
    */
   async getOrder(orderId: string, userId?: string): Promise<{ success: boolean; order?: any; error?: string }> {
     try {
-      const where: any = { id: orderId };
-      if (userId) {
-        where.userId = userId;
-      }
-
-      const order = await prisma?.order?.findFirst({
-        where,
+      const order = await prisma?.order?.findUnique({
+        where: { id: orderId },
         include: {
           user: {
             select: {
@@ -255,6 +413,14 @@ export class PaymentUseCase {
         return {
           success: false,
           error: '주문을 찾을 수 없습니다.',
+        };
+      }
+
+      // 사용자 권한 확인
+      if (userId && order.userId !== userId) {
+        return {
+          success: false,
+          error: '주문에 대한 접근 권한이 없습니다.',
         };
       }
 
@@ -311,25 +477,6 @@ export class PaymentUseCase {
         success: false,
         error: '주문 목록 조회에 실패했습니다.',
       };
-    }
-  }
-
-  /**
-   * OrderStatus를 PaymentStatus로 매핑
-   */
-  private mapOrderStatusToPaymentStatus(orderStatus: OrderStatus): PaymentStatus {
-    switch (orderStatus) {
-      case OrderStatus.PAID:
-        return PaymentStatus.COMPLETED;
-      case OrderStatus.FAILED:
-        return PaymentStatus.FAILED;
-      case OrderStatus.CANCELLED:
-      case OrderStatus.USER_CANCELLED:
-        return PaymentStatus.CANCELLED;
-      case OrderStatus.REFUNDED:
-        return PaymentStatus.REFUNDED;
-      default:
-        return PaymentStatus.PENDING;
     }
   }
 } 

@@ -11,7 +11,7 @@ import passport from 'passport';
 import cookieParser from 'cookie-parser';
 
 import env from './config/env';
-// import { connectDatabase, disconnectDatabase } from './config/database';
+import { connectDatabase, disconnectDatabase } from './config/database';
 import { ApiResponse, HealthCheckResponse } from './types/common';
 import { createApiRoutes, DIContainer } from './routes/index';
 import { globalErrorHandler, notFoundHandler } from './middlewares/errorHandler';
@@ -64,14 +64,18 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: `http://localhost:3350`,
-        description: 'Development server',
+        url: process.env.NODE_ENV === 'production' 
+          ? 'https://api.ai645.com' 
+          : 'http://localhost:3350',
+        description: process.env.NODE_ENV === 'production' 
+          ? 'Production server' 
+          : 'Development server',
       },
     ],
     tags: [
       {
         name: 'Authentication',
-        description: '인증 관련 API',
+        description: '소셜 로그인 및 인증 관련 API',
       },
       {
         name: 'Recommendations',
@@ -89,8 +93,20 @@ const swaggerOptions = {
         name: 'Data',
         description: '데이터 조회 관련 API',
       },
+      {
+        name: 'Payment',
+        description: '결제 관련 API',
+      },
     ],
     components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'JWT 액세스 토큰을 Bearer 형식으로 전달',
+        },
+      },
       schemas: {
         ErrorResponse: {
           type: 'object',
@@ -102,9 +118,30 @@ const swaggerOptions = {
             timestamp: { type: 'string', format: 'date-time', example: '2025-06-23T12:00:00.000Z' }
           },
           required: ['success', 'error', 'timestamp']
-        }
-      }
-    }
+        },
+        LoginResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                accessToken: { type: 'string', description: 'JWT 액세스 토큰' },
+                user: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    nickname: { type: 'string' },
+                  },
+                },
+                expiresIn: { type: 'integer', description: '토큰 만료 시간 (초)' },
+              },
+            },
+            message: { type: 'string', example: '로그인이 완료되었습니다.' },
+          },
+        },
+      },
+    },
   },
   apis: env.NODE_ENV === 'production' 
     ? ['./dist/routes/*.js'] 
@@ -186,8 +223,24 @@ app.get('/', (req, res) => {
   res.json(response);
 });
 
+// Test route for debugging
+app.get('/test', (req, res) => {
+  res.json({ message: 'Test route works!' });
+});
+
 // API routes
-app.use('/api', createApiRoutes());
+const apiRoutes = createApiRoutes();
+app.use('/api', apiRoutes);
+
+// 라우트 등록 확인 로그
+console.log('🔍 등록된 라우트 확인:');
+console.log('  - /api/auth/* (Authentication)');
+console.log('  - /api/payment/* (Payment)');
+console.log('  - /api/recommend/* (Recommendation)');
+console.log('  - /api/review/* (Review)');
+console.log('  - /api/data/* (Data)');
+console.log('  - /api/board/* (Board)');
+console.log('  - /api/admin/* (Admin)');
 
 // 404 handler
 app.use('*', notFoundHandler);
@@ -199,11 +252,14 @@ app.use(globalErrorHandler);
 const startServer = async (): Promise<void> => {
   try {
     // Connect to database - 임시로 비활성화
-    // await connectDatabase();
+    await connectDatabase();
     
     // Start lotto scheduler
     const lottoScheduler = new LottoScheduler();
     lottoScheduler.startScheduler();
+    
+    // Start token refresh worker
+    startTokenRefreshWorker();
     
     // Start server
     const server = app.listen(env.PORT, '0.0.0.0', () => {
@@ -222,7 +278,7 @@ const startServer = async (): Promise<void> => {
    • 회고 생성: POST /api/review/generate
    • 데이터 조회: GET /api/data/recommendations
 
-⚠️  데이터베이스: 임시로 비활성화됨 (개발용)
+✅ 데이터베이스: 연결됨
 🔧 Clean Architecture + TypeScript 구조 적용 완료
       `);
     });
