@@ -13,12 +13,22 @@ async function initializeKeys() {
     let publicKeyString: string;
 
     // 환경변수에서 JWT 키 확인
-    if (process.env.JWT_PRIVATE_KEY && process.env.JWT_PUBLIC_KEY) {
+    if (process.env.JWT_PRIVATE_KEY_B64 && process.env.JWT_PUBLIC_KEY_B64) {
       // 환경변수에서 키 사용 (클라우드타입 등)
-      // 줄바꿈 문자를 올바르게 처리
+      // Base64로 인코딩된 키를 디코딩
+      try {
+        privateKeyString = Buffer.from(process.env.JWT_PRIVATE_KEY_B64, 'base64').toString('utf8');
+        publicKeyString = Buffer.from(process.env.JWT_PUBLIC_KEY_B64, 'base64').toString('utf8');
+        console.log('🔑 JWT 키를 환경변수(Base64)에서 로드합니다.');
+      } catch (error) {
+        console.error('Base64 디코딩 실패:', error);
+        throw new Error('JWT 키 Base64 디코딩에 실패했습니다.');
+      }
+    } else if (process.env.JWT_PRIVATE_KEY && process.env.JWT_PUBLIC_KEY) {
+      // 일반 문자열로 저장된 키 사용
       privateKeyString = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
       publicKeyString = process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
-      console.log('🔑 JWT 키를 환경변수에서 로드합니다.');
+      console.log('🔑 JWT 키를 환경변수(문자열)에서 로드합니다.');
     } else if (process.env.JWT_PRIVATE_KEY_PATH && process.env.JWT_PUBLIC_KEY_PATH) {
       // 파일에서 키 읽기 (로컬 개발 환경)
       try {
