@@ -12,14 +12,16 @@ services:
       - "5556:5556"  # Prisma Studio 포트 매핑
     env_file:
       - ./backend/.env
+    environment:
+      - NODE_ENV=production
     depends_on:
       - db
     volumes:
-      - ./backend:/app
+      - /app/node_modules
     restart: unless-stopped
     networks:
       - app-network
-    command: npm run dev
+    command: npm run start
 
   # Database service (PostgreSQL)
   db:

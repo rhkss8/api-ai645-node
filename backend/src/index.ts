@@ -225,7 +225,18 @@ app.get('/test', (req, res) => {
 });
 
 // API routes
-app.use('/api', createApiRoutes());
+const apiRoutes = createApiRoutes();
+app.use('/api', apiRoutes);
+
+// 라우트 등록 확인 로그
+console.log('🔍 등록된 라우트 확인:');
+console.log('  - /api/auth/* (Authentication)');
+console.log('  - /api/payment/* (Payment)');
+console.log('  - /api/recommend/* (Recommendation)');
+console.log('  - /api/review/* (Review)');
+console.log('  - /api/data/* (Data)');
+console.log('  - /api/board/* (Board)');
+console.log('  - /api/admin/* (Admin)');
 
 // 404 handler
 app.use('*', notFoundHandler);
