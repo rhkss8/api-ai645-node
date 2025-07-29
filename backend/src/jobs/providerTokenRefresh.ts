@@ -1,7 +1,6 @@
 import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
-import { verifyToken } from '../auth/providers';
 
 const prisma = new PrismaClient();
 
@@ -79,7 +78,7 @@ async function refreshProviderToken(account: any): Promise<void> {
     // 새 토큰 암호화
     const bcrypt = await import('bcryptjs');
     const newAccessToken = await bcrypt.hash(tokenResponse.access_token, 10);
-    const newRefreshToken = tokenResponse.refresh_token 
+    const newRefreshToken = tokenResponse.refresh_token
       ? await bcrypt.hash(tokenResponse.refresh_token, 10)
       : account.refreshToken;
 
@@ -100,7 +99,7 @@ async function refreshProviderToken(account: any): Promise<void> {
     console.log(`✅ 토큰 갱신 완료: ${account.provider} - ${account.providerUid}`);
   } catch (error) {
     console.error(`❌ 토큰 갱신 실패: ${account.provider} - ${account.providerUid}`, error);
-    
+
     // 갱신 실패 시 계정 비활성화 또는 알림 처리
     // 여기서는 로그만 남기고 계속 진행
   }
@@ -170,4 +169,4 @@ export function startTokenRefreshWorker(): void {
       console.error('❌ 토큰 정리 오류:', error);
     }
   });
-} 
+}
