@@ -15,7 +15,7 @@ COPY ./backend/tsconfig.json ./
 RUN npm ci && npm cache clean --force
 
 # backend 전체 복사
-COPY ./backend/ .  # <- 이걸로 scripts 포함 모든 파일이 /app에 복사됨
+COPY ./backend/ .
 
 # Prisma Client 생성
 RUN npx prisma generate
