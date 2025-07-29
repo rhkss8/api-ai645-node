@@ -137,6 +137,7 @@ model Order {
   id           String        @id @default(cuid())
   userId       String
   merchantUid  String        @unique
+  orderName    String        @default("로또 추천 서비스")
   amount       Int
   currency     String        @default("KRW")
   status       OrderStatus   @default(PENDING)

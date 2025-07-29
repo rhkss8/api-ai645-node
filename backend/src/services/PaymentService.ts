@@ -37,7 +37,7 @@ export class PaymentService {
           status: OrderStatus.PENDING,
           description: data.description,
           metadata: data.metadata,
-          // orderName: data.description || '로또 추천 서비스',
+          orderName: data.description || '로또 추천 서비스',
         },
       });
 
