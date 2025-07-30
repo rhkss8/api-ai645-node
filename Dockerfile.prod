@@ -27,6 +27,9 @@ RUN addgroup -g 1001 -S nodejs && \
 
 USER nodejs
 
+# node_modules 디렉토리 소유권 명시적 설정
+RUN chown -R nodejs:nodejs /app/backend/node_modules
+
 # Prisma Client 생성 (사용자 전환 후)
 RUN npx prisma generate
 
