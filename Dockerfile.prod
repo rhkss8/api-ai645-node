@@ -40,4 +40,4 @@ USER nodejs
 EXPOSE 3350
 
 # CMD 실행 시 script + app 시작
-CMD ["sh", "-c", "scripts/init-data-prod.sh && npm run start"]
+CMD ["/bin/sh", "-c", "./scripts/init-data-prod.sh \"$@\"", "--", "npm", "run", "start"]
