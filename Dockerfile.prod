@@ -44,14 +44,14 @@ RUN echo '#!/bin/sh' > /app/start.sh && \
     echo 'export DATABASE_URL="postgresql://root:tarscase12%21%40@svc.sel5.cloudtype.app:31473/main"' >> /app/start.sh && \
     echo 'echo "⏳ 클라우드타입 데이터베이스 연결 대기 중..."' >> /app/start.sh && \
     echo 'for i in $(seq 1 30); do' >> /app/start.sh && \
-    echo '  if npx prisma db execute --stdin <<< "SELECT 1" > /dev/null 2>&1; then' >> /app/start.sh && \
+    echo '  if echo "SELECT 1" | npx prisma db execute --stdin > /dev/null 2>&1; then' >> /app/start.sh && \
     echo '    echo "✅ 클라우드타입 데이터베이스 연결 성공!"' >> /app/start.sh && \
     echo '    break' >> /app/start.sh && \
     echo '  fi' >> /app/start.sh && \
     echo '  echo "   데이터베이스 연결 대기 중... ($i/30)"' >> /app/start.sh && \
     echo '  sleep 2' >> /app/start.sh && \
     echo 'done' >> /app/start.sh && \
-    echo 'if ! npx prisma db execute --stdin <<< "SELECT 1" > /dev/null 2>&1; then' >> /app/start.sh && \
+    echo 'if ! echo "SELECT 1" | npx prisma db execute --stdin > /dev/null 2>&1; then' >> /app/start.sh && \
     echo '  echo "❌ 데이터베이스 연결 실패. 스크립트를 종료합니다."' >> /app/start.sh && \
     echo '  exit 1' >> /app/start.sh && \
     echo 'fi' >> /app/start.sh && \
