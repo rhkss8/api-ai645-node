@@ -36,7 +36,7 @@ import { createPaymentRoutes } from './paymentRoutes';
 import adminRoutes from './adminRoutes';
 
 // Middleware
-import { resetIPLimits } from '../middleware/ipLimitMiddleware';
+import { resetIPLimits } from '../middlewares/ipLimitMiddleware';
 
 // Dependency Injection Container
 class DIContainer {

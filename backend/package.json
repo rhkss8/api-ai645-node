@@ -15,6 +15,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "import:winning-numbers": "ts-node src/scripts/importWinningNumbers.ts",
+    "import:csv": "node scripts/import-winning-numbers.js",
+    "import:csv:sh": "./scripts/import-winning-numbers.sh",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts"

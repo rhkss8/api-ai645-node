@@ -12,7 +12,7 @@ import {
   premiumRecommendationLimiter,
   imageExtractionLimiter,
 } from '../middlewares/rateLimiter';
-import { freeRecommendationIPLimit } from '../middleware/ipLimitMiddleware';
+import { freeRecommendationIPLimit } from '../middlewares/ipLimitMiddleware';
 import { authenticateAccess } from '../middlewares/auth';
 
 // Multer 설정 (메모리 저장)

@@ -1,7 +1,7 @@
-# Node.js 18 기반 이미지
+# Node.js 18 기반 이미지 사용 (LTS 버전)
 FROM node:18-alpine
 
-# Prisma 실행을 위한 기본 의존성 설치
+# Prisma를 위한 필수 라이브러리 설치
 RUN apk add --no-cache openssl libc6-compat
 
 # 작업 디렉토리 설정
@@ -10,62 +10,34 @@ WORKDIR /app
 # backend 폴더로 이동
 WORKDIR /app/backend
 
-# backend/package.json과 tsconfig.json 등 복사
-COPY ./backend/package*.json ./
-COPY ./backend/tsconfig.json ./
+# package.json과 package-lock.json 복사 (캐싱 최적화)
+COPY backend/package*.json ./
+COPY backend/tsconfig.json ./
 
-# 의존성 설치
+# 의존성 설치 (dev dependencies 포함, TypeScript 빌드를 위해)
 RUN npm ci && npm cache clean --force
 
-# backend 전체 복사
+# 소스 코드 복사
 COPY backend/ .
 
-# 비권한 사용자 전환
+# Prisma 클라이언트 생성
+RUN npx prisma generate
+
+# TypeScript 컴파일
+RUN npm run build
+
+# 스크립트 실행 권한 부여
+RUN chmod +x scripts/init-data.sh
+
+# 비특권 사용자로 실행 (보안 강화)
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
     chown -R nodejs:nodejs /app
 
 USER nodejs
 
-# node_modules 디렉토리 소유권 명시적 설정
-RUN chown -R nodejs:nodejs /app/backend/node_modules
-
-# Prisma Client 생성 (사용자 전환 후)
-RUN npx prisma generate
-
-# TypeScript 빌드
-RUN npm run build
-
-# 포트 설정
+# 포트 노출 (CloudType 기본 포트)
 EXPOSE 3350
 
-# 시작 스크립트 생성
-RUN echo '#!/bin/sh' > /app/start.sh && \
-    echo 'set -e' >> /app/start.sh && \
-    echo 'cd /app/backend' >> /app/start.sh && \
-    echo 'echo "🚀 클라우드타입 프로덕션 데이터 초기화 스크립트 시작..."' >> /app/start.sh && \
-    echo 'export DATABASE_URL="postgresql://root:tarscase12%21%40@svc.sel5.cloudtype.app:31473/main"' >> /app/start.sh && \
-    echo 'echo "⏳ 클라우드타입 데이터베이스 연결 대기 중..."' >> /app/start.sh && \
-    echo 'for i in $(seq 1 30); do' >> /app/start.sh && \
-    echo '  if echo "SELECT 1" | npx prisma db execute --stdin > /dev/null 2>&1; then' >> /app/start.sh && \
-    echo '    echo "✅ 클라우드타입 데이터베이스 연결 성공!"' >> /app/start.sh && \
-    echo '    break' >> /app/start.sh && \
-    echo '  fi' >> /app/start.sh && \
-    echo '  echo "   데이터베이스 연결 대기 중... ($i/30)"' >> /app/start.sh && \
-    echo '  sleep 2' >> /app/start.sh && \
-    echo 'done' >> /app/start.sh && \
-    echo 'if ! echo "SELECT 1" | npx prisma db execute --stdin > /dev/null 2>&1; then' >> /app/start.sh && \
-    echo '  echo "❌ 데이터베이스 연결 실패. 스크립트를 종료합니다."' >> /app/start.sh && \
-    echo '  exit 1' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "🔄 Prisma 마이그레이션 실행 중..."' >> /app/start.sh && \
-    echo 'npx prisma db push' >> /app/start.sh && \
-    echo 'echo "🔧 Prisma 클라이언트 생성 중..."' >> /app/start.sh && \
-    echo 'npx prisma generate' >> /app/start.sh && \
-    echo 'echo "🎉 클라우드타입 프로덕션 데이터 초기화 완료!"' >> /app/start.sh && \
-    echo 'echo "🚀 애플리케이션 시작 중..."' >> /app/start.sh && \
-    echo 'exec "$@"' >> /app/start.sh && \
-    chmod +x /app/start.sh
-
-# CMD 실행
-CMD ["/app/start.sh", "npm", "run", "start"]
+# 애플리케이션 실행 (컴파일된 JavaScript 실행)
+CMD ["npm", "run", "start"]
