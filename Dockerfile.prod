@@ -26,9 +26,6 @@ RUN npx prisma generate
 # TypeScript 빌드
 RUN npm run build
 
-# 스크립트 실행 권한 부여
-RUN chmod +x scripts/init-data-prod.sh
-
 # 비권한 사용자 전환
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
@@ -39,5 +36,33 @@ USER nodejs
 # 포트 설정
 EXPOSE 3350
 
-# CMD 실행 시 script + app 시작
-CMD ["/bin/sh", "-c", "./scripts/init-data-prod.sh \"$@\"", "--", "npm", "run", "start"]
+# 시작 스크립트 생성
+RUN echo '#!/bin/sh' > /app/start.sh && \
+    echo 'set -e' >> /app/start.sh && \
+    echo 'cd /app/backend' >> /app/start.sh && \
+    echo 'echo "🚀 클라우드타입 프로덕션 데이터 초기화 스크립트 시작..."' >> /app/start.sh && \
+    echo 'export DATABASE_URL="postgresql://root:tarscase12%21%40@svc.sel5.cloudtype.app:31473/main"' >> /app/start.sh && \
+    echo 'echo "⏳ 클라우드타입 데이터베이스 연결 대기 중..."' >> /app/start.sh && \
+    echo 'for i in $(seq 1 30); do' >> /app/start.sh && \
+    echo '  if npx prisma db execute --stdin <<< "SELECT 1" > /dev/null 2>&1; then' >> /app/start.sh && \
+    echo '    echo "✅ 클라우드타입 데이터베이스 연결 성공!"' >> /app/start.sh && \
+    echo '    break' >> /app/start.sh && \
+    echo '  fi' >> /app/start.sh && \
+    echo '  echo "   데이터베이스 연결 대기 중... ($i/30)"' >> /app/start.sh && \
+    echo '  sleep 2' >> /app/start.sh && \
+    echo 'done' >> /app/start.sh && \
+    echo 'if ! npx prisma db execute --stdin <<< "SELECT 1" > /dev/null 2>&1; then' >> /app/start.sh && \
+    echo '  echo "❌ 데이터베이스 연결 실패. 스크립트를 종료합니다."' >> /app/start.sh && \
+    echo '  exit 1' >> /app/start.sh && \
+    echo 'fi' >> /app/start.sh && \
+    echo 'echo "🔄 Prisma 마이그레이션 실행 중..."' >> /app/start.sh && \
+    echo 'npx prisma db push' >> /app/start.sh && \
+    echo 'echo "🔧 Prisma 클라이언트 생성 중..."' >> /app/start.sh && \
+    echo 'npx prisma generate' >> /app/start.sh && \
+    echo 'echo "🎉 클라우드타입 프로덕션 데이터 초기화 완료!"' >> /app/start.sh && \
+    echo 'echo "🚀 애플리케이션 시작 중..."' >> /app/start.sh && \
+    echo 'exec "$@"' >> /app/start.sh && \
+    chmod +x /app/start.sh
+
+# CMD 실행
+CMD ["/app/start.sh", "npm", "run", "start"]
