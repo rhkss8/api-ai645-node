@@ -10,6 +10,7 @@ export interface IRecommendationHistoryRepository {
     data: RecommendationHistory[];
     total: number;
   }>;
+  findByOrderId(orderId: string): Promise<RecommendationHistory | null>;
   findRecent(limit: number): Promise<RecommendationHistory[]>;
   findAll(page: number, limit: number): Promise<{
     data: RecommendationHistory[];

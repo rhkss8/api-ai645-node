@@ -12,7 +12,7 @@ export class PaymentController {
   public createOrder = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
       const userId = (req as any).user?.sub;
-      const { amount, currency, description, metadata } = req.body;
+      const { amount, currency, description, metadata, paramId } = req.body;
 
       if (!userId) {
         res.status(401).json({
@@ -32,12 +32,15 @@ export class PaymentController {
         return;
       }
 
+      console.log(`💳 주문 생성 - 사용자: ${userId}, 파라미터: ${paramId || '없음'}`);
+
       const result = await this.paymentUseCase.createOrder({
         userId,
         amount,
         currency,
         description,
         metadata,
+        paramId, // 추천 파라미터 ID 추가
       });
 
       if (!result.success) {

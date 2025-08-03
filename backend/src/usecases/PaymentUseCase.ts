@@ -11,6 +11,7 @@ export interface CreateOrderData {
   currency?: string;
   description?: string;
   metadata?: any;
+  paramId?: string; // 추천 파라미터 ID
 }
 
 export interface VerifyPaymentData {
@@ -46,6 +47,7 @@ export class PaymentUseCase {
           metadata: data.metadata,
           status: OrderStatus.PENDING,
           orderName: data.description || '로또 추천 서비스',
+          paramId: data.paramId, // 추천 파라미터 ID 저장
         },
         include: {
           user: {
@@ -62,6 +64,20 @@ export class PaymentUseCase {
           success: false,
           error: '주문 생성에 실패했습니다.',
         };
+      }
+
+      // paramId가 있는 경우 RecommendationParams와 양방향 연결 설정
+      if (data.paramId) {
+        try {
+          await prisma?.recommendationParams?.update({
+            where: { id: data.paramId },
+            data: { orderId: order.id },
+          });
+          console.log(`✅ 추천 파라미터 ${data.paramId}와 주문 ${order.id} 연결 완료`);
+        } catch (error) {
+          console.warn(`⚠️ 추천 파라미터 연결 실패:`, error);
+          // 파라미터 연결 실패해도 주문 생성은 성공으로 처리
+        }
       }
 
       return {
@@ -171,6 +187,15 @@ export class PaymentUseCase {
             rawResponse: paymentData as any,
           },
         });
+
+        // 연결된 추천 파라미터 상태 업데이트 (있는 경우)
+        if (order.paramId) {
+          await tx.recommendationParams.update({
+            where: { id: order.paramId },
+            data: { status: 'PAYMENT_COMPLETED' },
+          });
+          console.log(`✅ 추천 파라미터 ${order.paramId} 상태를 PAYMENT_COMPLETED로 업데이트`);
+        }
 
         return { order: updatedOrder, payment };
       });

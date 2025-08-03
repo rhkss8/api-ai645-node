@@ -20,7 +20,9 @@ model RecommendationHistory {
   updatedAt  DateTime               @updatedAt
   analysis   String?
   userId     String?
+  orderId    String?                @unique // 유료 추천의 경우 주문 ID 연결 (1:1 관계)
   user       User?                  @relation(fields: [userId], references: [id])
+  order      Order?                 @relation(fields: [orderId], references: [id])
   reviews    RecommendationReview[]
 
   @@map("recommendation_history")
@@ -95,6 +97,7 @@ model User {
   refreshTokens   RefreshToken[]
   socialAccounts  SocialAccount[]
   subscriptions   Subscription[]
+  params          RecommendationParams[]
 
   @@map("users")
 }
@@ -143,15 +146,19 @@ model Order {
   status      OrderStatus @default(PENDING)
   description String?
   metadata    Json?
+  paramId     String?     // 추천 파라미터 ID 연결
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   payment     Payment?
+  params      RecommendationParams? @relation(fields: [paramId], references: [id])
+  recommendation RecommendationHistory?
 
   @@index([userId])
   @@index([merchantUid])
   @@index([status])
   @@index([createdAt])
+  @@index([paramId])
   @@map("orders")
 }
 
@@ -212,6 +219,27 @@ model BoardPost {
   @@map("board_posts")
 }
 
+model RecommendationParams {
+  id         String                 @id @default(cuid())
+  userId     String
+  type       RecommendationType
+  gameCount  Int                    @default(5)
+  conditions Json?                  // 사용자 조건 (includeNumbers에 이미지 추출 번호 포함)
+  round      Int?                   // 대상 회차
+  status     RecommendationParamStatus @default(PENDING)
+  orderId    String?                // 연결된 주문 ID
+  expiresAt  DateTime               // 24시간 후 만료
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders     Order[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("recommendation_params")
+}
+
 enum RecommendationType {
   FREE
   PREMIUM
@@ -257,4 +285,14 @@ enum SubscriptionType {
   MONTHLY
   YEARLY
   LIFETIME
+}
+
+enum RecommendationParamStatus {
+  PENDING           // 파라미터 저장됨
+  PAYMENT_PENDING   // 결제 대기
+  PAYMENT_COMPLETED // 결제 완료
+  GENERATING        // GPT 처리 중
+  COMPLETED         // 완료
+  FAILED            // 실패
+  EXPIRED           // 만료
 }

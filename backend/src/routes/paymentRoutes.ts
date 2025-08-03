@@ -11,7 +11,7 @@ export const createPaymentRoutes = (controller: PaymentController): Router => {
    *   post:
    *     operationId: createOrder
    *     summary: 주문 생성
-   *     description: 결제를 위한 주문을 생성합니다.
+   *     description: 결제를 위한 주문을 생성합니다. 유료 추천의 경우 paramId를 포함해야 합니다.
    *     tags: [Payment]
    *     security:
    *       - bearerAuth: []
@@ -28,13 +28,122 @@ export const createPaymentRoutes = (controller: PaymentController): Router => {
    *                 type: integer
    *                 description: 결제 금액
    *                 example: 10000
+   *               paramId:
+   *                 type: string
+   *                 description: 추천 파라미터 ID (유료 추천의 경우 필수)
+   *                 example: "param_abc123"
+   *               currency:
+   *                 type: string
+   *                 description: 통화 코드
+   *                 default: "KRW"
+   *               description:
+   *                 type: string
+   *                 description: 주문 설명
+   *               metadata:
+   *                 type: object
+   *                 description: 추가 메타데이터
    *     responses:
    *       201:
    *         description: 주문 생성 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     order:
+   *                       type: object
+   *                       properties:
+   *                         id:
+   *                           type: string
+   *                           description: 주문 ID
+   *                           example: "ord_abc123def456"
+   *                         merchantUid:
+   *                           type: string
+   *                           description: 가맹점 주문 ID
+   *                           example: "merchant_20250801_123456"
+   *                         amount:
+   *                           type: integer
+   *                           description: 결제 금액
+   *                           example: 10000
+   *                         currency:
+   *                           type: string
+   *                           description: 통화 코드
+   *                           example: "KRW"
+   *                         description:
+   *                           type: string
+   *                           description: 주문 설명
+   *                           example: "프리미엄 로또 추천"
+   *                         status:
+   *                           type: string
+   *                           description: 주문 상태
+   *                           example: "PENDING"
+   *                         orderName:
+   *                           type: string
+   *                           description: 주문명
+   *                           example: "로또 추천 서비스"
+   *                         userId:
+   *                           type: string
+   *                           description: 사용자 ID
+   *                         paramId:
+   *                           type: string
+   *                           description: 추천 파라미터 ID (있는 경우)
+   *                           nullable: true
+   *                         recommendationId:
+   *                           type: string
+   *                           description: 추천 결과 ID (있는 경우)
+   *                           nullable: true
+   *                         createdAt:
+   *                           type: string
+   *                           format: date-time
+   *                           description: 생성 시간
+   *                         user:
+   *                           type: object
+   *                           properties:
+   *                             id:
+   *                               type: string
+   *                             nickname:
+   *                               type: string
+   *                 message:
+   *                   type: string
+   *                   example: "주문이 생성되었습니다."
    *       400:
    *         description: 잘못된 요청
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "유효하지 않은 결제 금액입니다."
+   *                 message:
+   *                   type: string
+   *                   example: "결제 금액을 확인해주세요."
    *       401:
    *         description: 인증 필요
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "로그인이 필요합니다."
+   *                 message:
+   *                   type: string
+   *                   example: "다시 로그인해주세요."
    */
   router.post('/order-register', authenticateAccess, controller.createOrder);
 

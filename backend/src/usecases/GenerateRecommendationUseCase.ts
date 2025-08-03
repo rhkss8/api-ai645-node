@@ -45,7 +45,15 @@ export class GenerateRecommendationUseCase {
     let recentWinningNumbers: number[][] = [];
     try {
       const recentWinnings = await this.winningNumbersRepository.findRecent(10);
-      recentWinningNumbers = recentWinnings.map(winning => winning.numbers);
+      recentWinningNumbers = recentWinnings.map(winning => {
+        // numbers가 배열인지 확인하고 안전하게 처리
+        if (Array.isArray(winning.numbers)) {
+          return winning.numbers;
+        } else {
+          console.warn(`Invalid winning numbers structure:`, winning.numbers);
+          return [];
+        }
+      }).filter(numbers => numbers.length > 0); // 빈 배열 제거
       console.log(`🏆 최근 당첨 번호 ${recentWinningNumbers.length}회차 로드됨`);
     } catch (error) {
       console.warn('최근 당첨 번호 로드 실패:', error);

@@ -38,6 +38,15 @@ export const createAuthRoutes = (controller: AuthController): Router => {
    *                       type: string
    *                       enum: [USER, ADMIN]
    *                       description: 사용자 역할
+   *                     termsAgreed:
+   *                       type: boolean
+   *                       description: 이용약관 동의 여부
+   *                     privacyAgreed:
+   *                       type: boolean
+   *                       description: 개인정보 수집·이용 동의 여부
+   *                     marketingAgreed:
+   *                       type: boolean
+   *                       description: 마케팅 정보 수신 동의 여부
    *                     authType:
    *                       type: string
    *                       description: 주요 소셜 인증 타입

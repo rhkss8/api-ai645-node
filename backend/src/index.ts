@@ -17,6 +17,7 @@ import { createApiRoutes, DIContainer } from './routes/index';
 import { globalErrorHandler, notFoundHandler } from './middlewares/errorHandler';
 import { generalLimiter } from './middlewares/rateLimiter';
 import { LottoScheduler } from './batch/LottoScheduler';
+import { CleanupScheduler } from './batch/CleanupScheduler';
 import { initPassportStrategies } from './auth/providers';
 import { startTokenRefreshWorker } from './jobs/providerTokenRefresh';
 
@@ -257,6 +258,10 @@ const startServer = async (): Promise<void> => {
     // Start lotto scheduler
     const lottoScheduler = new LottoScheduler();
     lottoScheduler.startScheduler();
+
+    // Start cleanup scheduler
+    const cleanupScheduler = new CleanupScheduler();
+    cleanupScheduler.start();
     
     // Start token refresh worker
     startTokenRefreshWorker();

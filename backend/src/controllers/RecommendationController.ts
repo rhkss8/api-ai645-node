@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { GenerateRecommendationUseCase } from '../usecases/GenerateRecommendationUseCase';
+import { PrepareRecommendationUseCase } from '../usecases/PrepareRecommendationUseCase';
+import { GenerateRecommendationFromOrderUseCase } from '../usecases/GenerateRecommendationFromOrderUseCase';
 import { ExtractImageNumbersUseCase } from '../usecases/ExtractImageNumbersUseCase';
 import { IPLimitService } from '../services/IPLimitService';
 import { ApiResponse, RecommendationType, UploadedFile } from '../types/common';
@@ -9,6 +11,8 @@ import { BusinessLogicError, ImageProcessingError } from '../middlewares/errorHa
 export class RecommendationController {
   constructor(
     private readonly generateRecommendationUseCase: GenerateRecommendationUseCase,
+    private readonly prepareRecommendationUseCase: PrepareRecommendationUseCase,
+    private readonly generateFromOrderUseCase: GenerateRecommendationFromOrderUseCase,
     private readonly extractImageNumbersUseCase: ExtractImageNumbersUseCase,
     private readonly ipLimitService: IPLimitService,
   ) {}
@@ -223,6 +227,123 @@ export class RecommendationController {
         if (error instanceof Error) {
           throw new ImageProcessingError(error.message);
         }
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * 유료 추천 파라미터 준비 API
+   */
+  public prepareRecommendation = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const user = (req as any).user;
+        if (!user) {
+          throw new BusinessLogicError('로그인이 필요합니다.');
+        }
+
+        console.log(`🔧 추천 파라미터 준비 - 사용자: ${user.sub} (${user.nickname})`);
+        console.log('📋 요청 데이터:', JSON.stringify(req.body, null, 2));
+
+        const request = {
+          userId: user.sub,
+          type: req.body.type || RecommendationType.PREMIUM,
+          gameCount: req.body.gameCount,
+          conditions: req.body.conditions,
+          imageData: req.body.imageData,
+          round: req.body.round,
+        };
+
+        const result = await this.prepareRecommendationUseCase.execute(request);
+
+        const response: ApiResponse = {
+          success: true,
+          data: result,
+          message: '추천 파라미터가 저장되었습니다. 결제를 진행해주세요.',
+          timestamp: new Date().toISOString(),
+        };
+
+        res.status(200).json(response);
+      } catch (error) {
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * 결제 완료 후 추천번호 생성 API
+   */
+  public generateFromOrder = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const user = (req as any).user;
+        if (!user) {
+          throw new BusinessLogicError('로그인이 필요합니다.');
+        }
+
+        const orderId = req.params.orderId;
+        if (!orderId) {
+          throw new BusinessLogicError('주문 ID가 필요합니다.');
+        }
+
+        console.log(`💰 결제 후 추천번호 생성 - 사용자: ${user.sub}, 주문: ${orderId}`);
+
+        const request = {
+          orderId,
+          userId: user.sub,
+        };
+
+        const result = await this.generateFromOrderUseCase.execute(request);
+
+        const response: ApiResponse = {
+          success: true,
+          data: result,
+          message: '추천번호가 성공적으로 생성되었습니다.',
+          timestamp: new Date().toISOString(),
+        };
+
+        res.status(200).json(response);
+      } catch (error) {
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * 추천번호 재생성 API (결제 완료된 주문)
+   */
+  public regenerateFromOrder = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const user = (req as any).user;
+        if (!user) {
+          throw new BusinessLogicError('로그인이 필요합니다.');
+        }
+
+        const orderId = req.params.orderId;
+        if (!orderId) {
+          throw new BusinessLogicError('주문 ID가 필요합니다.');
+        }
+
+        console.log(`🔄 추천번호 재생성 - 사용자: ${user.sub}, 주문: ${orderId}`);
+
+        const request = {
+          orderId,
+          userId: user.sub,
+        };
+
+        const result = await this.generateFromOrderUseCase.execute(request);
+
+        const response: ApiResponse = {
+          success: true,
+          data: result,
+          message: '추천번호가 재생성되었습니다.',
+          timestamp: new Date().toISOString(),
+        };
+
+        res.status(200).json(response);
+      } catch (error) {
         throw error;
       }
     },

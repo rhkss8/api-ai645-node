@@ -18,6 +18,13 @@ export class IdGenerator {
   }
 
   /**
+   * 추천 파라미터 ID 생성
+   */
+  static generateRecommendationParamId(): string {
+    return `param_${this.generateShortId()}`;
+  }
+
+  /**
    * 회고 ID 생성
    */
   static generateReviewId(): string {

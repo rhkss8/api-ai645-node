@@ -43,7 +43,12 @@ export const generateFreeRecommendationPrompt = (
     if (conditions.recentPurchases && conditions.recentPurchases.length > 0) {
       prompt += `\n\n## 최근 당첨 번호 (최근 ${conditions.recentPurchases.length}회차)\n과거 당첨 패턴 분석:`;
       conditions.recentPurchases.forEach((purchase, index) => {
-        prompt += `\n${index + 1}. [${purchase.join(', ')}]`;
+        // purchase가 배열인지 확인하고 안전하게 처리
+        if (Array.isArray(purchase)) {
+          prompt += `\n${index + 1}. [${purchase.join(', ')}]`;
+        } else {
+          console.warn(`Invalid purchase data at index ${index}:`, purchase);
+        }
       });
       prompt += `\n\n위 당첨 패턴을 분석하여 유사한 패턴을 피하거나 반대로 활용해주세요.`;
     }

@@ -17,6 +17,7 @@ export class RecommendationHistory {
     public readonly imageData: ImageExtractResult | null,
     public readonly gptModel: GPTModel,
     public readonly analysis: string | null,
+    public readonly orderId: string | null,
     public readonly createdAt: Date,
     public readonly updatedAt: Date,
   ) {}
@@ -31,6 +32,7 @@ export class RecommendationHistory {
     imageData?: ImageExtractResult,
     analysis?: string,
     userId?: string,
+    orderId?: string,
   ): RecommendationHistory {
     const now = new Date();
     return new RecommendationHistory(
@@ -43,6 +45,7 @@ export class RecommendationHistory {
       imageData ?? null,
       gptModel,
       analysis ?? null,
+      orderId ?? null,
       now,
       now,
     );

@@ -17,6 +17,11 @@ import { GenerateRecommendationUseCase } from '../usecases/GenerateRecommendatio
 import { GenerateReviewUseCase } from '../usecases/GenerateReviewUseCase';
 import { ExtractImageNumbersUseCase } from '../usecases/ExtractImageNumbersUseCase';
 import { PaymentUseCase } from '../usecases/PaymentUseCase';
+import { PrepareRecommendationUseCase } from '../usecases/PrepareRecommendationUseCase';
+import { GenerateRecommendationFromOrderUseCase } from '../usecases/GenerateRecommendationFromOrderUseCase';
+import { PrismaRecommendationParamsRepository } from '../repositories/impl/PrismaRecommendationParamsRepository';
+import { BoardPostUseCase } from '../usecases/BoardPostUseCase';
+import { PrismaBoardPostRepository } from '../repositories/impl/PrismaBoardPostRepository';
 
 // Controllers
 import { RecommendationController } from '../controllers/RecommendationController';
@@ -48,6 +53,7 @@ class DIContainer {
   private recommendationReviewRepository!: PrismaRecommendationReviewRepository;
   private winningNumbersRepository!: PrismaWinningNumbersRepository;
   private ipLimitRepository!: PrismaIPLimitRepository;
+  private recommendationParamsRepository!: any; // PrismaRecommendationParamsRepository
   private gptService!: OpenAIGPTService;
   
   // Services
@@ -57,6 +63,8 @@ class DIContainer {
   private generateRecommendationUseCase!: GenerateRecommendationUseCase;
   private generateReviewUseCase!: GenerateReviewUseCase;
   private extractImageNumbersUseCase!: ExtractImageNumbersUseCase;
+  private prepareRecommendationUseCase!: any; // PrepareRecommendationUseCase
+  private generateFromOrderUseCase!: any; // GenerateRecommendationFromOrderUseCase
   private boardPostUseCase!: any; // BoardPostUseCase
   private paymentUseCase!: PaymentUseCase;
   
@@ -106,9 +114,17 @@ class DIContainer {
     );
     this.extractImageNumbersUseCase = new ExtractImageNumbersUseCase(this.gptService);
     
+    // 새로운 Use Cases
+    this.recommendationParamsRepository = new PrismaRecommendationParamsRepository(this.prisma);
+    this.prepareRecommendationUseCase = new PrepareRecommendationUseCase(this.recommendationParamsRepository);
+    this.generateFromOrderUseCase = new GenerateRecommendationFromOrderUseCase(
+      this.recommendationParamsRepository,
+      this.recommendationHistoryRepository,
+      this.winningNumbersRepository,
+      this.gptService,
+    );
+    
     // Board Use Case
-    const { BoardPostUseCase } = require('../usecases/BoardPostUseCase');
-    const { PrismaBoardPostRepository } = require('../repositories/impl/PrismaBoardPostRepository');
     this.boardPostUseCase = new BoardPostUseCase(new PrismaBoardPostRepository(this.prisma));
 
     // Payment Use Case
@@ -117,6 +133,8 @@ class DIContainer {
     // Controllers
     this.recommendationController = new RecommendationController(
       this.generateRecommendationUseCase,
+      this.prepareRecommendationUseCase,
+      this.generateFromOrderUseCase,
       this.extractImageNumbersUseCase,
       this.ipLimitService,
     );

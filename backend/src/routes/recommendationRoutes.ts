@@ -422,6 +422,194 @@ export const createRecommendationRoutes = (
     controller.generatePremiumRecommendation,
   );
 
+  /**
+   * @swagger
+   * /api/recommend/prepare:
+   *   post:
+   *     summary: 유료 추천 파라미터 준비
+   *     description: 결제 전에 추천 파라미터를 저장합니다
+   *     tags: [Recommendations]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               type:
+   *                 type: string
+   *                 enum: [PREMIUM]
+   *                 default: PREMIUM
+   *               gameCount:
+   *                 type: integer
+   *                 minimum: 1
+   *                 maximum: 10
+   *                 default: 5
+   *               round:
+   *                 type: integer
+   *                 minimum: 1
+   *                 maximum: 9999
+   *               conditions:
+   *                 type: object
+   *                 properties:
+   *                   excludeNumbers:
+   *                     type: array
+   *                     items:
+   *                       type: integer
+   *                       minimum: 1
+   *                       maximum: 45
+   *                   includeNumbers:
+   *                     type: array
+   *                     items:
+   *                       type: integer
+   *                       minimum: 1
+   *                       maximum: 45
+   *                   preferences:
+   *                     type: string
+   *     responses:
+   *       200:
+   *         description: 파라미터 저장 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     paramId:
+   *                       type: string
+   *                     type:
+   *                       type: string
+   *                     gameCount:
+   *                       type: integer
+   *                     expiresAt:
+   *                       type: string
+   *                       format: date-time
+   *                 message:
+   *                   type: string
+   *       401:
+   *         description: 인증 필요
+   */
+  router.post(
+    '/prepare',
+    authenticateAccess,
+    premiumRecommendationLimiter,
+    controller.prepareRecommendation,
+  );
+
+  /**
+   * @swagger
+   * /api/recommend/generate-from-order/{orderId}:
+   *   post:
+   *     summary: 결제 완료 후 추천번호 생성
+   *     description: 결제가 완료된 주문으로부터 추천번호를 생성합니다
+   *     tags: [Recommendations]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: orderId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 주문 ID
+   *     responses:
+   *       200:
+   *         description: 추천번호 생성 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     gameCount:
+   *                       type: integer
+   *                     numbers:
+   *                       type: array
+   *                       items:
+   *                         type: array
+   *                         items:
+   *                           type: integer
+   *                     round:
+   *                       type: integer
+   *                     analysis:
+   *                       type: string
+   *                 message:
+   *                   type: string
+   *       401:
+   *         description: 인증 필요
+   *       404:
+   *         description: 주문을 찾을 수 없음
+   */
+  router.post(
+    '/generate-from-order/:orderId',
+    authenticateAccess,
+    controller.generateFromOrder,
+  );
+
+  /**
+   * @swagger
+   * /api/recommend/regenerate/{orderId}:
+   *   post:
+   *     summary: 추천번호 재생성
+   *     description: 결제 완료된 주문의 추천번호를 재생성합니다
+   *     tags: [Recommendations]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: orderId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 주문 ID
+   *     responses:
+   *       200:
+   *         description: 추천번호 재생성 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     gameCount:
+   *                       type: integer
+   *                     numbers:
+   *                       type: array
+   *                       items:
+   *                         type: array
+   *                         items:
+   *                           type: integer
+   *                     round:
+   *                       type: integer
+   *                     analysis:
+   *                       type: string
+   *                 message:
+   *                   type: string
+   *       401:
+   *         description: 인증 필요
+   *       404:
+   *         description: 주문을 찾을 수 없음
+   */
+  router.post(
+    '/regenerate/:orderId',
+    authenticateAccess,
+    controller.regenerateFromOrder,
+  );
+
   return router;
 };
 
@@ -553,6 +741,194 @@ export const createImageRoutes = (controller: RecommendationController): Router 
     upload.single('image'),
     validateImageFile,
     controller.extractImageNumbers,
+  );
+
+  /**
+   * @swagger
+   * /api/recommend/prepare:
+   *   post:
+   *     summary: 유료 추천 파라미터 준비
+   *     description: 결제 전에 추천 파라미터를 저장합니다
+   *     tags: [Recommendations]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               type:
+   *                 type: string
+   *                 enum: [PREMIUM]
+   *                 default: PREMIUM
+   *               gameCount:
+   *                 type: integer
+   *                 minimum: 1
+   *                 maximum: 10
+   *                 default: 5
+   *               round:
+   *                 type: integer
+   *                 minimum: 1
+   *                 maximum: 9999
+   *               conditions:
+   *                 type: object
+   *                 properties:
+   *                   excludeNumbers:
+   *                     type: array
+   *                     items:
+   *                       type: integer
+   *                       minimum: 1
+   *                       maximum: 45
+   *                   includeNumbers:
+   *                     type: array
+   *                     items:
+   *                       type: integer
+   *                       minimum: 1
+   *                       maximum: 45
+   *                   preferences:
+   *                     type: string
+   *     responses:
+   *       200:
+   *         description: 파라미터 저장 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     paramId:
+   *                       type: string
+   *                     type:
+   *                       type: string
+   *                     gameCount:
+   *                       type: integer
+   *                     expiresAt:
+   *                       type: string
+   *                       format: date-time
+   *                 message:
+   *                   type: string
+   *       401:
+   *         description: 인증 필요
+   */
+  router.post(
+    '/prepare',
+    authenticateAccess,
+    premiumRecommendationLimiter,
+    controller.prepareRecommendation,
+  );
+
+  /**
+   * @swagger
+   * /api/recommend/generate-from-order/{orderId}:
+   *   post:
+   *     summary: 결제 완료 후 추천번호 생성
+   *     description: 결제가 완료된 주문으로부터 추천번호를 생성합니다
+   *     tags: [Recommendations]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: orderId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 주문 ID
+   *     responses:
+   *       200:
+   *         description: 추천번호 생성 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     gameCount:
+   *                       type: integer
+   *                     numbers:
+   *                       type: array
+   *                       items:
+   *                         type: array
+   *                         items:
+   *                           type: integer
+   *                     round:
+   *                       type: integer
+   *                     analysis:
+   *                       type: string
+   *                 message:
+   *                   type: string
+   *       401:
+   *         description: 인증 필요
+   *       404:
+   *         description: 주문을 찾을 수 없음
+   */
+  router.post(
+    '/generate-from-order/:orderId',
+    authenticateAccess,
+    controller.generateFromOrder,
+  );
+
+  /**
+   * @swagger
+   * /api/recommend/regenerate/{orderId}:
+   *   post:
+   *     summary: 추천번호 재생성
+   *     description: 결제 완료된 주문의 추천번호를 재생성합니다
+   *     tags: [Recommendations]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: orderId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 주문 ID
+   *     responses:
+   *       200:
+   *         description: 추천번호 재생성 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     gameCount:
+   *                       type: integer
+   *                     numbers:
+   *                       type: array
+   *                       items:
+   *                         type: array
+   *                         items:
+   *                           type: integer
+   *                     round:
+   *                       type: integer
+   *                     analysis:
+   *                       type: string
+   *                 message:
+   *                   type: string
+   *       401:
+   *         description: 인증 필요
+   *       404:
+   *         description: 주문을 찾을 수 없음
+   */
+  router.post(
+    '/regenerate/:orderId',
+    authenticateAccess,
+    controller.regenerateFromOrder,
   );
 
   return router;

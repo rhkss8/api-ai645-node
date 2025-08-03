@@ -18,6 +18,7 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
         imageData: recommendation.imageData ? JSON.parse(JSON.stringify(recommendation.imageData)) : undefined,
         gptModel: recommendation.gptModel,
         analysis: recommendation.analysis,
+        orderId: recommendation.orderId,
         createdAt: recommendation.createdAt,
         updatedAt: recommendation.updatedAt,
       },
@@ -74,6 +75,14 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
       data: recommendations.map(this.toDomain),
       total,
     };
+  }
+
+  async findByOrderId(orderId: string): Promise<RecommendationHistory | null> {
+    const recommendation = await this.prisma.recommendationHistory.findFirst({
+      where: { orderId },
+    });
+
+    return recommendation ? this.toDomain(recommendation) : null;
   }
 
   async findRecent(limit: number): Promise<RecommendationHistory[]> {
@@ -183,6 +192,7 @@ export class PrismaRecommendationHistoryRepository implements IRecommendationHis
       prismaModel.imageData,
       prismaModel.gptModel,
       prismaModel.analysis,
+      prismaModel.orderId,
       prismaModel.createdAt,
       prismaModel.updatedAt,
     );
