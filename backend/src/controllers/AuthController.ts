@@ -1,10 +1,177 @@
 import { Request, Response } from 'express';
 import passport from 'passport';
+import * as crypto from 'crypto';
 import { prisma } from '../config/database';
 import { signAccessToken, signRefreshToken, extractJTI } from '../lib/jwt';
 import { asyncHandler } from '../middlewares/errorHandler';
 
+// 임시 해싱 함수 (결제 심사용)
+function hashPassword(password: string): string {
+  return crypto.createHash('sha256').update(password + 'ai645_salt').digest('hex');
+}
+
+function verifyPassword(password: string, hashedPassword: string): boolean {
+  return hashPassword(password) === hashedPassword;
+}
+
 export class AuthController {
+  /**
+   * 임시 계정 생성 (결제 심사용)
+   */
+  public createTempAccount = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const { email, password, nickname } = req.body;
+
+      if (!email || !password || !nickname) {
+        res.status(400).json({
+          success: false,
+          error: '필수 정보가 누락되었습니다.',
+          message: '이메일, 비밀번호, 닉네임을 모두 입력해주세요.',
+        });
+        return;
+      }
+
+      try {
+        // 이메일 중복 확인
+        const existingUser = await prisma?.user?.findUnique({
+          where: { email },
+        });
+
+        if (existingUser) {
+          res.status(409).json({
+            success: false,
+            error: '이미 존재하는 이메일입니다.',
+            message: '다른 이메일을 사용해주세요.',
+          });
+          return;
+        }
+
+        // 비밀번호 해싱
+        const hashedPassword = hashPassword(password);
+
+        // 사용자 생성
+        const user = await prisma?.user?.create({
+          data: {
+            email,
+            password: hashedPassword,
+            nickname,
+            termsAgreed: true,
+            privacyAgreed: true,
+            marketingAgreed: false,
+            role: 'USER',
+          },
+        });
+
+        res.status(201).json({
+          success: true,
+          data: {
+            id: user?.id,
+            email: user?.email,
+            nickname: user?.nickname,
+          },
+          message: '임시 계정이 생성되었습니다.',
+        });
+      } catch (error) {
+        console.error('임시 계정 생성 오류:', error);
+        res.status(500).json({
+          success: false,
+          error: '계정 생성에 실패했습니다.',
+          message: '다시 시도해주세요.',
+        });
+      }
+    }
+  );
+
+  /**
+   * ID/비밀번호 로그인 (결제 심사용)
+   */
+  public loginWithPassword = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        res.status(400).json({
+          success: false,
+          error: '이메일과 비밀번호를 입력해주세요.',
+          message: '필수 정보가 누락되었습니다.',
+        });
+        return;
+      }
+
+      try {
+        // 사용자 조회
+        const user = await prisma?.user?.findUnique({
+          where: { email },
+        });
+
+        if (!user || !user.password) {
+          res.status(401).json({
+            success: false,
+            error: '존재하지 않는 계정입니다.',
+            message: '이메일 또는 비밀번호를 확인해주세요.',
+          });
+          return;
+        }
+
+        // 비밀번호 확인
+        const isPasswordValid = verifyPassword(password, user.password);
+        if (!isPasswordValid) {
+          res.status(401).json({
+            success: false,
+            error: '비밀번호가 일치하지 않습니다.',
+            message: '이메일 또는 비밀번호를 확인해주세요.',
+          });
+          return;
+        }
+
+        // JWT 토큰 발급
+        const accessToken = await signAccessToken({
+          sub: user.id,
+          nickname: user.nickname,
+        });
+
+        const refreshToken = await signRefreshToken({
+          sub: user.id,
+          nickname: user.nickname,
+        });
+        const refreshTokenHash = hashPassword(refreshToken);
+
+        // 리프레시 토큰 저장
+        await prisma?.refreshToken?.create({
+          data: {
+            userId: user.id,
+            tokenHash: refreshTokenHash,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7일
+          },
+        });
+
+        console.log('✅ ID/비밀번호 로그인 성공:', user.email);
+
+        res.json({
+          success: true,
+          data: {
+            accessToken,
+            refreshToken,
+            user: {
+              id: user.id,
+              email: user.email,
+              nickname: user.nickname,
+              role: user.role,
+            },
+          },
+          message: '로그인에 성공했습니다.',
+        });
+      } catch (error) {
+        console.error('로그인 오류:', error);
+        res.status(500).json({
+          success: false,
+          error: '로그인에 실패했습니다.',
+          message: '다시 시도해주세요.',
+        });
+      }
+    }
+  );
+
   /**
    * 소셜 로그인 콜백 처리
    */

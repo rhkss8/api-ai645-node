@@ -9,6 +9,7 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import passport from 'passport';
 import cookieParser from 'cookie-parser';
+import * as yaml from 'js-yaml';
 
 import env from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
@@ -144,18 +145,40 @@ const swaggerOptions = {
       },
     },
   },
-  apis: env.NODE_ENV === 'production' 
-    ? ['./dist/routes/*.js'] 
-    : ['./src/routes/*.ts'],
+  apis: [
+    './src/routes/*.ts',
+    './dist/routes/*.js'
+  ],
 };
 
 const specs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
-// OpenAPI JSON spec 엔드포인트
+// OpenAPI JSON spec 엔드포인트 (다양한 경로 지원)
 app.get('/openapi.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(specs);
+});
+
+app.get('/api-docs-json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(specs);
+});
+
+app.get('/swagger.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(specs);
+});
+
+// YAML 형태의 OpenAPI 스펙 제공
+app.get('/openapi.yaml', (req, res) => {
+  res.setHeader('Content-Type', 'application/x-yaml');
+  res.send(yaml.dump(specs));
+});
+
+app.get('/swagger.yaml', (req, res) => {
+  res.setHeader('Content-Type', 'application/x-yaml');
+  res.send(yaml.dump(specs));
 });
 
 // Health check endpoint

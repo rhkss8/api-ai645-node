@@ -85,6 +85,8 @@ model IPLimitRecord {
 model User {
   id              String                  @id @default(cuid())
   nickname        String                  @db.VarChar(40)
+  email           String?                 @unique @db.VarChar(255) // 임시 ID/비밀번호 로그인용
+  password        String?                 @db.VarChar(255) // 해시된 비밀번호
   createdAt       DateTime                @default(now())
   deletedAt       DateTime?
   role            UserRole                @default(USER)

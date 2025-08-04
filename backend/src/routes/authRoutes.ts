@@ -169,6 +169,146 @@ export const createAuthRoutes = (controller: AuthController): Router => {
 
   /**
    * @swagger
+   * /api/auth/temp-register:
+   *   post:
+   *     operationId: createTempAccount
+   *     summary: 임시 계정 생성 (결제 심사용)
+   *     description: 결제 심사를 위한 임시 ID/비밀번호 계정을 생성합니다.
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *               - password
+   *               - nickname
+   *             properties:
+   *               email:
+   *                 type: string
+   *                 format: email
+   *                 example: "test@example.com"
+   *                 description: 로그인용 이메일
+   *               password:
+   *                 type: string
+   *                 minLength: 6
+   *                 example: "password123"
+   *                 description: 로그인용 비밀번호
+   *               nickname:
+   *                 type: string
+   *                 minLength: 2
+   *                 maxLength: 40
+   *                 example: "테스터"
+   *                 description: 사용자 닉네임
+   *     responses:
+   *       201:
+   *         description: 계정 생성 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                       example: "user_123"
+   *                     email:
+   *                       type: string
+   *                       example: "test@example.com"
+   *                     nickname:
+   *                       type: string
+   *                       example: "테스터"
+   *                 message:
+   *                   type: string
+   *                   example: "임시 계정이 생성되었습니다."
+   *       400:
+   *         description: 필수 정보 누락
+   *       409:
+   *         description: 이메일 중복
+   */
+  router.post('/temp-register', controller.createTempAccount);
+
+  /**
+   * @swagger
+   * /api/auth/temp-login:
+   *   post:
+   *     operationId: loginWithPassword
+   *     summary: ID/비밀번호 로그인 (결제 심사용)
+   *     description: 이메일과 비밀번호로 로그인합니다.
+   *     tags: [Authentication]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - email
+   *               - password
+   *             properties:
+   *               email:
+   *                 type: string
+   *                 format: email
+   *                 example: "test@example.com"
+   *                 description: 로그인용 이메일
+   *               password:
+   *                 type: string
+   *                 example: "password123"
+   *                 description: 로그인용 비밀번호
+   *     responses:
+   *       200:
+   *         description: 로그인 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     accessToken:
+   *                       type: string
+   *                       example: "eyJ0eXAiOiJKV1Q..."
+   *                     refreshToken:
+   *                       type: string
+   *                       example: "eyJ0eXAiOiJKV1Q..."
+   *                     user:
+   *                       type: object
+   *                       properties:
+   *                         id:
+   *                           type: string
+   *                           example: "user_123"
+   *                         email:
+   *                           type: string
+   *                           example: "test@example.com"
+   *                         nickname:
+   *                           type: string
+   *                           example: "테스터"
+   *                         role:
+   *                           type: string
+   *                           example: "USER"
+   *                 message:
+   *                   type: string
+   *                   example: "로그인에 성공했습니다."
+   *       400:
+   *         description: 필수 정보 누락
+   *       401:
+   *         description: 인증 실패
+   */
+  router.post('/temp-login', controller.loginWithPassword);
+
+  /**
+   * @swagger
    * /api/auth/account:
    *   delete:
    *     operationId: deleteAccount
