@@ -474,6 +474,14 @@ export class PaymentUseCase {
           where: { userId },
           include: {
             payment: true,
+            // recommendation 관계 추가로 추천번호 생성 여부 확인
+            recommendation: {
+              select: {
+                id: true,
+                numbers: true,
+                createdAt: true,
+              },
+            },
           },
           orderBy: { createdAt: 'desc' },
           skip,

@@ -94,10 +94,6 @@ export const createPaymentRoutes = (controller: PaymentController): Router => {
    *                           type: string
    *                           description: 추천 파라미터 ID (있는 경우)
    *                           nullable: true
-   *                         recommendationId:
-   *                           type: string
-   *                           description: 추천 결과 ID (있는 경우)
-   *                           nullable: true
    *                         createdAt:
    *                           type: string
    *                           format: date-time
@@ -414,17 +410,100 @@ export const createPaymentRoutes = (controller: PaymentController): Router => {
    *                       type: array
    *                       items:
    *                         type: object
+   *                         properties:
+   *                           id:
+   *                             type: string
+   *                             description: 주문 ID
+   *                             example: "cmdvy2xty000x4ogljiz7hoz6"
+   *                           userId:
+   *                             type: string
+   *                             description: 사용자 ID
+   *                           merchantUid:
+   *                             type: string
+   *                             description: 가맹점 주문 ID
+   *                             example: "AI645_1754241476037_A0733DC1"
+   *                           orderName:
+   *                             type: string
+   *                             description: 주문명
+   *                             example: "5게임 프리미엄 추천"
+   *                           amount:
+   *                             type: integer
+   *                             description: 결제 금액
+   *                             example: 1000
+   *                           currency:
+   *                             type: string
+   *                             description: 통화 코드
+   *                             example: "KRW"
+   *                           status:
+   *                             type: string
+   *                             description: 주문 상태 (결제 완료 여부 확인)
+   *                             enum: [PENDING, PAID, FAILED, CANCELLED, USER_CANCELLED, REFUNDED]
+   *                             example: "PAID"
+   *                           description:
+   *                             type: string
+   *                             description: 주문 설명
+   *                             example: "5게임 프리미엄 추천"
+   *                           metadata:
+   *                             type: object
+   *                             nullable: true
+   *                             description: 주문 메타데이터
+   *                           paramId:
+   *                             type: string
+   *                             nullable: true
+   *                             description: 추천 파라미터 ID
+   *                             example: "param_DfPOw4Zl"
+   *                           createdAt:
+   *                             type: string
+   *                             format: date-time
+   *                             description: 주문 생성 시간
+   *                           updatedAt:
+   *                             type: string
+   *                             format: date-time
+   *                             description: 주문 수정 시간
+   *                           payment:
+   *                             type: object
+   *                             nullable: true
+   *                             description: 결제 정보
+   *                           recommendation:
+   *                             type: object
+   *                             nullable: true
+   *                             description: 추천번호 생성 여부 확인 (null이면 미생성, 객체면 생성 완료)
+   *                             properties:
+   *                               id:
+   *                                 type: string
+   *                                 description: 추천 ID
+   *                                 example: "rec_abc123"
+   *                               numbers:
+   *                                 type: array
+   *                                 description: 생성된 추천번호
+   *                                 items:
+   *                                   type: array
+   *                                   items:
+   *                                     type: integer
+   *                                 example: [[1,7,15,23,35,42], [3,9,18,27,33,44]]
+   *                               createdAt:
+   *                                 type: string
+   *                                 format: date-time
+   *                                 description: 추천번호 생성 시간
    *                     pagination:
    *                       type: object
    *                       properties:
    *                         page:
    *                           type: integer
+   *                           description: 현재 페이지
+   *                           example: 1
    *                         limit:
    *                           type: integer
+   *                           description: 페이지당 항목 수
+   *                           example: 20
    *                         total:
    *                           type: integer
+   *                           description: 전체 주문 수
+   *                           example: 17
    *                         totalPages:
    *                           type: integer
+   *                           description: 전체 페이지 수
+   *                           example: 1
    *       401:
    *         description: 인증 필요
    */
