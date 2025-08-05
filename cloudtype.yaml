@@ -1,0 +1,47 @@
+# CloudType 배포 설정
+# https://cloudtype.io/docs
+
+# 프로젝트 정보
+project:
+  name: api-ai645-node
+  description: "AI645 로또 추천 API 서버"
+
+# 서비스 정의
+services:
+  - name: backend
+    type: web
+    source:
+      type: git
+      url: https://github.com/tarcasesoft/api-ai645-node.git
+      branch: main
+    build:
+      dockerfile: backend/Dockerfile.prod
+      context: .
+    ports:
+      - 3350:4000
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      # 환경변수는 CloudType 대시보드에서 설정
+      - DATABASE_URL=${DATABASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - API_VERSION=${API_VERSION:-v1}
+    healthcheck:
+      path: /health
+      port: 4000
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    resources:
+      memory: 512M
+      cpu: 0.5
+    scaling:
+      min: 1
+      max: 3
+    domains:
+      - api.ai645.com
+    ssl: true 
