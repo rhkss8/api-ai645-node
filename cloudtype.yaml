@@ -17,6 +17,8 @@ services:
     build:
       dockerfile: backend/Dockerfile.prod  # 수정된 Dockerfile 사용
       context: .
+      args:
+        - BUILD_WITH_MIGRATION=true
     ports:
       - 3350:4000
     environment:
