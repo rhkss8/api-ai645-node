@@ -15,25 +15,30 @@ async function main() {
     // 1. 기본 이메일 계정 생성
     console.log('📧 기본 이메일 계정 생성 중...');
     
-    const existingUser = await prisma.user.findUnique({
-      where: { email: 'ai645@ai645.com' }
-    });
-
-    if (!existingUser) {
-      const defaultUser = await prisma.user.create({
-        data: {
-          email: 'ai645@ai645.com',
-          password: hashPassword('ai645!'),
-          nickname: 'AI645관리자',
-          termsAgreed: true,
-          privacyAgreed: true,
-          marketingAgreed: false,
-          role: 'USER'
-        }
+    try {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: 'ai645@ai645.com' }
       });
-      console.log('✅ 기본 이메일 계정 생성 완료:', defaultUser.email);
-    } else {
-      console.log('⚠️ 기본 이메일 계정이 이미 존재합니다:', existingUser.email);
+
+      if (!existingUser) {
+        const defaultUser = await prisma.user.create({
+          data: {
+            email: 'ai645@ai645.com',
+            password: hashPassword('ai645!'),
+            nickname: 'AI645관리자',
+            termsAgreed: true,
+            privacyAgreed: true,
+            marketingAgreed: false,
+            role: 'USER'
+          }
+        });
+        console.log('✅ 기본 이메일 계정 생성 완료:', defaultUser.email);
+      } else {
+        console.log('⚠️ 기본 이메일 계정이 이미 존재합니다:', existingUser.email);
+      }
+    } catch (error) {
+      console.error('❌ 기본 이메일 계정 생성 실패:', error);
+      console.log('⚠️ 계속 진행합니다...');
     }
 
     // 2. 초기 당첨번호 데이터 생성
