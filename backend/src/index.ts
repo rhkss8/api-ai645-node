@@ -345,3 +345,4 @@ void startServer();
 
 export default app; // Force rebuild for production: Tue Aug  5 23:57:33 KST 2025
 // Force production rebuild: Tue Aug  5 23:59:54 KST 2025
+// Fix production permissions: Wed Aug  6 00:26:46 KST 2025

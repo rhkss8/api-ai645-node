@@ -15,7 +15,7 @@ services:
       url: https://github.com/tarcasesoft/api-ai645-node.git
       branch: main
     build:
-      dockerfile: backend/Dockerfile.prod
+      dockerfile: backend/Dockerfile.prod  # 수정된 Dockerfile 사용
       context: .
     ports:
       - 3350:4000
@@ -29,6 +29,8 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - API_VERSION=${API_VERSION:-v1}
+      # 권한 관련 환경변수 추가
+      - NODE_OPTIONS=--max-old-space-size=512
     healthcheck:
       path: /health
       port: 4000
