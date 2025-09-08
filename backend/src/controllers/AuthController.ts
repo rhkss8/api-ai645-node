@@ -255,13 +255,13 @@ export class AuthController {
 
           // 프론트엔드로 리다이렉트 (토큰을 URL 파라미터로 전달)
           const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-          const redirectUrl = `${frontendUrl}/auth/callback?success=true&user=${encodeURIComponent(user.nickname)}&access_token=${accessToken}`;
+          const redirectUrl = `${frontendUrl}/callback/auth/?success=true&user=${encodeURIComponent(user.nickname)}&access_token=${accessToken}`;
           
           res.redirect(redirectUrl);
         } catch (error) {
           console.error('JWT 토큰 발급 오류:', error);
           const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-          const redirectUrl = `${frontendUrl}/auth/callback?success=false&error=token_error`;
+          const redirectUrl = `${frontendUrl}/callback/auth/?success=false&error=token_error`;
           res.redirect(redirectUrl);
         }
       })(req, res);

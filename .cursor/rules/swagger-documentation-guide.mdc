@@ -3,3 +3,320 @@ description:
 globs:
 alwaysApply: false
 ---
+# Swagger API 문서화 가이드
+
+## 🚨 중요: 새 API 엔드포인트 추가 시 Swagger 문서 필수
+
+### 1. Swagger 문서 업데이트가 필요한 경우
+
+#### ✅ 반드시 Swagger 문서를 작성해야 하는 상황들
+- [ ] 새 API 엔드포인트 추가
+- [ ] 기존 API의 요청/응답 구조 변경
+- [ ] 새 쿼리 파라미터나 경로 파라미터 추가
+- [ ] 에러 응답 코드 추가/변경
+
+### 2. Swagger 문서 작성 패턴
+
+#### ✅ 표준 JSDoc 패턴 ([routes/](mdc:backend/src/routes/))
+```javascript
+/**
+ * @swagger
+ * /api/endpoint-path:
+ *   post:
+ *     summary: 간단한 설명
+ *     description: 상세한 설명
+ *     tags: [TagName]
+ *     security:
+ *       - bearerAuth: []  # 인증 필요한 경우
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               field1:
+ *                 type: string
+ *                 description: 필드 설명
+ *     responses:
+ *       200:
+ *         description: 성공 응답
+ *       401:
+ *         description: 인증 필요
+ */
+```
+
+### 3. 실제 예시들
+
+#### ✅ 유료 추천 파라미터 준비 API
+```javascript
+/**
+ * @swagger
+ * /api/recommend/prepare:
+ *   post:
+ *     summary: 유료 추천 파라미터 준비
+ *     description: 결제 전에 추천 파라미터를 저장합니다
+ *     tags: [Recommendations]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 enum: [PREMIUM]
+ *                 default: PREMIUM
+ *               gameCount:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 10
+ *                 default: 5
+ *     responses:
+ *       200:
+ *         description: 파라미터 저장 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     paramId:
+ *                       type: string
+ *       401:
+ *         description: 인증 필요
+ */
+```
+
+#### ✅ 경로 파라미터가 있는 API
+```javascript
+/**
+ * @swagger
+ * /api/recommend/generate-from-order/{orderId}:
+ *   post:
+ *     summary: 결제 완료 후 추천번호 생성
+ *     tags: [Recommendations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 주문 ID
+ *     responses:
+ *       200:
+ *         description: 추천번호 생성 성공
+ *       404:
+ *         description: 주문을 찾을 수 없음
+ */
+```
+
+### 4. Swagger 문서 검증 방법
+
+#### ✅ 문서가 제대로 반영되었는지 확인
+```bash
+# 1. 서버 재빌드 후 확인
+docker-compose down && docker-compose up -d --build
+
+# 2. OpenAPI JSON에서 새 엔드포인트 확인
+curl -s http://localhost:3350/openapi.json | jq '.paths | keys' | grep "새로운엔드포인트"
+
+# 3. Swagger UI에서 직접 확인
+# http://localhost:3350/api-docs 접속
+```
+
+#### ✅ 특정 엔드포인트 문서 상세 확인
+```bash
+# 특정 엔드포인트의 스웨거 문서 확인
+curl -s http://localhost:3350/openapi.json | jq '.paths."/api/recommend/prepare".post'
+```
+
+### 5. 자주 사용하는 Swagger 패턴들
+
+#### ✅ 인증이 필요한 API
+```yaml
+security:
+  - bearerAuth: []  # JWT 토큰 필요
+```
+
+#### ✅ 배열 응답
+```yaml
+responses:
+  200:
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+```
+
+#### ✅ 열거형(enum) 사용
+```yaml
+type:
+  type: string
+  enum: [FREE, PREMIUM]
+  description: 추천 타입
+```
+
+#### ✅ 중첩 객체
+```yaml
+conditions:
+  type: object
+  properties:
+    excludeNumbers:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+        maximum: 45
+    includeNumbers:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+        maximum: 45
+```
+
+### 6. 공통 응답 패턴
+
+#### ✅ 표준 성공 응답
+```yaml
+responses:
+  200:
+    description: 성공
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              # 실제 데이터 구조
+            message:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+```
+
+#### ✅ 표준 오류 응답들
+```yaml
+responses:
+  400:
+    description: 잘못된 요청
+  401:
+    description: 인증 필요
+  403:
+    description: 권한 없음
+  404:
+    description: 리소스를 찾을 수 없음
+  500:
+    description: 서버 내부 오류
+```
+
+### 7. Tags 분류 규칙
+
+#### ✅ 이 프로젝트의 태그 분류
+- `Authentication` - 인증 관련 ([authRoutes.ts](mdc:backend/src/routes/authRoutes.ts))
+- `Recommendations` - 추천번호 관련 ([recommendationRoutes.ts](mdc:backend/src/routes/recommendationRoutes.ts))
+- `Payment` - 결제 관련 ([paymentRoutes.ts](mdc:backend/src/routes/paymentRoutes.ts))
+- `Reviews` - 회고 관련 ([reviewRoutes.ts](mdc:backend/src/routes/reviewRoutes.ts))
+- `Data` - 데이터 조회 ([dataRoutes.ts](mdc:backend/src/routes/dataRoutes.ts))
+- `Board` - 게시판 ([boardRoutes.ts](mdc:backend/src/routes/boardRoutes.ts))
+- `Admin` - 관리자 ([adminRoutes.ts](mdc:backend/src/routes/adminRoutes.ts))
+
+### 8. Swagger 문서 업데이트 체크리스트
+
+#### ✅ 새 API 추가 시 필수 체크
+- [ ] JSDoc 형태의 Swagger 주석 작성
+- [ ] 요청 스키마 정의 (requestBody)
+- [ ] 응답 스키마 정의 (responses)
+- [ ] 적절한 태그 분류
+- [ ] 인증 필요 여부 명시
+- [ ] 예시 값 포함 (example)
+- [ ] 에러 케이스별 응답 코드 정의
+
+#### ✅ 빌드 후 검증
+- [ ] TypeScript 빌드 성공
+- [ ] Docker 재빌드 성공
+- [ ] OpenAPI JSON에 엔드포인트 등록 확인
+- [ ] Swagger UI에서 문서 확인
+- [ ] API 테스트 실행 가능 확인
+
+## 🚨 Swagger 문서 관련 흔한 실수들
+
+### ❌ 실수 1: Swagger 주석 누락
+```javascript
+// 잘못된 예: Swagger 주석 없이 라우트만 등록
+router.post('/new-endpoint', controller.newMethod);
+```
+
+**✅ 올바른 예:**
+```javascript
+/**
+ * @swagger
+ * /api/new-endpoint:
+ *   post:
+ *     summary: 새 엔드포인트
+ *     ...
+ */
+router.post('/new-endpoint', controller.newMethod);
+```
+
+### ❌ 실수 2: 잘못된 스키마 구조
+```yaml
+# 잘못된 예: 타입 불일치
+gameCount:
+  type: string  # 실제로는 숫자인데 문자열로 정의
+```
+
+### ❌ 실수 3: 응답 코드 누락
+```yaml
+# 잘못된 예: 200만 정의하고 에러 케이스 누락
+responses:
+  200:
+    description: 성공
+  # 401, 400 등 에러 케이스 누락
+```
+
+## 🎯 Swagger 문서 품질 확인
+
+### ✅ 좋은 Swagger 문서의 특징
+1. **완전성**: 모든 필드가 정의됨
+2. **정확성**: 실제 API와 문서가 일치
+3. **예시**: example 값이 포함됨
+4. **설명**: description이 명확함
+5. **에러 처리**: 모든 에러 케이스 포함
+
+### ✅ 문서 품질 체크 명령어
+```bash
+# API 문서 완성도 확인
+curl -s http://localhost:3350/openapi.json | jq '
+  .paths | 
+  to_entries | 
+  map({
+    path: .key, 
+    methods: .value | keys,
+    has_docs: (.value | values | map(has("summary")) | any)
+  })
+'
+```
+
+---
+
+**💡 핵심: 코드 변경과 문서 업데이트는 항상 함께! API 문서는 개발자의 얼굴입니다.**

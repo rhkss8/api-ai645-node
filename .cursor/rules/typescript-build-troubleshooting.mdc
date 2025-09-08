@@ -3,3 +3,227 @@ description:
 globs:
 alwaysApply: false
 ---
+# TypeScript 빌드 오류 해결 가이드
+
+## 🚨 자주 발생하는 TypeScript 빌드 오류와 해결법
+
+### 1. Prisma 관련 오류들
+
+#### ❌ `Property 'newModel' does not exist on type 'PrismaClient'`
+```typescript
+// 오류 예시
+await this.prisma.recommendationParams.create(...)
+// Property 'recommendationParams' does not exist
+```
+
+**✅ 해결법:**
+```bash
+# 1. Prisma 클라이언트 재생성
+npx prisma generate
+
+# 2. 스키마가 DB와 동기화되지 않은 경우
+npx prisma db push
+```
+
+#### ❌ `Type 'string | null' is not assignable to type 'InputJsonValue'`
+```typescript
+// 잘못된 코드
+conditions: params.conditions ? JSON.stringify(params.conditions) : null,
+```
+
+**✅ 해결법:**
+```typescript
+// 올바른 코드
+conditions: params.conditions ? JSON.stringify(params.conditions) : undefined,
+```
+
+### 2. 생성자 매개변수 오류들
+
+#### ❌ `Expected X arguments, but got Y`
+```typescript
+// 오류 예시: RecommendationHistory 생성자 호출
+return new RecommendationHistory(
+  prismaModel.id,
+  prismaModel.userId,
+  // ... 11개 매개변수인데 생성자는 12개 요구
+);
+```
+
+**✅ 해결법:**
+1. 엔티티 생성자 매개변수 확인: [backend/src/entities/RecommendationHistory.ts](mdc:backend/src/entities/RecommendationHistory.ts)
+2. 모든 매개변수가 순서대로 전달되는지 확인
+3. 새로 추가된 필드 (`orderId` 등) 누락 확인
+
+### 3. DI 컨테이너 오류들
+
+#### ❌ `Property 'newUseCase' does not exist on type 'DIContainer'`
+```typescript
+// 잘못된 순서
+this.newUseCase = new NewUseCase(); // 오류 발생!
+```
+
+**✅ 해결법:** [routes/index.ts](mdc:backend/src/routes/index.ts)에서
+```typescript
+// 1. 먼저 클래스 프로퍼티 선언
+class DIContainer {
+  private newUseCase!: NewUseCase; // 선언 필수!
+  
+  // 2. 그 다음 initializeDependencies()에서 초기화
+  private initializeDependencies(): void {
+    this.newUseCase = new NewUseCase(dependencies...);
+  }
+}
+```
+
+#### ❌ `Expected 5 arguments, but got 3` (Controller 생성자)
+```typescript
+// 오류: RecommendationController 생성자 매개변수 부족
+this.recommendationController = new RecommendationController(
+  this.generateRecommendationUseCase,
+  this.extractImageNumbersUseCase,
+  this.ipLimitService,
+); // 5개 필요한데 3개만 전달
+```
+
+**✅ 해결법:**
+```typescript
+// Controller 생성자 확인 후 모든 의존성 주입
+this.recommendationController = new RecommendationController(
+  this.generateRecommendationUseCase,
+  this.prepareRecommendationUseCase,      // 추가
+  this.generateFromOrderUseCase,          // 추가
+  this.extractImageNumbersUseCase,
+  this.ipLimitService,
+);
+```
+
+### 4. 타입 호환성 오류들
+
+#### ❌ `Type 'null' is not assignable to type 'UserConditions | undefined'`
+```typescript
+// 잘못된 코드
+RecommendationHistory.create(
+  id,
+  numbers,
+  type,
+  model,
+  round,
+  params.conditions, // null일 수 있음
+  // ...
+);
+```
+
+**✅ 해결법:**
+```typescript
+// null을 undefined로 변환
+RecommendationHistory.create(
+  id,
+  numbers,
+  type,
+  model,
+  round,
+  params.conditions || undefined, // null → undefined 변환
+  params.imageData || undefined,
+  // ...
+);
+```
+
+## 🛠️ 빌드 오류 디버깅 단계
+
+### 1단계: 오류 메시지 정확히 읽기
+```bash
+# 상세한 빌드 오류 확인
+cd backend
+npm run build 2>&1 | tee build-error.log
+```
+
+### 2단계: 오류 유형별 대응
+- **Prisma 관련**: `npx prisma generate` 먼저 실행
+- **매개변수 개수**: 생성자/메서드 시그니처 확인
+- **타입 불일치**: null/undefined 처리 확인
+- **Property 존재하지 않음**: DI 컨테이너 프로퍼티 선언 확인
+
+### 3단계: 단계별 검증
+```bash
+# 1. Prisma 클라이언트 최신화
+npx prisma generate
+
+# 2. 타입 체크만 실행
+npx tsc --noEmit
+
+# 3. 전체 빌드
+npm run build
+```
+
+## 🔍 자주 놓치는 체크포인트
+
+### 새 엔티티 추가 시
+- [ ] [backend/src/entities/](mdc:backend/src/entities/) - 엔티티 클래스
+- [ ] [backend/src/repositories/](mdc:backend/src/repositories/) - 인터페이스
+- [ ] [backend/src/repositories/impl/](mdc:backend/src/repositories/impl/) - 구현체
+- [ ] [backend/src/routes/index.ts](mdc:backend/src/routes/index.ts) - DI 컨테이너 등록
+- [ ] 생성자 매개변수 순서 일치 확인
+
+### 새 API 엔드포인트 추가 시
+- [ ] Controller 메서드 구현
+- [ ] Routes 파일에 등록
+- [ ] DI 컨테이너에 Controller 의존성 주입
+- [ ] Swagger 문서 추가
+- [ ] TypeScript 빌드 성공 확인
+
+## ⚡ 빠른 해결 스크립트
+
+```bash
+#!/bin/bash
+# 빌드 오류 빠른 해결 스크립트
+
+echo "🔧 Prisma 클라이언트 재생성..."
+npx prisma generate
+
+echo "🔧 데이터베이스 동기화..."
+npx prisma db push
+
+echo "🔧 TypeScript 빌드 테스트..."
+npm run build
+
+if [ $? -eq 0 ]; then
+    echo "✅ 빌드 성공! Docker 재빌드 진행..."
+    cd .. && docker-compose down && docker-compose up -d --build
+else
+    echo "❌ 빌드 실패! 오류를 확인하세요."
+    exit 1
+fi
+```
+
+## 🚨 빌드 오류 발생 시 절대 금지사항
+
+1. **빌드 오류 무시하고 Docker 실행 금지**
+   ```bash
+   # ❌ 절대 하지 마세요
+   docker-compose up -d --build  # 빌드 오류 상태에서 실행
+   ```
+
+2. **타입 오류를 `any`로 회피하지 마세요**
+   ```typescript
+   // ❌ 임시방편
+   this.newRepository = new NewRepository() as any;
+   
+   // ✅ 근본적 해결
+   private newRepository!: INewRepository;
+   ```
+
+3. **Prisma 생성 없이 스키마 변경 금지**
+   ```bash
+   # ❌ 스키마 변경 후 generate 누락
+   # schema.prisma 수정
+   npm run build  # 오류 발생!
+   
+   # ✅ 올바른 순서
+   # schema.prisma 수정
+   npx prisma generate
+   npm run build
+   ```
+
+---
+
+**💡 핵심: 빌드 오류는 반드시 해결하고 넘어가기. 임시방편 금지!**

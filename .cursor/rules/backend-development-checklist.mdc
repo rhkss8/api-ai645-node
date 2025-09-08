@@ -3,3 +3,180 @@ description:
 globs:
 alwaysApply: false
 ---
+# 백엔드 개발 체크리스트 및 실수 방지 가이드
+
+## 🚨 중요: 백엔드 수정 후 필수 단계들
+
+### 1. 데이터베이스 스키마 변경 시
+
+#### ✅ Prisma 스키마 수정 후 반드시 실행할 명령어들
+```bash
+# 1. Prisma 클라이언트 재생성
+npx prisma generate
+
+# 2. 데이터베이스 스키마 동기화 (개발환경)
+npx prisma db push
+
+# 또는 마이그레이션 생성 (프로덕션 준비)
+npx prisma migrate dev --name [변경사항_설명]
+```
+
+#### 🔥 흔한 실수들
+- `Property 'newModel' does not exist on type 'PrismaClient'` 
+  → **해결**: `npx prisma generate` 실행 누락
+- JSON 필드에서 `Type 'null' is not assignable to type 'InputJsonValue'`
+  → **해결**: `null` 대신 `undefined` 사용
+
+### 2. 새로운 엔티티/리포지토리 추가 시
+
+#### ✅ 체크리스트
+- [ ] 엔티티 클래스 생성 ([entities/](mdc:backend/src/entities/))
+- [ ] 인터페이스 정의 ([repositories/](mdc:backend/src/repositories/))
+- [ ] Prisma 구현체 생성 ([repositories/impl/](mdc:backend/src/repositories/impl/))
+- [ ] UseCase에서 활용
+- [ ] Controller에 주입
+- [ ] **DI 컨테이너에 등록** ([routes/index.ts](mdc:backend/src/routes/index.ts))
+
+#### 🔥 흔한 실수
+- DI 컨테이너 프로퍼티 선언 누락
+- Constructor 매개변수 순서 불일치
+- 타입 선언 vs 실제 구현 불일치
+
+### 3. 새로운 API 엔드포인트 추가 시
+
+#### ✅ 체크리스트
+- [ ] Controller 메서드 구현
+- [ ] Routes 파일에 엔드포인트 등록
+- [ ] **Swagger 문서 작성** (JSDoc 형태)
+- [ ] 미들웨어 적용 (인증, 유효성검사, 레이트리밋)
+- [ ] TypeScript 빌드 확인
+- [ ] Docker 재빌드
+
+#### 🔥 흔한 실수들
+- Swagger 문서 누락으로 API 문서에 반영 안됨
+- 빌드 오류로 새 엔드포인트가 실제로 등록되지 않음
+
+### 4. TypeScript 빌드 및 배포
+
+#### ✅ 반드시 확인할 단계들
+```bash
+# 1. 로컬 빌드 테스트
+cd backend && npm run build
+
+# 2. 빌드 성공 확인 후 Docker 재빌드
+cd .. && docker-compose down && docker-compose up -d --build
+
+# 3. 서버 로그 확인
+docker logs api-backend --tail=20
+
+# 4. Swagger 문서 업데이트 확인
+curl -s http://localhost:3350/openapi.json | jq '.paths | keys'
+```
+
+#### 🔥 흔한 실수들
+- TypeScript 빌드 오류 무시하고 Docker 실행
+- 캐시된 이미지로 인한 변경사항 미반영
+- Swagger JSON 갱신 확인 누락
+
+### 5. DI (Dependency Injection) 패턴 관리
+
+#### ✅ [routes/index.ts](mdc:backend/src/routes/index.ts) 수정 시 체크리스트
+- [ ] 클래스 프로퍼티 선언 (private readonly)
+- [ ] `initializeDependencies()` 메서드에서 인스턴스 생성
+- [ ] Controller 생성자에 의존성 주입
+- [ ] 의존성 순서 확인 (하위 → 상위)
+
+#### 🔥 흔한 실수
+```typescript
+// ❌ 잘못된 예: 프로퍼티 선언 누락
+this.newUseCase = new NewUseCase(); // Property 'newUseCase' does not exist
+
+// ✅ 올바른 예: 프로퍼티 먼저 선언
+private newUseCase!: NewUseCase;
+// 그 다음 initializeDependencies()에서 초기화
+this.newUseCase = new NewUseCase(dependencies...);
+```
+
+### 6. JSON 필드 처리 (Prisma)
+
+#### ✅ 올바른 패턴
+```typescript
+// ✅ JSON 필드 저장 시
+conditions: params.conditions ? JSON.stringify(params.conditions) : undefined,
+
+// ❌ 잘못된 패턴
+conditions: params.conditions ? JSON.stringify(params.conditions) : null,
+```
+
+### 7. 엔티티 생성자 매개변수 관리
+
+#### ✅ 엔티티 수정 시 체크리스트
+- [ ] 생성자 매개변수 순서 확인
+- [ ] `create()` 정적 메서드 매개변수 일치
+- [ ] Repository `toDomain()` 메서드 매개변수 일치
+- [ ] UseCase에서 호출하는 부분 매개변수 일치
+
+#### 🔥 흔한 실수
+```typescript
+// ❌ 매개변수 개수 불일치
+return new RecommendationHistory(
+  // 11개 매개변수인데 생성자는 12개 요구
+);
+
+// ✅ 새 필드 추가 시 모든 곳에서 일치시키기
+```
+
+### 8. 백엔드 변경 후 최종 검증
+
+#### ✅ 필수 검증 단계
+```bash
+# 1. 빌드 성공 확인
+npm run build
+
+# 2. 서버 정상 시작 확인
+docker logs api-backend | grep "서버가 시작되었습니다"
+
+# 3. 새 API 엔드포인트 등록 확인
+curl -s http://localhost:3350/openapi.json | jq '.paths | keys' | grep [새로운_엔드포인트]
+
+# 4. Swagger UI에서 문서 확인
+# http://localhost:3350/api-docs 접속해서 새 API 확인
+```
+
+## 🎯 프로젝트별 특이사항
+
+### 이 프로젝트의 핵심 파일들
+- [backend/src/routes/index.ts](mdc:backend/src/routes/index.ts) - DI 컨테이너 및 라우트 등록
+- [backend/prisma/schema.prisma](mdc:backend/prisma/schema.prisma) - 데이터베이스 스키마
+- [docker-compose.yml](mdc:docker-compose.yml) - 개발환경 설정
+
+### 자주 수정되는 패턴
+1. **새 추천 기능 추가**: Entity → Repository → UseCase → Controller → Routes → Swagger
+2. **결제 플로우 수정**: PaymentUseCase → PaymentController → 스키마 변경 → 마이그레이션
+3. **인증/권한 변경**: AuthController → 미들웨어 → 라우트 설정
+
+## 🚀 빠른 체크 명령어 모음
+
+```bash
+# 전체 체크 스크립트
+cd backend
+npm run build && \
+cd .. && \
+docker-compose down && \
+docker-compose up -d --build && \
+sleep 10 && \
+docker logs api-backend --tail=10 && \
+curl -s http://localhost:3350/openapi.json | jq '.paths | keys | length'
+```
+
+## ⚠️ 절대 하지 말 것
+
+1. **빌드 오류 무시하고 Docker 실행하지 마라**
+2. **Prisma generate 없이 스키마 변경하지 마라**  
+3. **DI 컨테이너 수정 후 프로퍼티 선언 빼먹지 마라**
+4. **Swagger 문서 없이 API 추가하지 마라**
+5. **Docker 캐시 때문에 변경사항 안 보인다고 포기하지 마라** → `--build` 플래그 사용
+
+---
+
+**🎯 핵심 원칙: 백엔드 코드 수정 → 빌드 테스트 → Docker 재빌드 → 검증 → 문서 확인**
