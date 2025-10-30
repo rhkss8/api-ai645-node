@@ -10,6 +10,7 @@ WORKDIR /app
 # backend 폴더로 이동
 WORKDIR /app/backend
 
+
 # package.json과 package-lock.json 복사 (캐싱 최적화)
 COPY backend/package*.json ./
 COPY backend/tsconfig.json ./
