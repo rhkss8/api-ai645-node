@@ -7,8 +7,7 @@ set -e  # 오류 발생 시 스크립트 중단
 
 echo "🚀 클라우드타입 프로덕션 데이터 초기화 스크립트 시작..."
 
-# 환경변수 설정
-export DATABASE_URL="postgresql://root:tarscase12%21%40@svc.sel5.cloudtype.app:31473/main"
+# 환경변수는 실행 환경에서 주입됩니다 (DATABASE_URL 필수)
 
 # 데이터베이스 연결 대기 (최대 60초)
 echo "⏳ 클라우드타입 데이터베이스 연결 대기 중..."
@@ -43,21 +42,7 @@ fi
 echo "🔄 Prisma 마이그레이션 실행 중..."
 npx prisma db push
 
-# 당첨번호 데이터 확인 및 import
-echo "📊 당첨번호 데이터 확인 중..."
-WINNING_COUNT=$(npx prisma db execute --stdin <<< "SELECT COUNT(*) as count FROM winning_numbers" 2>/dev/null | grep -o '[0-9]*' | tail -1 || echo "0")
-
-if [ "$WINNING_COUNT" -eq 0 ]; then
-    echo "⚠️  당첨번호 데이터가 없습니다. CSV에서 import를 시작합니다..."
-    if [ -f "src/scripts/importWinningNumbers.ts" ]; then
-        npx ts-node src/scripts/importWinningNumbers.ts
-        echo "✅ 당첨번호 데이터 import 완료!"
-    else
-        echo "⚠️  importWinningNumbers.ts 파일이 없습니다."
-    fi
-else
-    echo "✅ 당첨번호 데이터가 이미 존재합니다. (${WINNING_COUNT}개)"
-fi
+# 도메인별 초기 데이터는 별도 시드로 관리합니다 (운세 도메인 전환)
 
 # Prisma 클라이언트 생성
 echo "🔧 Prisma 클라이언트 생성 중..."

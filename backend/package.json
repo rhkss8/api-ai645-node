@@ -1,7 +1,7 @@
 {
   "name": "api-ai645-backend",
   "version": "1.0.0",
-  "description": "TypeScript Express backend with PostgreSQL and GPT integration for lottery recommendation",
+  "description": "TypeScript Express backend for fortune service (운세 서비스)",
   "main": "dist/index.js",
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -19,9 +19,7 @@
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "import:winning-numbers": "ts-node src/scripts/importWinningNumbers.ts",
-    "import:csv": "node scripts/import-winning-numbers.js",
-    "import:csv:sh": "./scripts/import-winning-numbers.sh",
+    
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts"
@@ -33,7 +31,7 @@
     "prisma",
     "openai",
     "gpt",
-    "lottery",
+    "fortune",
     "clean-architecture"
   ],
   "author": "",

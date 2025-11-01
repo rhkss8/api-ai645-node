@@ -53,6 +53,27 @@ export class IdGenerator {
   }
 
   /**
+   * 운세 세션 ID 생성
+   */
+  static generateFortuneSessionId(): string {
+    return `session_${this.generateShortId()}`;
+  }
+
+  /**
+   * 대화 로그 ID 생성
+   */
+  static generateConversationLogId(): string {
+    return `log_${this.generateShortId()}`;
+  }
+
+  /**
+   * 문서 결과 ID 생성
+   */
+  static generateDocumentResultId(): string {
+    return `doc_${this.generateShortId()}`;
+  }
+
+  /**
    * 짧은 ID 생성 (8자리)
    */
   private static generateShortId(): string {

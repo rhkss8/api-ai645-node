@@ -100,6 +100,10 @@ model User {
   socialAccounts  SocialAccount[]
   subscriptions   Subscription[]
   params          RecommendationParams[]
+  fortuneSessions FortuneSession[]
+  conversationLogs ConversationLog[]
+  documentResults  DocumentResult[]
+  hongsiCredits    HongsiCredit[]
 
   @@map("users")
 }
@@ -297,4 +301,113 @@ enum RecommendationParamStatus {
   COMPLETED         // 완료
   FAILED            // 실패
   EXPIRED           // 만료
+}
+
+// 포포춘 운세 서비스 모델
+model FortuneSession {
+  id            String          @id @default(cuid())
+  userId        String
+  category      FortuneCategory
+  mode          SessionMode
+  remainingTime Int             // 남은 시간 (초)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  expiresAt     DateTime
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationLogs ConversationLog[]
+  paymentDetails  PaymentDetail[]
+
+  @@index([userId])
+  @@index([category])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("fortune_sessions")
+}
+
+model ConversationLog {
+  id            String          @id @default(cuid())
+  sessionId     String
+  userInput     String
+  aiOutput      String
+  elapsedTime   Int             // 소요 시간 (초)
+  isPaid        Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  session       FortuneSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("conversation_logs")
+}
+
+model DocumentResult {
+  id            String          @id @default(cuid())
+  userId        String
+  category      FortuneCategory
+  title         String          @db.VarChar(200)
+  content       String
+  issuedAt      DateTime        @default(now())
+  expiresAt     DateTime
+  documentLink  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([expiresAt])
+  @@map("document_results")
+}
+
+model PaymentDetail {
+  id            String          @id @default(cuid())
+  paymentId     String          // Payment.id (기존 결제 시스템과 연결)
+  sessionId     String?         // FortuneSession.id (채팅형 세션)
+  documentId    String?         // DocumentResult.id (문서형 결과)
+  sessionType   SessionMode     // CHAT or DOCUMENT
+  category      FortuneCategory
+  result        Json?           // 결과 데이터
+  createdAt     DateTime        @default(now())
+  expiredAt     DateTime?       // 만료일시
+  session       FortuneSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId])
+  @@index([sessionId])
+  @@index([documentId])
+  @@map("payment_details")
+}
+
+model HongsiCredit {
+  id            String          @id @default(cuid())
+  userId        String
+  creditDate    String          // YYYY-MM-DD 형식
+  freeUsed      Boolean         @default(false)  // 무료 홍시 사용 여부
+  paidMinutes   Int             @default(0)      // 유료 구매 시간 (분)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, creditDate])
+  @@index([userId, creditDate])
+  @@map("hongsi_credits")
+}
+
+enum FortuneCategory {
+  SASA              // 사주
+  TAROT             // 타로
+  DREAM             // 꿈해몽
+  LUCKY_NUMBER      // 행운번호(로또)
+  LOVE              // 연애운
+  CAREER            // 직장운
+  BUSINESS          // 사업운
+  LUCKY_DAY         // 길일
+  MOVING            // 이사
+  CAR_PURCHASE      // 차구매
+  NAMING            // 작명
+  NICKNAME          // 닉네임
+}
+
+enum SessionMode {
+  CHAT              // 채팅형
+  DOCUMENT          // 문서형
 }

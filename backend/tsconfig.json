@@ -33,7 +33,6 @@
       "@/repositories/*": ["repositories/*"],
       "@/middlewares/*": ["middlewares/*"],
       "@/routes/*": ["routes/*"],
-      "@/prompts/*": ["prompts/*"],
       "@/config/*": ["config/*"],
       "@/utils/*": ["utils/*"],
       "@/types/*": ["types/*"]
