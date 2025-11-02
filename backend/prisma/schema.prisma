@@ -101,7 +101,6 @@ model User {
   subscriptions   Subscription[]
   params          RecommendationParams[]
   fortuneSessions FortuneSession[]
-  conversationLogs ConversationLog[]
   documentResults  DocumentResult[]
   hongsiCredits    HongsiCredit[]
 

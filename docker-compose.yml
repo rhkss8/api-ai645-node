@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   # Backend service (Node.js + Express)
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: api-backend
     ports:
       - "3350:3350"  # 외부:내부 포트 매핑
@@ -13,16 +11,19 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/main
+      - PORT=3350
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
+      - ./backend:/app
       - /app/node_modules
     restart: unless-stopped
     networks:
       - app-network
-    command: npm run start
+    command: sh -c "npx prisma generate && npx prisma db push && npm run dev"
 
   # Database service (PostgreSQL)
   db:

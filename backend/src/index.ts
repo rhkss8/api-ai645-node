@@ -17,7 +17,6 @@ import { ApiResponse, HealthCheckResponse } from './types/common';
 import { createApiRoutes, DIContainer } from './routes/index';
 import { globalErrorHandler, notFoundHandler } from './middlewares/errorHandler';
 import { generalLimiter } from './middlewares/rateLimiter';
-import { LottoScheduler } from './batch/LottoScheduler';
 import { CleanupScheduler } from './batch/CleanupScheduler';
 import { initPassportStrategies } from './auth/providers';
 import { startTokenRefreshWorker } from './jobs/providerTokenRefresh';
@@ -60,9 +59,9 @@ const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Lottery Recommendation API',
-      version: '1.0.0',
-      description: 'AI-powered lottery number recommendation service with TypeScript and Clean Architecture',
+      title: '포포춘(For Fortune) 운세 API',
+      version: '2.0.0',
+      description: 'AI 기반 운세 상담 플랫폼 - 사주, 타로, 꿈해몽, 행운번호 등',
     },
     servers: [
       {
@@ -74,30 +73,22 @@ const swaggerOptions = {
           : 'Development server',
       },
     ],
-    tags: [
+      tags: [
       {
         name: 'Authentication',
         description: '소셜 로그인 및 인증 관련 API',
       },
       {
-        name: 'Recommendations',
-        description: '로또 번호 추천 관련 API',
+        name: 'Fortune',
+        description: '운세 서비스 관련 API (채팅형/문서형)',
       },
       {
-        name: 'Image Processing',
-        description: '이미지 처리 관련 API',
+        name: 'Board',
+        description: '게시판 관련 API',
       },
       {
-        name: 'Reviews',
-        description: '추천 회고 분석 관련 API',
-      },
-      {
-        name: 'Data',
-        description: '데이터 조회 관련 API',
-      },
-      {
-        name: 'Payment',
-        description: '결제 관련 API',
+        name: 'Admin',
+        description: '관리자 관련 API',
       },
     ],
     components: {
@@ -208,37 +199,34 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   const response: ApiResponse = {
     success: true,
-    message: '🚀 Lottery Recommendation API Server (TypeScript + Clean Architecture)',
+    message: '🔮 포포춘(For Fortune) 운세 API 서버',
     data: {
-      version: '1.0.0',
+      version: '2.0.0',
       environment: env.NODE_ENV,
       status: 'All systems operational',
       features: [
-        '무료 번호 추천 (GPT-3.5-turbo)',
-        '프리미엄 번호 추천 (GPT-4o)',
-        '이미지 번호 추출 (GPT-4o Vision)',
-        '추천 결과 회고 분석',
+        '채팅형 운세 상담 (GPT-4o)',
+        '문서형 운세 리포트 (GPT-4o)',
+        '12가지 운세 카테고리',
+        '홍시(복채) 기반 시간 관리',
         'Clean Architecture 구조',
         'TypeScript 완전 지원',
       ],
       endpoints: {
         health: '/health',
         docs: '/api-docs',
-        recommend: {
-          free: 'POST /api/recommend/free',
-          premium: 'POST /api/recommend/premium',
+        fortune: {
+          session: 'POST /api/fortune/session',
+          chat: 'POST /api/fortune/chat',
+          document: 'POST /api/fortune/document',
+          hongsi: 'POST /api/fortune/hongsi/purchase',
         },
-        image: {
-          extract: 'POST /api/image/extract',
+        auth: {
+          login: 'POST /api/auth/login',
+          register: 'POST /api/auth/register',
         },
-        review: {
-          generate: 'POST /api/review/generate',
-          list: 'GET /api/review',
-          byId: 'GET /api/review/:id',
-        },
-        data: {
-          recommendations: 'GET /api/data/recommendations',
-          winningNumbers: 'GET /api/data/winning-numbers/latest',
+        board: {
+          posts: 'GET /api/board/:category',
         },
       },
     },
@@ -259,10 +247,7 @@ app.use('/api', apiRoutes);
 // 라우트 등록 확인 로그
 console.log('🔍 등록된 라우트 확인:');
 console.log('  - /api/auth/* (Authentication)');
-console.log('  - /api/payment/* (Payment)');
-console.log('  - /api/recommend/* (Recommendation)');
-console.log('  - /api/review/* (Review)');
-console.log('  - /api/data/* (Data)');
+console.log('  - /api/fortune/* (Fortune Service)');
 console.log('  - /api/board/* (Board)');
 console.log('  - /api/admin/* (Admin)');
 
@@ -275,12 +260,8 @@ app.use(globalErrorHandler);
 // Server startup
 const startServer = async (): Promise<void> => {
   try {
-    // Connect to database - 임시로 비활성화
+    // Connect to database
     await connectDatabase();
-    
-    // Start lotto scheduler
-    const lottoScheduler = new LottoScheduler();
-    lottoScheduler.startScheduler();
 
     // Start cleanup scheduler
     const cleanupScheduler = new CleanupScheduler();
@@ -292,7 +273,7 @@ const startServer = async (): Promise<void> => {
     // Start server
     const server = app.listen(env.PORT, '0.0.0.0', () => {
       console.log(`
-🚀 TypeScript 로또 추천 API 서버가 시작되었습니다!
+🔮 포포춘(For Fortune) 운세 API 서버가 시작되었습니다!
 📡 포트: ${env.PORT}
 🌍 환경: ${env.NODE_ENV}
 📍 URL: http://localhost:${env.PORT}
@@ -300,11 +281,11 @@ const startServer = async (): Promise<void> => {
 📚 API Docs: http://localhost:${env.PORT}/api-docs
 
 🎯 주요 API 엔드포인트:
-   • 무료 추천: POST /api/recommend/free
-   • 프리미엄 추천: POST /api/recommend/premium
-   • 이미지 추출: POST /api/image/extract
-   • 회고 생성: POST /api/review/generate
-   • 데이터 조회: GET /api/data/recommendations
+   • 운세 세션 생성: POST /api/fortune/session
+   • 채팅형 운세: POST /api/fortune/chat
+   • 문서형 리포트: POST /api/fortune/document
+   • 홍시 구매: POST /api/fortune/hongsi/purchase
+   • 세션 시간 연장: POST /api/fortune/session/:id/extend
 
 ✅ 데이터베이스: 연결됨
 🔧 Clean Architecture + TypeScript 구조 적용 완료
