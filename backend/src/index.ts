@@ -138,7 +138,7 @@ const swaggerOptions = {
   },
   apis: [
     './src/routes/*.ts',
-    './dist/routes/*.js'
+    // './dist/routes/*.js' // 제거: dist 폴더의 오래된 빌드 파일이 스웨거에 포함되는 것을 방지
   ],
 };
 

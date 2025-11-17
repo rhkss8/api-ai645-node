@@ -4,7 +4,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../middlewares/errorHandler';
 import { ApiResponse } from '../types/common';
-import { FortuneApiResponse, FortuneCategory, SessionMode } from '../types/fortune';
+import { FortuneApiResponse, FortuneCategory, SessionMode, FormType } from '../types/fortune';
 import { CreateFortuneSessionUseCase } from '../usecases/CreateFortuneSessionUseCase';
 import { ChatFortuneUseCase } from '../usecases/ChatFortuneUseCase';
 import { DocumentFortuneUseCase } from '../usecases/DocumentFortuneUseCase';
@@ -15,6 +15,8 @@ import { ExtendSessionTimeUseCase } from '../usecases/ExtendSessionTimeUseCase';
 import { GetFortuneStatisticsUseCase } from '../usecases/GetFortuneStatisticsUseCase';
 import { PrepareFortunePaymentUseCase } from '../usecases/PrepareFortunePaymentUseCase';
 import { FortuneProductService } from '../services/FortuneProductService';
+import { ResultTokenService } from '../services/ResultTokenService';
+import { PaymentService } from '../services/PaymentService';
 import { HongsiUnit, FortuneProductType } from '../types/fortune';
 
 export class FortuneController {
@@ -28,7 +30,9 @@ export class FortuneController {
     private readonly extendSessionTimeUseCase: ExtendSessionTimeUseCase,
     private readonly getStatisticsUseCase: GetFortuneStatisticsUseCase,
     private readonly preparePaymentUseCase: PrepareFortunePaymentUseCase,
+    private readonly paymentService: PaymentService,
     private readonly productService: FortuneProductService,
+    private readonly resultTokenService: ResultTokenService,
   ) {}
 
   /**
@@ -50,10 +54,10 @@ export class FortuneController {
         throw new Error('로그인이 필요합니다.');
       }
 
-      const { category, mode, userInput, paymentId, useFreeHongsi, durationMinutes } = req.body;
+      const { category, formType, mode, userInput, paymentId, portOnePaymentId, useFreeHongsi, durationMinutes } = req.body;
 
-      if (!category || !mode || !userInput) {
-        throw new Error('카테고리, 모드, 사용자 입력은 필수입니다.');
+      if (!category || !formType || !mode || !userInput) {
+        throw new Error('카테고리, 폼타입, 모드, 사용자 입력은 필수입니다.');
       }
 
       // 채팅형 검증
@@ -83,8 +87,18 @@ export class FortuneController {
         mode: mode as SessionMode,
         userInput,
         paymentId,
+        portOnePaymentId,
         useFreeHongsi,
         durationMinutes,
+      });
+
+      // 결과 토큰 발급 (30분 만료)
+      const resultToken = this.resultTokenService.sign({
+        sessionId: session.id,
+        userId: user.sub,
+        category: category as FortuneCategory,
+        formType: formType as FormType,
+        mode: mode as SessionMode,
       });
 
       const response: FortuneApiResponse = {
@@ -92,11 +106,13 @@ export class FortuneController {
         data: {
           sessionId: session.id,
           category: session.category,
+          formType: formType as FormType,
           mode: session.mode,
           remainingTime: session.remainingTime,
           isActive: session.isActive,
           expiresAt: session.expiresAt.toISOString(),
           isPaid: !!paymentId,
+          resultToken,
         },
         remainingTime: session.remainingTime,
         isFreeHongsi: useFreeHongsi && session.remainingTime === 120,
@@ -272,7 +288,7 @@ export class FortuneController {
 
       const { id } = req.params;
 
-      const sessionData = await this.getSessionUseCase.execute(id, user.sub);
+      const sessionData = await this.getSessionUseCase.execute(id as string, user.sub as string);
 
       const response: FortuneApiResponse = {
         success: true,
@@ -299,7 +315,7 @@ export class FortuneController {
 
       const { id } = req.params;
 
-      const documentData = await this.getDocumentUseCase.execute(id, user.sub);
+      const documentData = await this.getDocumentUseCase.execute(id as string, user.sub as string);
 
       const response: ApiResponse = {
         success: true,
@@ -369,9 +385,9 @@ export class FortuneController {
       }
 
       const result = await this.extendSessionTimeUseCase.execute(
-        id,
-        user.sub,
-        additionalSeconds,
+        id as string,
+        user.sub as string,
+        additionalSeconds as number,
       );
 
       const response: FortuneApiResponse = {
@@ -408,6 +424,191 @@ export class FortuneController {
       };
 
       res.status(200).json(response);
+    },
+  );
+
+  /**
+   * 결제 웹훅 (PortOne 서버→서버)
+   * POST /api/v1/fortune/payment/webhook
+   */
+  paymentWebhook = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      // 웹훅 요청 로깅 (디버깅용)
+      console.log('🔔 웹훅 요청 수신:', {
+        method: req.method,
+        url: req.url,
+        headers: {
+          'x-webhook-secret': req.headers['x-webhook-secret'],
+          'x-portone-secret': req.headers['x-portone-secret'],
+          'x-portone-signature': req.headers['x-portone-signature'],
+          'authorization': req.headers['authorization'],
+        },
+        body: req.body,
+        ip: req.ip,
+      });
+
+      // 최소 유효성 검사
+      const { orderId, paymentId, amount, status } = req.body || {};
+      if (!orderId || !paymentId || typeof amount !== 'number' || !status) {
+        console.error('❌ 웹훅 페이로드 검증 실패:', { orderId, paymentId, amount, status });
+        res.status(400).json({ success: false, error: 'INVALID_WEBHOOK_PAYLOAD' });
+        return;
+      }
+
+      // 간이 서명 검증 (비밀키 헤더 비교)
+      // PortOne V2는 여러 헤더 이름을 사용할 수 있음
+      const secretHeader = (
+        req.headers['x-webhook-secret'] || 
+        req.headers['x-portone-secret'] ||
+        req.headers['x-portone-signature']
+      ) as string | undefined;
+      const expected = process.env.PORTONE_WEBHOOK_SECRET;
+      
+      if (!expected) {
+        console.error('❌ PORTONE_WEBHOOK_SECRET 환경변수가 설정되지 않았습니다.');
+        res.status(500).json({ success: false, error: 'WEBHOOK_SECRET_NOT_CONFIGURED' });
+        return;
+      }
+
+      if (!secretHeader || secretHeader !== expected) {
+        console.error('❌ 웹훅 시크릿 검증 실패:', {
+          received: secretHeader ? '***' : '(없음)',
+          expected: expected ? '***' : '(없음)',
+        });
+        res.status(401).json({ success: false, error: 'PAYMENT_UNVERIFIED' });
+        return;
+      }
+
+      // 결제 확정 처리
+      console.log('✅ 웹훅 검증 통과, 결제 확정 처리 시작:', { orderId, paymentId, amount, status });
+      const ok = await this.paymentService.confirmPaymentByWebhook({ orderId, paymentId, amount, status });
+      if (!ok.success) {
+        console.error('❌ 결제 확정 처리 실패:', { orderId, paymentId });
+        res.status(400).json({ success: false, error: 'PAYMENT_UNVERIFIED' });
+        return;
+      }
+
+      console.log('✅ 웹훅 처리 완료:', { orderId, paymentId });
+      res.status(200).json({ success: true });
+    },
+  );
+
+  /**
+   * 결제 상태 확인 (프론트엔드 폴링용)
+   * GET /api/v1/fortune/payment/:paymentId/status
+   */
+  getPaymentStatus = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      if (!user) {
+        // authenticateAccess 미들웨어가 이미 401을 보냈을 수 있으므로 확인
+        if (!res.headersSent) {
+          res.status(401).json({
+            success: false,
+            error: '로그인이 필요합니다.',
+            message: '다시 로그인해주세요.',
+            errorCode: 'UNAUTHORIZED',
+          });
+        }
+        return;
+      }
+
+      const { paymentId } = req.params;
+      if (!paymentId) {
+        res.status(400).json({ success: false, error: 'PAYMENT_ID_REQUIRED' });
+        return;
+      }
+
+      // Payment 조회
+      const payment = await this.paymentService.getPaymentById(paymentId);
+      if (!payment) {
+        res.status(404).json({ success: false, error: 'PAYMENT_NOT_FOUND' });
+        return;
+      }
+
+      // 사용자 확인
+      if (payment.order.userId !== user.sub) {
+        res.status(403).json({ success: false, error: 'PAYMENT_ACCESS_DENIED' });
+        return;
+      }
+
+      // 캐시 방지 헤더 추가 (304 응답 방지)
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          paymentId: payment.id,
+          status: payment.status,
+          amount: payment.amount,
+          paidAt: payment.paidAt,
+        },
+      });
+    },
+  );
+
+  /**
+   * 결과 토큰으로 결과 조회
+   * GET /api/v1/fortune/result/:token
+   */
+  getResultByToken = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const { token } = req.params;
+      if (!token) {
+        res.status(400).json({ success: false, error: 'TOKEN_INVALID' });
+        return;
+      }
+      try {
+        console.log('[결과 조회] 토큰 검증 시작:', { token: token.substring(0, 20) + '...', tokenLength: token.length });
+        const payload = this.resultTokenService.verify(token);
+        console.log('[결과 조회] 토큰 검증 성공:', { sessionId: payload.sessionId, userId: payload.userId });
+        const session = await this.getSessionUseCase.execute(payload.sessionId, payload.userId);
+
+        // 최근 채팅 N개 및 최신 문서 조회 (직접 Prisma 사용)
+        const prisma = new (require('@prisma/client').PrismaClient)();
+        const chats = await prisma.conversationLog.findMany({
+          where: { sessionId: session.id },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        });
+        const document = await prisma.documentResult.findFirst({
+          where: { userId: payload.userId, category: payload.category },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        const response: ApiResponse = {
+          success: true,
+          data: {
+            sessionMeta: {
+              sessionId: session.id,
+              category: session.category,
+              formType: payload.formType,
+              mode: session.mode,
+              remainingTime: session.remainingTime,
+              isPaid: session.isPaid,
+            },
+            document,
+            lastChats: chats,
+            cta: { label: '채팅으로 이어보기(홍시 사용)', requiresPayment: session.remainingTime <= 0 },
+          },
+          timestamp: new Date().toISOString(),
+        };
+
+        res.status(200).json(response);
+      } catch (error: any) {
+        console.error('[결과 조회] 토큰 검증 실패:', {
+          token: token.substring(0, 20) + '...',
+          tokenLength: token.length,
+          error: error?.message || error,
+          errorName: error?.name,
+          stack: error?.stack?.split('\n')[0],
+        });
+        res.status(401).json({ success: false, error: 'TOKEN_INVALID', message: error?.message || '토큰이 유효하지 않거나 만료되었습니다.' });
+      }
     },
   );
 }

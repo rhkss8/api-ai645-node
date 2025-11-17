@@ -39,9 +39,7 @@ export class DocumentFortuneUseCase {
 
     await this.documentRepository.create(document);
 
-    // documentLink 설정 (절대 URL 또는 상대 경로)
-    const baseUrl = process.env.API_BASE_URL || 'http://localhost:3350';
-    documentResponse.documentLink = `${baseUrl}/api/fortune/document/${documentId}`;
+    // 문서 링크는 사용처에서 구성 (응답 타입 최소화)
 
     return documentResponse;
   }

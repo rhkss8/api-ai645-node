@@ -1,7 +1,8 @@
 /**
  * Prisma 기반 운세 세션 리포지토리
  */
-import { PrismaClient, FortuneCategory, SessionMode } from '@prisma/client';
+import { PrismaClient, FortuneCategory as PrismaFortuneCategory, SessionMode as PrismaSessionMode } from '@prisma/client';
+import { FortuneCategory, SessionMode } from '../../types/fortune';
 import { FortuneSession } from '../../entities/FortuneSession';
 import { IFortuneSessionRepository } from '../IFortuneSessionRepository';
 
@@ -13,8 +14,8 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
       data: {
         id: session.id,
         userId: session.userId,
-        category: session.category as FortuneCategory,
-        mode: session.mode as SessionMode,
+        category: session.category as PrismaFortuneCategory,
+        mode: session.mode as PrismaSessionMode,
         remainingTime: session.remainingTime,
         isActive: session.isActive,
         expiresAt: session.expiresAt,
@@ -77,7 +78,7 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
     const found = await this.prisma.fortuneSession.findFirst({
       where: {
         userId,
-        category: category as FortuneCategory,
+        category: category as PrismaFortuneCategory,
         isActive: true,
         expiresAt: {
           gt: new Date(),
@@ -107,8 +108,8 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
     return new FortuneSession(
       prismaSession.id,
       prismaSession.userId,
-      prismaSession.category as FortuneCategory,
-      prismaSession.mode as SessionMode,
+      prismaSession.category as PrismaFortuneCategory as unknown as FortuneCategory,
+      prismaSession.mode as PrismaSessionMode as unknown as SessionMode,
       prismaSession.remainingTime,
       prismaSession.isActive,
       prismaSession.createdAt,

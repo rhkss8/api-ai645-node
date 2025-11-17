@@ -1,7 +1,8 @@
 /**
  * Prisma 기반 문서 결과 리포지토리
  */
-import { PrismaClient, FortuneCategory } from '@prisma/client';
+import { PrismaClient, FortuneCategory as PrismaFortuneCategory } from '@prisma/client';
+import { FortuneCategory } from '../../types/fortune';
 import { DocumentResult } from '../../entities/DocumentResult';
 import { IDocumentResultRepository } from '../IDocumentResultRepository';
 
@@ -13,7 +14,7 @@ export class PrismaDocumentResultRepository implements IDocumentResultRepository
       data: {
         id: document.id,
         userId: document.userId,
-        category: document.category as FortuneCategory,
+        category: document.category as PrismaFortuneCategory,
         title: document.title,
         content: document.content,
         issuedAt: document.issuedAt,
@@ -36,7 +37,7 @@ export class PrismaDocumentResultRepository implements IDocumentResultRepository
   async findByUserId(userId: string, category?: FortuneCategory): Promise<DocumentResult[]> {
     const where: any = { userId };
     if (category) {
-      where.category = category as FortuneCategory;
+      where.category = category as PrismaFortuneCategory;
     }
 
     const documents = await this.prisma.documentResult.findMany({
@@ -54,7 +55,7 @@ export class PrismaDocumentResultRepository implements IDocumentResultRepository
     const documents = await this.prisma.documentResult.findMany({
       where: {
         userId,
-        category: category as FortuneCategory,
+        category: category as PrismaFortuneCategory,
         expiresAt: {
           gt: new Date(),
         },
@@ -75,7 +76,7 @@ export class PrismaDocumentResultRepository implements IDocumentResultRepository
     return new DocumentResult(
       prismaDoc.id,
       prismaDoc.userId,
-      prismaDoc.category as FortuneCategory,
+      prismaDoc.category as PrismaFortuneCategory as unknown as FortuneCategory,
       prismaDoc.title,
       prismaDoc.content,
       prismaDoc.issuedAt,

@@ -3,30 +3,16 @@
  */
 import { FortuneCategory, DocumentResponse } from '../types/fortune';
 import { getCategorySpecificDocumentPrompt } from './categorySpecificPrompts';
+import { CATEGORY_NAMES } from '../data/fortuneProducts';
 
 interface DocumentFortunePromptParams {
   category: FortuneCategory;
   userInput: string;
 }
 
-const categoryNames: Record<FortuneCategory, string> = {
-  [FortuneCategory.SASA]: '사주',
-  [FortuneCategory.TAROT]: '타로',
-  [FortuneCategory.DREAM]: '꿈해몽',
-  [FortuneCategory.LUCKY_NUMBER]: '행운번호',
-  [FortuneCategory.LOVE]: '연애운',
-  [FortuneCategory.CAREER]: '직장운',
-  [FortuneCategory.BUSINESS]: '사업운',
-  [FortuneCategory.LUCKY_DAY]: '길일',
-  [FortuneCategory.MOVING]: '이사',
-  [FortuneCategory.CAR_PURCHASE]: '차구매',
-  [FortuneCategory.NAMING]: '작명',
-  [FortuneCategory.NICKNAME]: '닉네임',
-};
-
 export function generateDocumentFortunePrompt(params: DocumentFortunePromptParams): string {
   const { category, userInput } = params;
-  const categoryName = categoryNames[category];
+  const categoryName = CATEGORY_NAMES[category];
 
   const prompt = `당신은 전문 ${categoryName} 분석가입니다. 사용자의 정보를 바탕으로 상세한 운세 리포트를 작성해주세요.
 

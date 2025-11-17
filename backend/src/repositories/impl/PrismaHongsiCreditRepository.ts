@@ -11,16 +11,17 @@ export class PrismaHongsiCreditRepository implements IHongsiCreditRepository {
    * 오늘의 무료 홍시 사용 여부 확인
    */
   async isFreeHongsiUsedToday(userId: string): Promise<boolean> {
+    const uid = userId as unknown as string;
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
     const credit = await this.prisma.hongsiCredit.findUnique({
       where: {
         userId_creditDate: {
-          userId,
+          userId: uid,
           creditDate: today,
         },
       },
-    });
+    } as any);
 
     return credit?.freeUsed || false;
   }
@@ -29,17 +30,18 @@ export class PrismaHongsiCreditRepository implements IHongsiCreditRepository {
    * 오늘의 무료 홍시 사용 처리
    */
   async useFreeHongsi(userId: string): Promise<void> {
+    const uid = userId as unknown as string;
     const today = new Date().toISOString().split('T')[0];
 
     await this.prisma.hongsiCredit.upsert({
       where: {
         userId_creditDate: {
-          userId,
+          userId: uid,
           creditDate: today,
         },
       },
       create: {
-        userId,
+        userId: uid,
         creditDate: today,
         freeUsed: true,
         paidMinutes: 0,
@@ -47,24 +49,25 @@ export class PrismaHongsiCreditRepository implements IHongsiCreditRepository {
       update: {
         freeUsed: true,
       },
-    });
+    } as any);
   }
 
   /**
    * 유료 시간 추가 (분 단위)
    */
   async addPaidMinutes(userId: string, minutes: number): Promise<void> {
+    const uid = userId as unknown as string;
     const today = new Date().toISOString().split('T')[0];
 
     await this.prisma.hongsiCredit.upsert({
       where: {
         userId_creditDate: {
-          userId,
+          userId: uid,
           creditDate: today,
         },
       },
       create: {
-        userId,
+        userId: uid,
         creditDate: today,
         freeUsed: false,
         paidMinutes: minutes,
@@ -74,7 +77,7 @@ export class PrismaHongsiCreditRepository implements IHongsiCreditRepository {
           increment: minutes,
         },
       },
-    });
+    } as any);
   }
 
   /**
@@ -82,16 +85,17 @@ export class PrismaHongsiCreditRepository implements IHongsiCreditRepository {
    * 무료 홍시 사용 가능하면 120초(2분), 아니면 0초 + 유료 구매 시간
    */
   async getAvailableTimeToday(userId: string): Promise<number> {
+    const uid = userId as unknown as string;
     const today = new Date().toISOString().split('T')[0];
 
     const credit = await this.prisma.hongsiCredit.findUnique({
       where: {
         userId_creditDate: {
-          userId,
+          userId: uid,
           creditDate: today,
         },
       },
-    });
+    } as any);
 
     let availableTime = 0;
 

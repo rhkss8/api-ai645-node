@@ -12,7 +12,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/session:
+   * /api/v1/fortune/session:
    *   post:
    *     operationId: createFortuneSession
    *     summary: 운세 세션 생성
@@ -28,14 +28,20 @@ export const createFortuneRoutes = (
    *             type: object
    *             required:
    *               - category
+   *               - formType
    *               - mode
    *               - userInput
    *             properties:
    *               category:
    *                 type: string
-   *                 enum: [SASA, TAROT, DREAM, LUCKY_NUMBER, LOVE, CAREER, BUSINESS, LUCKY_DAY, MOVING, CAR_PURCHASE, NAMING, NICKNAME]
+   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *                 description: 운세 카테고리
-   *                 example: SASA
+   *                 example: SAJU
+   *               formType:
+   *                 type: string
+   *                 enum: [ASK, DAILY, TRADITIONAL]
+   *                 description: 폼 타입 (ASK=자유질문, DAILY=오늘의 운세, TRADITIONAL=전통 운세)
+   *                 example: ASK
    *               mode:
    *                 type: string
    *                 enum: [CHAT, DOCUMENT]
@@ -76,6 +82,8 @@ export const createFortuneRoutes = (
    *                       type: string
    *                     category:
    *                       type: string
+   *                     formType:
+   *                       type: string
    *                     mode:
    *                       type: string
    *                     remainingTime:
@@ -88,6 +96,9 @@ export const createFortuneRoutes = (
    *                       format: date-time
    *                     isPaid:
    *                       type: boolean
+   *                     resultToken:
+   *                       type: string
+   *                       description: 결과 페이지 접근용 JWT 토큰
    *                 remainingTime:
    *                   type: number
    *                 isFreeHongsi:
@@ -107,7 +118,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/chat:
+   * /api/v1/fortune/chat:
    *   post:
    *     operationId: sendChatMessage
    *     summary: 채팅형 운세 메시지 전송
@@ -183,7 +194,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/document:
+   * /api/v1/fortune/document:
    *   post:
    *     operationId: createDocumentReport
    *     summary: 문서형 운세 리포트 생성
@@ -199,13 +210,19 @@ export const createFortuneRoutes = (
    *             type: object
    *             required:
    *               - category
+   *               - formType
    *               - userInput
    *             properties:
    *               category:
    *                 type: string
-   *                 enum: [SASA, TAROT, DREAM, LUCKY_NUMBER, LOVE, CAREER, BUSINESS, LUCKY_DAY, MOVING, CAR_PURCHASE, NAMING, NICKNAME]
+   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *                 description: 운세 카테고리
-   *                 example: SASA
+   *                 example: SAJU
+   *               formType:
+   *                 type: string
+   *                 enum: [ASK, DAILY, TRADITIONAL]
+   *                 description: 폼 타입 (ASK=자유질문, DAILY=오늘의 운세, TRADITIONAL=전통 운세)
+   *                 example: TRADITIONAL
    *               userInput:
    *                 type: string
    *                 description: 사용자 정보 또는 질문
@@ -241,6 +258,12 @@ export const createFortuneRoutes = (
    *                         type: string
    *                     chatPrompt:
    *                       type: string
+   *                     documentLink:
+   *                       type: string
+   *                       description: 생성된 문서 리포트의 직접 링크
+   *                     resultToken:
+   *                       type: string
+   *                       description: 결과 페이지 접근용 JWT 토큰
    *                 message:
    *                   type: string
    *       401:
@@ -256,7 +279,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/session/{id}:
+   * /api/v1/fortune/session/{id}:
    *   get:
    *     operationId: getFortuneSession
    *     summary: 운세 세션 조회
@@ -287,7 +310,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/document/{id}:
+   * /api/v1/fortune/document/{id}:
    *   get:
    *     operationId: getDocumentReport
    *     summary: 문서 리포트 조회
@@ -318,7 +341,190 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/hongsi/purchase:
+   * /api/v1/fortune/payment/webhook:
+   *   post:
+   *     operationId: fortunePaymentWebhook
+   *     summary: 결제 웹훅 (PortOne 서버→서버)
+   *     description: 결제 완료 알림을 수신하고 결제 내역을 확정합니다.
+   *     tags: [Fortune]
+   *     security: []
+   *     parameters:
+   *       - in: header
+   *         name: x-webhook-secret
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: PortOne 웹훅 시크릿 (백엔드 환경변수와 일치해야 함)
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [orderId, paymentId, amount, status]
+   *             properties:
+   *               orderId:
+   *                 type: string
+   *                 description: 주문 ID
+   *                 example: "order_1234567890"
+   *               paymentId:
+   *                 type: string
+   *                 description: 결제 ID
+   *                 example: "payment_1234567890"
+   *               amount:
+   *                 type: number
+   *                 description: 결제 금액
+   *                 example: 10000
+   *               status:
+   *                 type: string
+   *                 enum: [PAID, FAILED, PENDING, CANCELLED, USER_CANCELLED, REFUNDED]
+   *                 description: 결제 상태
+   *                 example: PAID
+   *     responses:
+   *       200:
+   *         description: 웹훅 처리 성공
+   *       400:
+   *         description: 잘못된 요청 (필수 파라미터 누락)
+   *       403:
+   *         description: 웹훅 시크릿 불일치
+   *       500:
+   *         description: 웹훅 처리 실패
+   */
+  router.post(
+    '/payment/webhook',
+    controller.paymentWebhook,
+  );
+
+  /**
+   * @swagger
+   * /api/v1/fortune/payment/{paymentId}/status:
+   *   get:
+   *     operationId: getPaymentStatus
+   *     summary: 결제 상태 확인 (프론트엔드 폴링용)
+   *     description: 결제 상태를 확인합니다. 프론트엔드에서 폴링하여 사용합니다.
+   *     tags: [Fortune]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: paymentId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 결제 ID
+   *     responses:
+   *       200:
+   *         description: 결제 상태 조회 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     paymentId:
+   *                       type: string
+   *                     status:
+   *                       type: string
+   *                       enum: [PENDING, COMPLETED, FAILED, CANCELLED]
+   *                     amount:
+   *                       type: number
+   *                     paidAt:
+   *                       type: string
+   *                       format: date-time
+   *                       nullable: true
+   *       404:
+   *         description: 결제 정보를 찾을 수 없음
+   *       403:
+   *         description: 접근 권한 없음
+   */
+  router.get(
+    '/payment/:paymentId/status',
+    authenticateAccess,
+    controller.getPaymentStatus,
+  );
+
+  /**
+   * @swagger
+   * /api/v1/fortune/result/{token}:
+   *   get:
+   *     operationId: getFortuneResultByToken
+   *     summary: 운세 결과 조회 (토큰 기반)
+   *     description: 결과 토큰을 사용하여 운세 세션 메타데이터, 문서, 최근 채팅, CTA 정보를 조회합니다.
+   *     tags: [Fortune]
+   *     security: []
+   *     parameters:
+   *       - in: path
+   *         name: token
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 결과 페이지 접근용 JWT 토큰
+   *     responses:
+   *       200:
+   *         description: 운세 결과 조회 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     sessionMeta:
+   *                       type: object
+   *                       properties:
+   *                         sessionId: { type: string }
+   *                         category: { type: string }
+   *                         formType: { type: string }
+   *                         mode: { type: string }
+   *                         remainingTime: { type: number }
+   *                         isPaid: { type: boolean }
+   *                         expiresAt: { type: string, format: date-time }
+   *                     document:
+   *                       type: object
+   *                       nullable: true
+   *                       properties:
+   *                         id: { type: string }
+   *                         userId: { type: string }
+   *                         category: { type: string }
+   *                         title: { type: string }
+   *                         content: { type: string }
+   *                         issuedAt: { type: string, format: date-time }
+   *                         expiresAt: { type: string, format: date-time }
+   *                         documentLink: { type: string, nullable: true }
+   *                     lastChats:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                       description: 최근 5개 채팅 기록 (채팅형 세션일 경우)
+   *                     cta:
+   *                       type: object
+   *                       properties:
+   *                         label: { type: string }
+   *                         requiresPayment: { type: boolean }
+   *               message:
+   *                 type: string
+   *       401:
+   *         description: 토큰 유효성 검증 실패 (TOKEN_INVALID)
+   *       404:
+   *         description: 세션을 찾을 수 없음 (SESSION_EXPIRED)
+   *       500:
+   *         description: 서버 오류
+   */
+  router.get(
+    '/result/:token',
+    controller.getResultByToken,
+  );
+
+  /**
+   * @swagger
+   * /api/v1/fortune/hongsi/purchase:
    *   post:
    *     operationId: purchaseHongsi
    *     summary: 홍시 구매
@@ -357,7 +563,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/session/{id}/extend:
+   * /api/v1/fortune/sessions/{id}/extend:
    *   post:
    *     operationId: extendSessionTime
    *     summary: 세션 시간 연장
@@ -392,14 +598,14 @@ export const createFortuneRoutes = (
    *         description: 인증 필요
    */
   router.post(
-    '/session/:id/extend',
+    '/sessions/:id/extend',
     authenticateAccess,
     controller.extendSessionTime,
   );
 
   /**
    * @swagger
-   * /api/fortune/statistics:
+   * /api/v1/fortune/statistics:
    *   get:
    *     operationId: getFortuneStatistics
    *     summary: 운세 통계 조회
@@ -443,7 +649,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/payment/prepare:
+   * /api/v1/fortune/payment/prepare:
    *   post:
    *     operationId: prepareFortunePayment
    *     summary: 운세 결제 준비
@@ -468,9 +674,9 @@ export const createFortuneRoutes = (
    *                 example: CHAT_SESSION
    *               category:
    *                 type: string
-   *                 enum: [SASA, TAROT, DREAM, LUCKY_NUMBER, LOVE, CAREER, BUSINESS, LUCKY_DAY, MOVING, CAR_PURCHASE, NAMING, NICKNAME]
+   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *                 description: 운세 카테고리
-   *                 example: SASA
+   *                 example: SAJU
    *               durationMinutes:
    *                 type: number
    *                 enum: [5, 10, 30]
@@ -495,10 +701,13 @@ export const createFortuneRoutes = (
    *                       type: string
    *                     amount:
    *                       type: number
+   *                       description: 실제 결제 금액 (할인 적용 후)
    *                     productName:
    *                       type: string
    *                     merchantUid:
    *                       type: string
+   *                       description: PortOne 결제 창 오픈에 사용할 주문 고유 ID
+ *                       example: "FORTUNE172345678900ABCDEF"
    *                 message:
    *                   type: string
    *       401:
@@ -514,7 +723,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/products/{category}:
+   * /api/v1/fortune/products/{category}:
    *   get:
    *     operationId: getProductsByCategory
    *     summary: 카테고리별 상품 정보 조회
@@ -526,7 +735,7 @@ export const createFortuneRoutes = (
    *         required: true
    *         schema:
    *           type: string
-   *           enum: [SASA, TAROT, DREAM, LUCKY_NUMBER, LOVE, CAREER, BUSINESS, LUCKY_DAY, MOVING, CAR_PURCHASE, NAMING, NICKNAME]
+   *           enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *         description: 운세 카테고리
    *     responses:
    *       200:
@@ -558,7 +767,7 @@ export const createFortuneRoutes = (
    *                         description: 원래 가격 (할인 전, 원)
    *                       discountRate:
    *                         type: number
-   *                         description: 할인률 (0~100, 예: 10 = 10% 할인)
+   *                         description: "할인률 (0~100, 예: 10 = 10% 할인)"
    *                       finalAmount:
    *                         type: number
    *                         description: 실제 결제 금액 (할인 적용 후, 원)
@@ -577,7 +786,7 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
-   * /api/fortune/products:
+   * /api/v1/fortune/products:
    *   get:
    *     operationId: getAllProducts
    *     summary: 전체 상품 정보 조회

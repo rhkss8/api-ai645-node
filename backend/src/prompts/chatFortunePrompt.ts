@@ -3,6 +3,7 @@
  */
 import { FortuneCategory, ChatResponse } from '../types/fortune';
 import { getCategorySpecificChatPrompt } from './categorySpecificPrompts';
+import { CATEGORY_NAMES } from '../data/fortuneProducts';
 
 interface ChatFortunePromptParams {
   category: FortuneCategory;
@@ -10,24 +11,9 @@ interface ChatFortunePromptParams {
   previousContext?: string;  // 이전 대화 맥락
 }
 
-const categoryNames: Record<FortuneCategory, string> = {
-  [FortuneCategory.SASA]: '사주',
-  [FortuneCategory.TAROT]: '타로',
-  [FortuneCategory.DREAM]: '꿈해몽',
-  [FortuneCategory.LUCKY_NUMBER]: '행운번호',
-  [FortuneCategory.LOVE]: '연애운',
-  [FortuneCategory.CAREER]: '직장운',
-  [FortuneCategory.BUSINESS]: '사업운',
-  [FortuneCategory.LUCKY_DAY]: '길일',
-  [FortuneCategory.MOVING]: '이사',
-  [FortuneCategory.CAR_PURCHASE]: '차구매',
-  [FortuneCategory.NAMING]: '작명',
-  [FortuneCategory.NICKNAME]: '닉네임',
-};
-
 export function generateChatFortunePrompt(params: ChatFortunePromptParams): string {
   const { category, userInput, previousContext } = params;
-  const categoryName = categoryNames[category];
+  const categoryName = CATEGORY_NAMES[category];
 
   let prompt = `당신은 전문 ${categoryName} 상담사입니다. 사용자의 질문에 대해 친근하고 상세하게 답변해주세요.
 

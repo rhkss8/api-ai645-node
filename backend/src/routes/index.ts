@@ -27,6 +27,7 @@ import { CreatePaymentDetailUseCase } from '../usecases/CreatePaymentDetailUseCa
 import { GetFortuneStatisticsUseCase } from '../usecases/GetFortuneStatisticsUseCase';
 import { PrepareFortunePaymentUseCase } from '../usecases/PrepareFortunePaymentUseCase';
 import { FortuneProductService } from '../services/FortuneProductService';
+import { ResultTokenService } from '../services/ResultTokenService';
 import { PaymentService } from '../services/PaymentService';
 
 // Controllers
@@ -97,6 +98,7 @@ class DIContainer {
     // Fortune Services (먼저 생성)
     const fortuneProductService = new FortuneProductService();
     const paymentService = new PaymentService();
+    const resultTokenService = new ResultTokenService(env.JWT_SECRET);
 
     // Fortune Repositories
     const fortuneSessionRepository = new PrismaFortuneSessionRepository(this.prisma);
@@ -110,6 +112,7 @@ class DIContainer {
       hongsiCreditRepository,
       this.prisma,
       fortuneProductService,
+      paymentService,
     );
     const chatUseCase = new ChatFortuneUseCase(
       fortuneSessionRepository,
@@ -131,7 +134,6 @@ class DIContainer {
     
     // Fortune Payment UseCase
     const preparePaymentUseCase = new PrepareFortunePaymentUseCase(
-      this.prisma,
       fortuneProductService,
       paymentService,
     );
@@ -149,7 +151,9 @@ class DIContainer {
       extendSessionTimeUseCase,
       getStatisticsUseCase,
       preparePaymentUseCase,
+      paymentService,
       fortuneProductService,
+      resultTokenService,
     );
   }
 
@@ -189,8 +193,8 @@ export const createApiRoutes = (): Router => {
   router.use('/board', createBoardRoutes(container.getBoardController()));
   router.use('/admin', adminRoutes);
   
-  // 운세 라우트
-  router.use('/fortune', createFortuneRoutes(container.getFortuneController()));
+  // 운세 라우트 (v1 네임스페이스)
+  router.use('/v1/fortune', createFortuneRoutes(container.getFortuneController()));
 
   return router;
 };

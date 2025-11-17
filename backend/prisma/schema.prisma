@@ -392,18 +392,31 @@ model HongsiCredit {
 }
 
 enum FortuneCategory {
-  SASA              // 사주
-  TAROT             // 타로
+  // TRADITIONAL (전통 운세)
+  SAJU              // 사주
+  NEW_YEAR          // 신년운세
+  MONEY             // 횡재수 & 금전운
+  HAND              // 손금
+  TOJEONG           // 토정비결
+  
+  // ASK (자유 질문)
+  BREAK_UP          // 헤어진 연인 재회
+  CAR_PURCHASE      // 차구매
+  BUSINESS          // 사업운
+  INVESTMENT        // 투자 상담
+  LOVE              // 연애운
   DREAM             // 꿈해몽
   LUCKY_NUMBER      // 행운번호(로또)
-  LOVE              // 연애운
-  CAREER            // 직장운
-  BUSINESS          // 사업운
-  LUCKY_DAY         // 길일
   MOVING            // 이사
-  CAR_PURCHASE      // 차구매
+  TRAVEL            // 여행운 & 방향
+  COMPATIBILITY     // 궁합
+  TAROT             // 타로
+  CAREER            // 직장운
+  LUCKY_DAY         // 길일
   NAMING            // 작명
-  NICKNAME          // 닉네임
+  
+  // DAILY (오늘의 운세)
+  DAILY             // 오늘의 운세
 }
 
 enum SessionMode {

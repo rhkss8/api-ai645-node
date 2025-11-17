@@ -208,6 +208,9 @@ tramp
 .local
 .env.backup
 
+# ngrok
+ngrok.yml
+
 # API Keys and secrets (double check these are not committed)
 secrets/
 config/secrets.json

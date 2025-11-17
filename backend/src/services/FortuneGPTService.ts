@@ -10,7 +10,10 @@ import { FortuneCategory } from '../types/fortune';
 export class FortuneGPTService {
   private openai: OpenAI;
 
-  constructor(apiKey: string) {
+  constructor(apiKey?: string) {
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY가 설정되지 않았습니다.');
+    }
     this.openai = new OpenAI({
       apiKey,
     });
@@ -102,7 +105,7 @@ export class FortuneGPTService {
         throw new Error('GPT 응답을 받지 못했습니다.');
       }
 
-      const parsed = JSON.parse(response) as DocumentResponse;
+      const parsed = JSON.parse(response) as Partial<DocumentResponse>;
 
       // 유효성 검증
       if (!parsed.title || !parsed.summary || !parsed.content || !parsed.advice || !parsed.warnings) {
@@ -110,16 +113,24 @@ export class FortuneGPTService {
       }
 
       // chatPrompt가 없으면 기본값 설정
-      if (!parsed.chatPrompt) {
-        parsed.chatPrompt = '더 자세한 상담을 원하시나요? 홍시를 사용해 채팅으로 이어보세요!';
-      }
+      const chatPrompt = parsed.chatPrompt ?? '더 자세한 상담을 원하시나요? 홍시를 사용해 채팅으로 이어보세요!';
 
       // 날짜 설정 (Asia/Seoul 기준)
       const now = new Date();
       const seoulTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
-      parsed.date = seoulTime.toISOString().split('T')[0];
+      const date = seoulTime.toISOString().split('T')[0] as string;
 
-      return parsed;
+      const ensured: DocumentResponse = {
+        title: parsed.title as string,
+        date,
+        summary: parsed.summary as string,
+        content: parsed.content as string,
+        advice: parsed.advice as string[],
+        warnings: parsed.warnings as string[],
+        chatPrompt,
+      };
+
+      return ensured;
     } catch (error) {
       console.error('문서형 운세 리포트 생성 중 오류:', error);
       throw new Error('운세 리포트 생성에 실패했습니다.');

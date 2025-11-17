@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    command: sh -c "npx prisma generate && npx prisma db push && npm run dev"
+    command: sh -c "npx prisma generate && npx prisma db push --accept-data-loss && npm run dev"
 
   # Database service (PostgreSQL)
   db:
@@ -52,6 +52,23 @@ services:
 volumes:
   postgres_data:
     driver: local
+
+  # ngrok (선택사항 - 웹훅 테스트용)
+  # ngrok:
+  #   image: ngrok/ngrok:latest
+  #   container_name: api-ngrok
+  #   command: start --all --config /etc/ngrok.yml
+  #   environment:
+  #     - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+  #   volumes:
+  #     - ./ngrok.yml:/etc/ngrok.yml:ro
+  #   ports:
+  #     - "4040:4040"  # ngrok Web Interface
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped
+  #   networks:
+  #     - app-network
 
 # 네트워크 정의
 networks:

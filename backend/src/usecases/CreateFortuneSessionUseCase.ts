@@ -1,20 +1,22 @@
 /**
  * 운세 세션 생성 UseCase
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, PaymentStatus } from '@prisma/client';
 import { IdGenerator } from '../utils/idGenerator';
 import { FortuneSession } from '../entities/FortuneSession';
 import { IFortuneSessionRepository } from '../repositories/IFortuneSessionRepository';
 import { IHongsiCreditRepository } from '../repositories/IHongsiCreditRepository';
 import { FortuneCategory, SessionMode, FortuneProductType } from '../types/fortune';
 import { FortuneProductService } from '../services/FortuneProductService';
+import { PaymentService } from '../services/PaymentService';
 
 export interface CreateSessionParams {
   userId: string;
   category: FortuneCategory;
   mode: SessionMode;
   userInput: string;
-  paymentId?: string;        // 즉시 결제 완료 시 결제 ID
+  paymentId?: string;        // 우리 DB의 Payment.id
+  portOnePaymentId?: string; // PortOne에서 반환한 paymentId (로컬: 콜백에서 전달, 실운영: 웹훅에서 저장)
   useFreeHongsi?: boolean;   // 무료 홍시 사용 여부 (채팅형만)
   durationMinutes?: number;  // 채팅형 결제 시 시간 (5, 10, 30분)
 }
@@ -25,10 +27,11 @@ export class CreateFortuneSessionUseCase {
     private readonly hongsiCreditRepository: IHongsiCreditRepository,
     private readonly prisma: PrismaClient,
     private readonly productService: FortuneProductService,
+    private readonly paymentService: PaymentService,
   ) {}
 
   async execute(params: CreateSessionParams): Promise<FortuneSession> {
-    const { userId, category, mode, userInput, paymentId, useFreeHongsi, durationMinutes } = params;
+    const { userId, category, mode, userInput, paymentId, portOnePaymentId, useFreeHongsi, durationMinutes } = params;
 
     // 문서형은 무조건 결제 필수
     if (mode === SessionMode.DOCUMENT) {
@@ -48,12 +51,65 @@ export class CreateFortuneSessionUseCase {
         include: { order: true },
       });
 
-      if (!payment || payment.status !== 'COMPLETED') {
+      if (!payment) {
         throw new Error('유효한 결제 정보가 없습니다.');
       }
 
       if (payment.order.userId !== userId) {
         throw new Error('결제 정보가 일치하지 않습니다.');
+      }
+
+      // 결제 상태가 PENDING이면 PortOne API로 결제 완료 여부 확인 (로컬: 폴링, 실운영: 웹훅)
+      if (payment.status === 'PENDING') {
+        // portOnePaymentId가 없으면 에러
+        if (!portOnePaymentId) {
+          throw new Error('PortOne 결제 ID가 필요합니다. 결제를 완료해주세요.');
+        }
+
+        // 로컬: 짧은 폴링으로 결제 완료 확인 (최대 5초, 5회 시도)
+        const maxRetries = 5;
+        const retryDelay = 1000; // 1초
+        let verifyResult: { success: boolean; status?: PaymentStatus } = { success: false };
+
+        console.log(`[세션 생성] 결제 상태 폴링 시작: paymentId=${paymentId}, portOnePaymentId=${portOnePaymentId}`);
+
+        for (let i = 0; i < maxRetries; i++) {
+          console.log(`[세션 생성] 폴링 시도 ${i + 1}/${maxRetries}`);
+          verifyResult = await this.paymentService.verifyAndUpdatePaymentStatus(paymentId, portOnePaymentId);
+
+          if (verifyResult.success && verifyResult.status === 'COMPLETED') {
+            console.log(`[세션 생성] 결제 완료 확인됨 (시도 ${i + 1})`);
+            break;
+          }
+
+          // 마지막 시도가 아니면 대기
+          if (i < maxRetries - 1) {
+            console.log(`[세션 생성] 결제 대기 중... ${retryDelay}ms 후 재시도`);
+            await new Promise((resolve) => setTimeout(resolve, retryDelay));
+          }
+        }
+
+        if (!verifyResult.success || verifyResult.status !== 'COMPLETED') {
+          // 로컬: PENDING 상태면 프론트엔드에서 폴링하도록 안내
+          console.warn(`[세션 생성] 폴링 실패: paymentId=${paymentId}, status=${verifyResult.status}`);
+          throw new Error(
+            '결제가 아직 완료되지 않았습니다. 잠시 후 다시 시도해주세요. (프론트엔드에서 폴링 권장)',
+          );
+        }
+
+        // Payment 상태가 업데이트되었으므로 다시 조회
+        const updatedPayment = await this.prisma.payment.findUnique({
+          where: { id: paymentId },
+          include: { order: true },
+        });
+
+        if (!updatedPayment || updatedPayment.status !== 'COMPLETED') {
+          throw new Error('결제 상태 확인에 실패했습니다.');
+        }
+
+        console.log(`[세션 생성] 결제 상태 확인 완료: ${paymentId} -> COMPLETED`);
+      } else if (payment.status !== 'COMPLETED') {
+        throw new Error('결제가 완료되지 않았거나 취소되었습니다.');
       }
 
       // 결제된 문서형 세션 생성 (시간 제한 없음, 문서 생성 후 종료)
@@ -91,12 +147,65 @@ export class CreateFortuneSessionUseCase {
           include: { order: true },
         });
 
-        if (!payment || payment.status !== 'COMPLETED') {
+        if (!payment) {
           throw new Error('유효한 결제 정보가 없습니다.');
         }
 
         if (payment.order.userId !== userId) {
           throw new Error('결제 정보가 일치하지 않습니다.');
+        }
+
+        // 결제 상태가 PENDING이면 PortOne API로 결제 완료 여부 확인 (로컬: 폴링, 실운영: 웹훅)
+        if (payment.status === 'PENDING') {
+          // portOnePaymentId가 없으면 에러
+          if (!portOnePaymentId) {
+            throw new Error('PortOne 결제 ID가 필요합니다. 결제를 완료해주세요.');
+          }
+
+          // 로컬: 짧은 폴링으로 결제 완료 확인 (최대 5초, 5회 시도)
+          const maxRetries = 5;
+          const retryDelay = 1000; // 1초
+          let verifyResult: { success: boolean; status?: PaymentStatus } = { success: false };
+
+          console.log(`[세션 생성] 결제 상태 폴링 시작: paymentId=${paymentId}, portOnePaymentId=${portOnePaymentId}`);
+
+          for (let i = 0; i < maxRetries; i++) {
+            console.log(`[세션 생성] 폴링 시도 ${i + 1}/${maxRetries}`);
+            verifyResult = await this.paymentService.verifyAndUpdatePaymentStatus(paymentId, portOnePaymentId);
+
+            if (verifyResult.success && verifyResult.status === 'COMPLETED') {
+              console.log(`[세션 생성] 결제 완료 확인됨 (시도 ${i + 1})`);
+              break;
+            }
+
+            // 마지막 시도가 아니면 대기
+            if (i < maxRetries - 1) {
+              console.log(`[세션 생성] 결제 대기 중... ${retryDelay}ms 후 재시도`);
+              await new Promise((resolve) => setTimeout(resolve, retryDelay));
+            }
+          }
+
+          if (!verifyResult.success || verifyResult.status !== 'COMPLETED') {
+            // 로컬: PENDING 상태면 프론트엔드에서 폴링하도록 안내
+            console.warn(`[세션 생성] 폴링 실패: paymentId=${paymentId}, status=${verifyResult.status}`);
+            throw new Error(
+              '결제가 아직 완료되지 않았습니다. 잠시 후 다시 시도해주세요. (프론트엔드에서 폴링 권장)',
+            );
+          }
+
+          // Payment 상태가 업데이트되었으므로 다시 조회
+          const updatedPayment = await this.prisma.payment.findUnique({
+            where: { id: paymentId },
+            include: { order: true },
+          });
+
+          if (!updatedPayment || updatedPayment.status !== 'COMPLETED') {
+            throw new Error('결제 상태 확인에 실패했습니다.');
+          }
+
+          console.log(`[세션 생성] 결제 상태 확인 완료: ${paymentId} -> COMPLETED`);
+        } else if (payment.status !== 'COMPLETED') {
+          throw new Error('결제가 완료되지 않았거나 취소되었습니다.');
         }
 
         // 결제 상품 정보 조회

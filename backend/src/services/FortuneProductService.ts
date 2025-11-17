@@ -11,6 +11,7 @@ import {
   PRODUCT_DESCRIPTIONS,
   PRODUCT_NAMES,
   CATEGORY_NAMES,
+  DOCUMENT_PRODUCT_NAMES,
   AVAILABLE_CHAT_DURATIONS,
 } from '../data/fortuneProducts';
 import { IdGenerator } from '../utils/idGenerator';
@@ -92,7 +93,7 @@ export class FortuneProductService {
         productId,
         type: FortuneProductType.DOCUMENT_REPORT,
         category,
-        name: PRODUCT_NAMES[FortuneProductType.DOCUMENT_REPORT](categoryName),
+        name: DOCUMENT_PRODUCT_NAMES[category] || PRODUCT_NAMES[FortuneProductType.DOCUMENT_REPORT](categoryName),
         amount: baseAmount,
         discountRate,
         finalAmount,

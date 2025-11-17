@@ -4,25 +4,65 @@
 import { ApiResponse } from './common';
 
 // 운세 카테고리
+// 하나의 enum으로 통합 관리하며, formType으로 분류됨
 export enum FortuneCategory {
-  SASA = 'SASA',              // 사주
-  TAROT = 'TAROT',            // 타로
-  DREAM = 'DREAM',            // 꿈해몽
-  LUCKY_NUMBER = 'LUCKY_NUMBER', // 행운번호(로또)
-  LOVE = 'LOVE',              // 연애운
-  CAREER = 'CAREER',          // 직장운
-  BUSINESS = 'BUSINESS',      // 사업운
-  LUCKY_DAY = 'LUCKY_DAY',    // 길일
-  MOVING = 'MOVING',          // 이사
-  CAR_PURCHASE = 'CAR_PURCHASE', // 차구매
-  NAMING = 'NAMING',          // 작명
-  NICKNAME = 'NICKNAME',      // 닉네임
+  // TRADITIONAL (전통 운세)
+  /** 사주 */
+  SAJU = 'SAJU',
+  /** 신년운세 */
+  NEW_YEAR = 'NEW_YEAR',
+  /** 횡재수 & 금전운 */
+  MONEY = 'MONEY',
+  /** 손금 */
+  HAND = 'HAND',
+  /** 토정비결 */
+  TOJEONG = 'TOJEONG',
+  
+  // ASK (자유 질문)
+  /** 헤어진 연인 재회 */
+  BREAK_UP = 'BREAK_UP',
+  /** 차구매 */
+  CAR_PURCHASE = 'CAR_PURCHASE',
+  /** 사업운 */
+  BUSINESS = 'BUSINESS',
+  /** 투자 상담 */
+  INVESTMENT = 'INVESTMENT',
+  /** 연애운 */
+  LOVE = 'LOVE',
+  /** 꿈해몽 */
+  DREAM = 'DREAM',
+  /** 행운번호(로또) */
+  LUCKY_NUMBER = 'LUCKY_NUMBER',
+  /** 이사 */
+  MOVING = 'MOVING',
+  /** 여행운 & 방향 */
+  TRAVEL = 'TRAVEL',
+  /** 궁합 */
+  COMPATIBILITY = 'COMPATIBILITY',
+  /** 타로 */
+  TAROT = 'TAROT',
+  /** 직장운 */
+  CAREER = 'CAREER',
+  /** 길일 */
+  LUCKY_DAY = 'LUCKY_DAY',
+  /** 작명 */
+  NAMING = 'NAMING',
+  
+  // DAILY (오늘의 운세)
+  DAILY = 'DAILY',
 }
 
 // 세션 모드
 export enum SessionMode {
   CHAT = 'CHAT',              // 채팅형
   DOCUMENT = 'DOCUMENT',      // 문서형
+}
+
+// 폼 타입 (베타 라우트)
+export enum FormType {
+  ASK = 'ASK',
+  DAILY = 'DAILY',
+  TRADITIONAL = 'TRADITIONAL',
 }
 
 // 결제 상품 타입 (일회성 결제)
@@ -70,22 +110,35 @@ export interface FortuneApiResponse extends ApiResponse {
 // 세션 생성 요청
 export interface CreateFortuneSessionRequest {
   category: FortuneCategory;
+  formType: FormType;
   mode: SessionMode;
   userInput: string;
   paymentId?: string;          // 즉시 결제 시 결제 ID (선택)
   useFreeHongsi?: boolean;     // 무료 홍시 사용 여부 (채팅형만)
+  durationMinutes?: number;    // 채팅형 유료 결제 시 필수 (5/10/30)
 }
 
 // 세션 생성 응답
 export interface CreateFortuneSessionResponse {
   sessionId: string;
   category: FortuneCategory;
+  formType: FormType;
   mode: SessionMode;
   remainingTime: number;
   isActive: boolean;
   expiresAt: string;
   isPaid: boolean;             // 결제 여부
 }
+
+// 에러 코드 표준
+export type FortuneErrorCode =
+  | 'NEED_PAYMENT'
+  | 'HONGSI_ALREADY_USED'
+  | 'SESSION_EXPIRED'
+  | 'CATEGORY_MISMATCH'
+  | 'TOKEN_INVALID'
+  | 'PAYMENT_UNVERIFIED'
+  | 'INVALID_FORMTYPE';
 
 // 채팅형 시간 옵션 (분 단위)
 export enum ChatDurationMinutes {

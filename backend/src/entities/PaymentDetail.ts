@@ -7,12 +7,12 @@ export class PaymentDetail {
   constructor(
     public readonly id: string,
     public readonly paymentId: string,
-    public readonly sessionId?: string,
-    public readonly documentId?: string,
     public readonly sessionType: SessionMode,
     public readonly category: FortuneCategory,
-    public readonly result?: any,
     public readonly createdAt: Date,
+    public readonly sessionId?: string,
+    public readonly documentId?: string,
+    public readonly result?: any,
     public readonly expiredAt?: Date,
   ) {}
 
@@ -29,12 +29,12 @@ export class PaymentDetail {
     return new PaymentDetail(
       id,
       paymentId,
-      sessionId,
-      documentId,
       sessionType,
       category,
-      result,
       new Date(),
+      sessionId,
+      documentId,
+      result,
       expiredAt,
     );
   }

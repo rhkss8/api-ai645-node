@@ -9,6 +9,7 @@ import { FortuneGPTService } from '../services/FortuneGPTService';
 import { IdGenerator } from '../utils/idGenerator';
 import { ChatResponse } from '../types/fortune';
 import { isCategoryMismatch, getSuggestedCategories } from '../utils/categoryDetection';
+import { CATEGORY_NAMES } from '../data/fortuneProducts';
 
 export class ChatFortuneUseCase {
   constructor(
@@ -44,24 +45,9 @@ export class ChatFortuneUseCase {
     if (categoryMismatch) {
       // 카테고리 이탈 시 안내 메시지 반환
       const suggestions = getSuggestedCategories(session.category, 3);
-      
-      const categoryNames: Record<string, string> = {
-        SASA: '사주',
-        TAROT: '타로',
-        DREAM: '꿈해몽',
-        LUCKY_NUMBER: '행운번호',
-        LOVE: '연애운',
-        CAREER: '직장운',
-        BUSINESS: '사업운',
-        LUCKY_DAY: '길일',
-        MOVING: '이사',
-        CAR_PURCHASE: '차구매',
-        NAMING: '작명',
-        NICKNAME: '닉네임',
-      };
 
-      const currentCategoryName = categoryNames[session.category] || session.category;
-      const suggestedNames = suggestions.map(c => categoryNames[c] || c);
+      const currentCategoryName = CATEGORY_NAMES[session.category] || session.category;
+      const suggestedNames = suggestions.map(c => CATEGORY_NAMES[c] || c);
 
       const mismatchResponse: ChatResponse = {
         summary: `현재 세션은 "${currentCategoryName}" 카테고리로 진행 중입니다.\n다른 카테고리 질문은 해당 카테고리로 새 세션을 생성해주세요.`,
