@@ -51,6 +51,34 @@ export const createFortuneRoutes = (
    *                 type: string
    *                 description: 사용자 질문 또는 정보
    *                 example: "1990년 1월 1일 오전 10시에 태어났어요"
+   *               userData:
+   *                 type: object
+   *                 description: 구조화된 운세 데이터 (선택사항, 이름, 생년월일, 성별 등)
+   *                 example:
+   *                   name: "홍길동"
+   *                   birthDate: "1990-05-14"
+   *                   birthTime: "10:00"
+   *                   gender: "male"
+   *                   solarLunar: "solar"
+   *                 properties:
+   *                   name:
+   *                     type: string
+   *                     description: 이름
+   *                   birthDate:
+   *                     type: string
+   *                     format: date
+   *                     description: 생년월일 (YYYY-MM-DD)
+   *                   birthTime:
+   *                     type: string
+   *                     description: 생시 (HH:mm)
+   *                   gender:
+   *                     type: string
+   *                     enum: [male, female]
+   *                     description: 성별
+   *                   solarLunar:
+   *                     type: string
+   *                     enum: [solar, lunar]
+   *                     description: 양력/음력
    *               paymentId:
    *                 type: string
    *                 description: 결제 ID (문서형 필수, 채팅형 선택)
@@ -227,6 +255,34 @@ export const createFortuneRoutes = (
    *                 type: string
    *                 description: 사용자 정보 또는 질문
    *                 example: "1990년 1월 1일 오전 10시에 태어났어요"
+   *               userData:
+   *                 type: object
+   *                 description: 구조화된 운세 데이터 (선택사항, 이름, 생년월일, 성별 등)
+   *                 example:
+   *                   name: "홍길동"
+   *                   birthDate: "1990-05-14"
+   *                   birthTime: "10:00"
+   *                   gender: "male"
+   *                   solarLunar: "solar"
+   *                 properties:
+   *                   name:
+   *                     type: string
+   *                     description: 이름
+   *                   birthDate:
+   *                     type: string
+   *                     format: date
+   *                     description: 생년월일 (YYYY-MM-DD)
+   *                   birthTime:
+   *                     type: string
+   *                     description: 생시 (HH:mm)
+   *                   gender:
+   *                     type: string
+   *                     enum: [male, female]
+   *                     description: 성별
+   *                   solarLunar:
+   *                     type: string
+   *                     enum: [solar, lunar]
+   *                     description: 양력/음력
    *     responses:
    *       201:
    *         description: 리포트 생성 성공
@@ -453,7 +509,11 @@ export const createFortuneRoutes = (
    *   get:
    *     operationId: getFortuneResultByToken
    *     summary: 운세 결과 조회 (토큰 기반)
-   *     description: 결과 토큰을 사용하여 운세 세션 메타데이터, 문서, 최근 채팅, CTA 정보를 조회합니다.
+   *     description: |
+   *       결과 토큰을 사용하여 운세 세션 메타데이터, 문서, 최근 채팅, CTA 정보를 조회합니다.
+   *       
+   *       **중요**: 문서형 세션의 경우, 저장된 문서가 없으면 자동으로 GPT를 통해 운세 결과를 생성합니다 (약 3-5초 소요).
+   *       생성된 결과는 자동으로 저장되며, 이후 호출 시에는 저장된 결과를 반환합니다.
    *     tags: [Fortune]
    *     security: []
    *     parameters:

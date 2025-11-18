@@ -16,6 +16,9 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
         userId: session.userId,
         category: session.category as PrismaFortuneCategory,
         mode: session.mode as PrismaSessionMode,
+        formType: session.formType as any,
+        userInput: session.userInput,
+        userData: session.userData ? JSON.parse(JSON.stringify(session.userData)) : null,
         remainingTime: session.remainingTime,
         isActive: session.isActive,
         expiresAt: session.expiresAt,
@@ -114,6 +117,9 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
       prismaSession.isActive,
       prismaSession.createdAt,
       prismaSession.expiresAt,
+      prismaSession.formType as any,
+      prismaSession.userInput,
+      prismaSession.userData as Record<string, any> | undefined,
     );
   }
 }

@@ -1,7 +1,7 @@
 /**
  * 포포춘 운세 세션 엔티티
  */
-import { FortuneCategory, SessionMode } from '../types/fortune';
+import { FortuneCategory, SessionMode, FormType } from '../types/fortune';
 
 export class FortuneSession {
   constructor(
@@ -13,6 +13,9 @@ export class FortuneSession {
     public readonly isActive: boolean,
     public readonly createdAt: Date,
     public readonly expiresAt: Date,
+    public readonly formType?: FormType,     // ASK, DAILY, TRADITIONAL
+    public readonly userInput?: string,      // 세션 생성 시 사용자 입력
+    public readonly userData?: Record<string, any>, // 구조화된 운세 데이터
   ) {}
 
   static create(
@@ -21,6 +24,9 @@ export class FortuneSession {
     category: FortuneCategory,
     mode: SessionMode,
     timeInSeconds: number,
+    formType?: FormType,
+    userInput?: string,
+    userData?: Record<string, any>,
   ): FortuneSession {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + timeInSeconds * 1000);
@@ -34,6 +40,9 @@ export class FortuneSession {
       true,
       now,
       expiresAt,
+      formType,
+      userInput,
+      userData,
     );
   }
 
@@ -53,6 +62,9 @@ export class FortuneSession {
       this.isActive,
       this.createdAt,
       newExpiresAt,
+      this.formType,
+      this.userInput,
+      this.userData,
     );
   }
 
@@ -75,6 +87,9 @@ export class FortuneSession {
       isActive,
       this.createdAt,
       newExpiresAt,
+      this.formType,
+      this.userInput,
+      this.userData,
     );
   }
 
@@ -91,6 +106,9 @@ export class FortuneSession {
       false,
       this.createdAt,
       new Date(),
+      this.formType,
+      this.userInput,
+      this.userData,
     );
   }
 

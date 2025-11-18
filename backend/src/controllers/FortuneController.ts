@@ -54,10 +54,15 @@ export class FortuneController {
         throw new Error('로그인이 필요합니다.');
       }
 
-      const { category, formType, mode, userInput, paymentId, portOnePaymentId, useFreeHongsi, durationMinutes } = req.body;
+      const { category, formType, mode, userInput, userData, paymentId, portOnePaymentId, useFreeHongsi, durationMinutes } = req.body;
 
       if (!category || !formType || !mode || !userInput) {
         throw new Error('카테고리, 폼타입, 모드, 사용자 입력은 필수입니다.');
+      }
+
+      // formType 검증 (ASK, DAILY, TRADITIONAL만 허용)
+      if (formType && !['ASK', 'DAILY', 'TRADITIONAL'].includes(formType)) {
+        throw new Error(`formType은 ASK, DAILY, TRADITIONAL 중 하나여야 합니다. (받은 값: ${formType})`);
       }
 
       // 채팅형 검증
@@ -84,8 +89,10 @@ export class FortuneController {
       const session = await this.createSessionUseCase.execute({
         userId: user.sub,
         category: category as FortuneCategory,
+        formType: formType as any,
         mode: mode as SessionMode,
         userInput,
+        userData,
         paymentId,
         portOnePaymentId,
         useFreeHongsi,
@@ -566,34 +573,111 @@ export class FortuneController {
         console.log('[결과 조회] 토큰 검증 시작:', { token: token.substring(0, 20) + '...', tokenLength: token.length });
         const payload = this.resultTokenService.verify(token);
         console.log('[결과 조회] 토큰 검증 성공:', { sessionId: payload.sessionId, userId: payload.userId });
-        const session = await this.getSessionUseCase.execute(payload.sessionId, payload.userId);
-
-        // 최근 채팅 N개 및 최신 문서 조회 (직접 Prisma 사용)
+        
+        // 세션 조회 (userInput, userData 포함)
         const prisma = new (require('@prisma/client').PrismaClient)();
+        const sessionRecord = await prisma.fortuneSession.findUnique({
+          where: { id: payload.sessionId },
+        });
+
+        if (!sessionRecord) {
+          res.status(404).json({ success: false, error: 'SESSION_NOT_FOUND' });
+          return;
+        }
+
+        if (sessionRecord.userId !== payload.userId) {
+          res.status(403).json({ success: false, error: 'SESSION_ACCESS_DENIED' });
+          return;
+        }
+
+        // 최근 채팅 N개 조회
         const chats = await prisma.conversationLog.findMany({
-          where: { sessionId: session.id },
+          where: { sessionId: payload.sessionId },
           orderBy: { createdAt: 'desc' },
           take: 5,
         });
-        const document = await prisma.documentResult.findFirst({
-          where: { userId: payload.userId, category: payload.category },
-          orderBy: { createdAt: 'desc' },
-        });
+
+        // 문서형 세션인 경우: 문서 결과 조회 또는 생성
+        let document: any = null;
+        if (sessionRecord.mode === 'DOCUMENT') {
+          // 기존 문서 조회 (세션 ID로 연결된 문서 찾기)
+          document = await prisma.documentResult.findFirst({
+            where: { 
+              userId: payload.userId, 
+              category: payload.category,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          // 문서가 없으면 GPT로 생성
+          if (!document && sessionRecord.userInput) {
+            console.log('[결과 조회] 문서가 없어 GPT로 생성 시작:', { sessionId: payload.sessionId });
+            try {
+              const documentResponse = await this.documentUseCase.execute(
+                payload.userId,
+                payload.category,
+                sessionRecord.userInput,
+                sessionRecord.userData as Record<string, any> | undefined,
+              );
+
+              // 생성된 문서를 DocumentResult로 변환하여 응답에 포함
+              document = {
+                id: `doc_${payload.sessionId}`,
+                userId: payload.userId,
+                category: payload.category,
+                title: documentResponse.title,
+                date: documentResponse.date,
+                summary: documentResponse.summary,
+                content: documentResponse.content,
+                advice: documentResponse.advice,
+                warnings: documentResponse.warnings,
+                chatPrompt: documentResponse.chatPrompt,
+                issuedAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30일
+              };
+            } catch (error: any) {
+              console.error('[결과 조회] GPT 문서 생성 실패:', error);
+              // GPT 생성 실패해도 에러를 반환하지 않고 document를 null로 유지
+            }
+          } else if (document && typeof document.content === 'string') {
+            // 저장된 문서가 있으면 파싱
+            try {
+              const parsedContent = JSON.parse(document.content);
+              document = {
+                ...document,
+                ...parsedContent,
+              };
+            } catch {
+              // 파싱 실패 시 원본 유지
+            }
+          }
+        }
 
         const response: ApiResponse = {
           success: true,
           data: {
             sessionMeta: {
-              sessionId: session.id,
-              category: session.category,
+              sessionId: sessionRecord.id,
+              category: sessionRecord.category,
               formType: payload.formType,
-              mode: session.mode,
-              remainingTime: session.remainingTime,
-              isPaid: session.isPaid,
+              mode: sessionRecord.mode,
+              remainingTime: sessionRecord.remainingTime,
+              isPaid: !!sessionRecord.remainingTime || sessionRecord.mode === 'DOCUMENT',
             },
             document,
-            lastChats: chats,
-            cta: { label: '채팅으로 이어보기(홍시 사용)', requiresPayment: session.remainingTime <= 0 },
+            lastChats: chats.map((chat: any) => ({
+              id: chat.id,
+              sessionId: chat.sessionId,
+              userInput: chat.userInput,
+              aiOutput: typeof chat.aiOutput === 'string' ? JSON.parse(chat.aiOutput) : chat.aiOutput,
+              elapsedTime: chat.elapsedTime,
+              isPaid: chat.isPaid,
+              createdAt: chat.createdAt,
+            })),
+            cta: { 
+              label: '채팅으로 이어보기(홍시 사용)', 
+              requiresPayment: sessionRecord.remainingTime <= 0 
+            },
           },
           timestamp: new Date().toISOString(),
         };

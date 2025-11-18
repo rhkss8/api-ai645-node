@@ -13,8 +13,10 @@ import { PaymentService } from '../services/PaymentService';
 export interface CreateSessionParams {
   userId: string;
   category: FortuneCategory;
+  formType?: string;         // ASK, DAILY, TRADITIONAL
   mode: SessionMode;
   userInput: string;
+  userData?: Record<string, any>; // 구조화된 운세 데이터 (이름, 생년월일, 성별 등)
   paymentId?: string;        // 우리 DB의 Payment.id
   portOnePaymentId?: string; // PortOne에서 반환한 paymentId (로컬: 콜백에서 전달, 실운영: 웹훅에서 저장)
   useFreeHongsi?: boolean;   // 무료 홍시 사용 여부 (채팅형만)
@@ -31,7 +33,7 @@ export class CreateFortuneSessionUseCase {
   ) {}
 
   async execute(params: CreateSessionParams): Promise<FortuneSession> {
-    const { userId, category, mode, userInput, paymentId, portOnePaymentId, useFreeHongsi, durationMinutes } = params;
+    const { userId, category, formType, mode, userInput, userData, paymentId, portOnePaymentId, useFreeHongsi, durationMinutes } = params;
 
     // 문서형은 무조건 결제 필수
     if (mode === SessionMode.DOCUMENT) {
@@ -112,18 +114,21 @@ export class CreateFortuneSessionUseCase {
         throw new Error('결제가 완료되지 않았거나 취소되었습니다.');
       }
 
-      // 결제된 문서형 세션 생성 (시간 제한 없음, 문서 생성 후 종료)
-      const sessionId = IdGenerator.generateFortuneSessionId();
-      const session = FortuneSession.create(
-        sessionId,
-        userId,
-        category,
-        mode,
-        0, // 문서형은 시간 개념 없음
-      );
+            // 결제된 문서형 세션 생성 (시간 제한 없음, 문서 생성 후 종료)
+            const sessionId = IdGenerator.generateFortuneSessionId();
+            const session = FortuneSession.create(
+              sessionId,
+              userId,
+              category,
+              mode,
+              0, // 문서형은 시간 개념 없음
+              formType as any,
+              userInput,
+              userData,
+            );
 
-      session.validate();
-      return await this.sessionRepository.create(session);
+            session.validate();
+            return await this.sessionRepository.create(session);
     }
 
     // 채팅형: 결제 또는 무료 홍시 선택
@@ -247,18 +252,21 @@ export class CreateFortuneSessionUseCase {
         );
       }
 
-      // 새 세션 생성
-      const sessionId = IdGenerator.generateFortuneSessionId();
-      const session = FortuneSession.create(
-        sessionId,
-        userId,
-        category,
-        mode,
-        sessionTime,
-      );
+            // 새 세션 생성
+            const sessionId = IdGenerator.generateFortuneSessionId();
+            const session = FortuneSession.create(
+              sessionId,
+              userId,
+              category,
+              mode,
+              sessionTime,
+              formType as any,
+              userInput,
+              userData,
+            );
 
-      session.validate();
-      return await this.sessionRepository.create(session);
+            session.validate();
+            return await this.sessionRepository.create(session);
     }
 
     throw new Error('유효하지 않은 세션 모드입니다.');

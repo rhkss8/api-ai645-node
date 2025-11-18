@@ -307,7 +307,10 @@ model FortuneSession {
   id            String          @id @default(cuid())
   userId        String
   category      FortuneCategory
+  formType      FormType?       // ASK, DAILY, TRADITIONAL
   mode          SessionMode
+  userInput     String?          // 세션 생성 시 사용자 입력 (이름, 생년월일, 성별 등)
+  userData      Json?            // 구조화된 운세 데이터 (이름, 생년월일시, 성별, 기타 메타데이터)
   remainingTime Int             // 남은 시간 (초)
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
@@ -417,6 +420,12 @@ enum FortuneCategory {
   
   // DAILY (오늘의 운세)
   DAILY             // 오늘의 운세
+}
+
+enum FormType {
+  ASK              // 자유 질문
+  DAILY            // 오늘의 운세
+  TRADITIONAL      // 전통 운세
 }
 
 enum SessionMode {

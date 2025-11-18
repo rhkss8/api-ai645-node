@@ -17,11 +17,13 @@ export class DocumentFortuneUseCase {
     userId: string,
     category: FortuneCategory,
     userInput: string,
+    userData?: Record<string, any>,
   ): Promise<DocumentResponse> {
     // GPT로 리포트 생성
     const documentResponse = await this.gptService.generateDocumentResponse(
       category,
       userInput,
+      userData,
     );
 
     // 문서 저장
