@@ -7,6 +7,7 @@ export interface EnvironmentConfig {
   PORT: number;
   DATABASE_URL: string;
   OPENAI_API_KEY: string;
+  GEMINI_API_KEY?: string;
   JWT_SECRET: string;
   CORS_ORIGIN: string | string[];
   LOG_LEVEL: string;
@@ -37,6 +38,7 @@ export const validateEnvironment = (): EnvironmentConfig => {
     PORT: parseInt(process.env.PORT || '4000', 10),
     DATABASE_URL: process.env.DATABASE_URL!,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY!,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     JWT_SECRET: process.env.JWT_SECRET!,
     CORS_ORIGIN: parsedCorsOrigin,
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',

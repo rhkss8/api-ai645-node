@@ -18,7 +18,7 @@ export class DocumentFortuneUseCase {
     category: FortuneCategory,
     userInput: string,
     userData?: Record<string, any>,
-  ): Promise<DocumentResponse> {
+  ): Promise<{ documentResponse: DocumentResponse; documentId: string }> {
     // GPT로 리포트 생성
     const documentResponse = await this.gptService.generateDocumentResponse(
       category,
@@ -43,6 +43,6 @@ export class DocumentFortuneUseCase {
 
     // 문서 링크는 사용처에서 구성 (응답 타입 최소화)
 
-    return documentResponse;
+    return { documentResponse, documentId };
   }
 }

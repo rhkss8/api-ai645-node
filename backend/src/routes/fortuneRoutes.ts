@@ -874,5 +874,196 @@ export const createFortuneRoutes = (
     controller.getAllProducts,
   );
 
+  /**
+   * @swagger
+   * /api/v1/fortune/payments:
+   *   get:
+   *     operationId: getFortunePayments
+   *     summary: 운세 결제 내역 조회
+   *     description: 사용자의 운세 관련 결제 내역을 조회합니다. 페이지네이션 및 필터링을 지원합니다.
+   *     tags: [Fortune]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *         description: 페이지 번호
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 20
+   *           maximum: 100
+   *         description: 페이지당 항목 수 (최대 100)
+   *       - in: query
+   *         name: status
+   *         schema:
+   *           type: string
+   *           enum: [PENDING, PAID, FAILED, CANCELLED, USER_CANCELLED, REFUNDED]
+   *         description: 주문 상태 필터
+   *       - in: query
+   *         name: category
+   *         schema:
+   *           type: string
+   *           enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
+   *         description: 운세 카테고리 필터
+   *       - in: query
+   *         name: mode
+   *         schema:
+   *           type: string
+   *           enum: [CHAT, DOCUMENT]
+   *         description: 세션 모드 필터
+   *     responses:
+   *       200:
+   *         description: 결제 내역 조회 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     items:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                         properties:
+   *                           id:
+   *                             type: string
+   *                           merchantUid:
+   *                             type: string
+   *                           orderName:
+   *                             type: string
+   *                           amount:
+   *                             type: integer
+   *                           status:
+   *                             type: string
+   *                           payment:
+   *                             type: object
+   *                           metadata:
+   *                             type: object
+   *                           session:
+   *                             type: object
+   *                           result:
+   *                             type: object
+   *                           createdAt:
+   *                             type: string
+   *                             format: date-time
+   *                     total:
+   *                       type: integer
+   *                     page:
+   *                       type: integer
+   *                     limit:
+   *                       type: integer
+   *                     totalPages:
+   *                       type: integer
+   *                 message:
+   *                   type: string
+   *       401:
+   *         description: 인증 필요
+   */
+  router.get(
+    '/payments',
+    authenticateAccess,
+    controller.getPayments,
+  );
+
+  /**
+   * @swagger
+   * /api/v1/fortune/payments/{orderId}:
+   *   get:
+   *     operationId: getFortunePaymentDetail
+   *     summary: 운세 결제 내역 상세 조회
+   *     description: 특정 결제 내역의 상세 정보를 조회합니다.
+   *     tags: [Fortune]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: orderId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 주문 ID
+   *     responses:
+   *       200:
+   *         description: 결제 내역 상세 조회 성공
+   *       401:
+   *         description: 인증 필요
+   *       404:
+   *         description: 결제 내역을 찾을 수 없음
+   */
+  router.get(
+    '/payments/:orderId',
+    authenticateAccess,
+    controller.getPaymentDetail,
+  );
+
+  /**
+   * @swagger
+   * /api/v1/fortune/document/regenerate:
+   *   post:
+   *     operationId: regenerateDocument
+   *     summary: 문서 재생성
+   *     description: 기존 세션의 정보를 기반으로 문서를 재생성합니다. 결제 완료된 문서형 세션만 재생성 가능합니다.
+   *     tags: [Fortune]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - sessionId
+   *             properties:
+   *               sessionId:
+   *                 type: string
+   *                 description: 세션 ID
+   *                 example: "session_abc123"
+   *     responses:
+   *       200:
+   *         description: 문서 재생성 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     resultToken:
+   *                       type: string
+   *                       description: 결과 페이지 접근용 JWT 토큰
+   *                     documentId:
+   *                       type: string
+   *                     title:
+   *                       type: string
+   *                     summary:
+   *                       type: string
+   *                 message:
+   *                   type: string
+   *       400:
+   *         description: 잘못된 요청 (세션 ID 누락, 문서형 세션이 아님 등)
+   *       401:
+   *         description: 인증 필요
+   *       404:
+   *         description: 세션을 찾을 수 없음
+   */
+  router.post(
+    '/document/regenerate',
+    authenticateAccess,
+    controller.regenerateDocument,
+  );
+
   return router;
 };

@@ -9,6 +9,7 @@ import { IHongsiCreditRepository } from '../repositories/IHongsiCreditRepository
 import { FortuneCategory, SessionMode, FortuneProductType } from '../types/fortune';
 import { FortuneProductService } from '../services/FortuneProductService';
 import { PaymentService } from '../services/PaymentService';
+import { DocumentFortuneUseCase } from './DocumentFortuneUseCase';
 
 export interface CreateSessionParams {
   userId: string;
@@ -30,6 +31,7 @@ export class CreateFortuneSessionUseCase {
     private readonly prisma: PrismaClient,
     private readonly productService: FortuneProductService,
     private readonly paymentService: PaymentService,
+    private readonly documentUseCase: DocumentFortuneUseCase, // 문서 생성 UseCase 추가
   ) {}
 
   async execute(params: CreateSessionParams): Promise<FortuneSession> {
@@ -114,21 +116,125 @@ export class CreateFortuneSessionUseCase {
         throw new Error('결제가 완료되지 않았거나 취소되었습니다.');
       }
 
-            // 결제된 문서형 세션 생성 (시간 제한 없음, 문서 생성 후 종료)
-            const sessionId = IdGenerator.generateFortuneSessionId();
-            const session = FortuneSession.create(
-              sessionId,
-              userId,
-              category,
-              mode,
-              0, // 문서형은 시간 개념 없음
-              formType as any,
-              userInput,
-              userData,
-            );
+      // 결제된 문서형 세션 생성 (시간 제한 없음, 문서 생성 후 종료)
+      const sessionId = IdGenerator.generateFortuneSessionId();
+      const session = FortuneSession.create(
+        sessionId,
+        userId,
+        category,
+        mode,
+        0, // 문서형은 시간 개념 없음
+        formType as any,
+        userInput,
+        userData,
+      );
 
-            session.validate();
-            return await this.sessionRepository.create(session);
+      session.validate();
+      const createdSession = await this.sessionRepository.create(session);
+
+      // Order의 metadata에 sessionId 저장 (세션과 주문 연결)
+      if (paymentId) {
+        try {
+          const payment = await this.prisma.payment.findUnique({
+            where: { id: paymentId },
+            include: { order: true },
+          });
+          
+          if (payment?.order) {
+            const orderMetadata = (payment.order.metadata as any) || {};
+            orderMetadata.sessionId = createdSession.id; // 세션 ID 저장
+            
+            await this.prisma.order.update({
+              where: { id: payment.order.id },
+              data: {
+                metadata: orderMetadata,
+              },
+            });
+            console.log(`[세션 생성] Order metadata에 sessionId 저장: orderId=${payment.order.id}, sessionId=${createdSession.id}`);
+          }
+        } catch (orderError: any) {
+          console.error(`[세션 생성] Order metadata 업데이트 실패: sessionId=${sessionId}`, orderError);
+        }
+      }
+
+      // 문서 생성 및 저장 (결제 완료 후 즉시 생성)
+      // 결제할 때마다 새로운 문서가 생성되어야 함
+      try {
+        console.log(`[세션 생성] 문서 생성 시작: sessionId=${sessionId}, category=${category}`);
+        const { documentResponse, documentId } = await this.documentUseCase.execute(
+          userId,
+          category,
+          userInput,
+          userData,
+        );
+        
+        console.log(`[세션 생성] 문서 생성 완료: sessionId=${sessionId}, documentId=${documentId}`);
+        
+        if (documentId) {
+          
+          // Order의 metadata에 documentId 저장 (세션과 문서 연결)
+          if (paymentId) {
+            try {
+              const payment = await this.prisma.payment.findUnique({
+                where: { id: paymentId },
+                include: { order: true },
+              });
+              
+              if (payment?.order) {
+                const orderMetadata = (payment.order.metadata as any) || {};
+                orderMetadata.documentId = documentId; // 문서 ID 저장
+                orderMetadata.sessionId = createdSession.id; // 세션 ID도 함께 저장 (이미 저장했지만 확실히)
+                
+                await this.prisma.order.update({
+                  where: { id: payment.order.id },
+                  data: {
+                    metadata: orderMetadata,
+                  },
+                });
+                console.log(`[세션 생성] Order metadata에 documentId 저장: orderId=${payment.order.id}, documentId=${documentId}`);
+              }
+              
+              // PaymentDetail에 documentId 연결 (이미 PaymentDetail이 있으면 업데이트, 없으면 생성)
+              const existingPaymentDetail = await this.prisma.paymentDetail.findFirst({
+                where: { 
+                  paymentId,
+                  sessionId: createdSession.id,
+                },
+              });
+              
+              if (existingPaymentDetail) {
+                // 기존 PaymentDetail 업데이트
+                await this.prisma.paymentDetail.update({
+                  where: { id: existingPaymentDetail.id },
+                  data: { documentId },
+                });
+                console.log(`[세션 생성] PaymentDetail 업데이트: paymentDetailId=${existingPaymentDetail.id}, documentId=${documentId}`);
+              } else {
+                // PaymentDetail이 아직 없으면 생성 (문서형 세션은 PaymentDetail이 있어야 함)
+                await this.prisma.paymentDetail.create({
+                  data: {
+                    paymentId,
+                    sessionId: createdSession.id,
+                    documentId,
+                    sessionType: 'DOCUMENT',
+                    category,
+                    expiredAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30일
+                  },
+                });
+                console.log(`[세션 생성] PaymentDetail 생성: paymentId=${paymentId}, documentId=${documentId}`);
+              }
+            } catch (pdError: any) {
+              console.error(`[세션 생성] PaymentDetail 연결 실패: sessionId=${sessionId}`, pdError);
+              // PaymentDetail 연결 실패해도 계속 진행
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error(`[세션 생성] 문서 생성 실패: sessionId=${sessionId}`, error);
+        // 문서 생성 실패해도 세션은 생성됨 (결과 조회 시 재시도 가능)
+      }
+
+      return createdSession;
     }
 
     // 채팅형: 결제 또는 무료 홍시 선택

@@ -14,6 +14,9 @@ import { PurchaseHongsiUseCase } from '../usecases/PurchaseHongsiUseCase';
 import { ExtendSessionTimeUseCase } from '../usecases/ExtendSessionTimeUseCase';
 import { GetFortuneStatisticsUseCase } from '../usecases/GetFortuneStatisticsUseCase';
 import { PrepareFortunePaymentUseCase } from '../usecases/PrepareFortunePaymentUseCase';
+import { GetFortunePaymentsUseCase } from '../usecases/GetFortunePaymentsUseCase';
+import { GetFortunePaymentDetailUseCase } from '../usecases/GetFortunePaymentDetailUseCase';
+import { RegenerateDocumentUseCase } from '../usecases/RegenerateDocumentUseCase';
 import { FortuneProductService } from '../services/FortuneProductService';
 import { ResultTokenService } from '../services/ResultTokenService';
 import { PaymentService } from '../services/PaymentService';
@@ -30,6 +33,9 @@ export class FortuneController {
     private readonly extendSessionTimeUseCase: ExtendSessionTimeUseCase,
     private readonly getStatisticsUseCase: GetFortuneStatisticsUseCase,
     private readonly preparePaymentUseCase: PrepareFortunePaymentUseCase,
+    private readonly getPaymentsUseCase: GetFortunePaymentsUseCase,
+    private readonly getPaymentDetailUseCase: GetFortunePaymentDetailUseCase,
+    private readonly regenerateDocumentUseCase: RegenerateDocumentUseCase,
     private readonly paymentService: PaymentService,
     private readonly productService: FortuneProductService,
     private readonly resultTokenService: ResultTokenService,
@@ -99,7 +105,7 @@ export class FortuneController {
         durationMinutes,
       });
 
-      // 결과 토큰 발급 (30분 만료)
+      // 결과 토큰 발급 (만료 시간은 ResultTokenService에서 설정)
       const resultToken = this.resultTokenService.sign({
         sessionId: session.id,
         userId: user.sub,
@@ -137,37 +143,72 @@ export class FortuneController {
    */
   preparePayment = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
-      const user = (req as any).user;
-      if (!user) {
-        throw new Error('로그인이 필요합니다.');
+      try {
+        console.log('[결제 준비] 요청 시작:', {
+          userId: (req as any).user?.sub,
+          body: req.body,
+        });
+
+        const user = (req as any).user;
+        if (!user) {
+          console.error('[결제 준비] 인증 실패: 사용자 정보 없음');
+          throw new Error('로그인이 필요합니다.');
+        }
+
+        const { productType, category, durationMinutes, payMethod, easyPayProvider } = req.body;
+
+        if (!productType || !category) {
+          console.error('[결제 준비] 필수 파라미터 누락:', { productType, category });
+          throw new Error('상품 타입과 카테고리는 필수입니다.');
+        }
+
+        // 채팅형일 경우 durationMinutes 필수
+        if (productType === FortuneProductType.CHAT_SESSION && !durationMinutes) {
+          console.error('[결제 준비] 채팅형 시간 누락:', { productType, durationMinutes });
+          throw new Error('채팅형은 시간 선택이 필수입니다. (5, 10, 30분)');
+        }
+
+        console.log('[결제 준비] UseCase 실행 시작:', {
+          userId: user.sub,
+          productType,
+          category,
+          durationMinutes,
+          payMethod,
+          easyPayProvider,
+        });
+
+        const result = await this.preparePaymentUseCase.execute(
+          user.sub,
+          productType as FortuneProductType,
+          category as FortuneCategory,
+          durationMinutes,
+          payMethod, // 결제 방법 전달
+          easyPayProvider, // 간편결제 제공자 전달
+        );
+
+        console.log('[결제 준비] 성공:', {
+          orderId: result.orderId,
+          paymentId: result.paymentId,
+          amount: result.amount,
+        });
+
+        const response: ApiResponse = {
+          success: true,
+          data: result,
+          message: '결제 준비가 완료되었습니다.',
+          timestamp: new Date().toISOString(),
+        };
+
+        res.status(200).json(response);
+      } catch (error: any) {
+        console.error('[결제 준비] 에러 발생:', {
+          error: error?.message || error,
+          stack: error?.stack,
+          userId: (req as any).user?.sub,
+          body: req.body,
+        });
+        throw error; // asyncHandler가 처리
       }
-
-      const { productType, category, durationMinutes } = req.body;
-
-      if (!productType || !category) {
-        throw new Error('상품 타입과 카테고리는 필수입니다.');
-      }
-
-      // 채팅형일 경우 durationMinutes 필수
-      if (productType === FortuneProductType.CHAT_SESSION && !durationMinutes) {
-        throw new Error('채팅형은 시간 선택이 필수입니다. (5, 10, 30분)');
-      }
-
-      const result = await this.preparePaymentUseCase.execute(
-        user.sub,
-        productType as FortuneProductType,
-        category as FortuneCategory,
-        durationMinutes,
-      );
-
-      const response: ApiResponse = {
-        success: true,
-        data: result,
-        message: '결제 준비가 완료되었습니다.',
-        timestamp: new Date().toISOString(),
-      };
-
-      res.status(200).json(response);
     },
   );
 
@@ -265,7 +306,7 @@ export class FortuneController {
         throw new Error('카테고리와 사용자 입력은 필수입니다.');
       }
 
-      const document = await this.documentUseCase.execute(
+      const { documentResponse: document } = await this.documentUseCase.execute(
         user.sub,
         category as FortuneCategory,
         userInput,
@@ -455,7 +496,7 @@ export class FortuneController {
       });
 
       // 최소 유효성 검사
-      const { orderId, paymentId, amount, status } = req.body || {};
+      const { orderId, paymentId, amount, status, payMethod, easyPayProvider } = req.body || {};
       if (!orderId || !paymentId || typeof amount !== 'number' || !status) {
         console.error('❌ 웹훅 페이로드 검증 실패:', { orderId, paymentId, amount, status });
         res.status(400).json({ success: false, error: 'INVALID_WEBHOOK_PAYLOAD' });
@@ -486,9 +527,23 @@ export class FortuneController {
         return;
       }
 
-      // 결제 확정 처리
-      console.log('✅ 웹훅 검증 통과, 결제 확정 처리 시작:', { orderId, paymentId, amount, status });
-      const ok = await this.paymentService.confirmPaymentByWebhook({ orderId, paymentId, amount, status });
+      // 결제 확정 처리 (결제 방법 정보 포함)
+      console.log('✅ 웹훅 검증 통과, 결제 확정 처리 시작:', { 
+        orderId, 
+        paymentId, 
+        amount, 
+        status, 
+        payMethod, 
+        easyPayProvider 
+      });
+      const ok = await this.paymentService.confirmPaymentByWebhook({ 
+        orderId, 
+        paymentId, 
+        amount, 
+        status,
+        payMethod, // 웹훅에서 받은 결제 방법
+        easyPayProvider, // 웹훅에서 받은 간편결제 제공자
+      });
       if (!ok.success) {
         console.error('❌ 결제 확정 처리 실패:', { orderId, paymentId });
         res.status(400).json({ success: false, error: 'PAYMENT_UNVERIFIED' });
@@ -600,56 +655,145 @@ export class FortuneController {
         // 문서형 세션인 경우: 문서 결과 조회 또는 생성
         let document: any = null;
         if (sessionRecord.mode === 'DOCUMENT') {
-          // 기존 문서 조회 (세션 ID로 연결된 문서 찾기)
-          document = await prisma.documentResult.findFirst({
-            where: { 
-              userId: payload.userId, 
-              category: payload.category,
-            },
-            orderBy: { createdAt: 'desc' },
-          });
+          try {
+            // 1. PaymentDetail을 통해 documentId 찾기 (우선순위)
+            const paymentDetail = await prisma.paymentDetail.findFirst({
+              where: { sessionId: payload.sessionId },
+              select: { documentId: true },
+            });
 
-          // 문서가 없으면 GPT로 생성
-          if (!document && sessionRecord.userInput) {
-            console.log('[결과 조회] 문서가 없어 GPT로 생성 시작:', { sessionId: payload.sessionId });
-            try {
-              const documentResponse = await this.documentUseCase.execute(
-                payload.userId,
-                payload.category,
-                sessionRecord.userInput,
-                sessionRecord.userData as Record<string, any> | undefined,
-              );
+            if (paymentDetail?.documentId) {
+              // PaymentDetail에 documentId가 있으면 해당 문서 조회
+              document = await prisma.documentResult.findUnique({
+                where: { id: paymentDetail.documentId },
+              });
+            }
 
-              // 생성된 문서를 DocumentResult로 변환하여 응답에 포함
-              document = {
-                id: `doc_${payload.sessionId}`,
-                userId: payload.userId,
-                category: payload.category,
-                title: documentResponse.title,
-                date: documentResponse.date,
-                summary: documentResponse.summary,
-                content: documentResponse.content,
-                advice: documentResponse.advice,
-                warnings: documentResponse.warnings,
-                chatPrompt: documentResponse.chatPrompt,
-                issuedAt: new Date(),
-                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30일
-              };
-            } catch (error: any) {
-              console.error('[결과 조회] GPT 문서 생성 실패:', error);
-              // GPT 생성 실패해도 에러를 반환하지 않고 document를 null로 유지
+            // 2. Order의 metadata에서 documentId 찾기 (세션 ID로 Order 찾기)
+            if (!document) {
+              // 세션과 연결된 Order 찾기 (metadata.sessionId로 찾기)
+              const order = await prisma.order.findFirst({
+                where: {
+                  userId: payload.userId,
+                  payment: {
+                    paymentDetails: {
+                      some: {
+                        sessionId: payload.sessionId,
+                      },
+                    },
+                  },
+                },
+                include: {
+                  payment: {
+                    include: {
+                      paymentDetails: {
+                        where: {
+                          sessionId: payload.sessionId,
+                        },
+                      },
+                    },
+                  },
+                },
+              });
+              
+              // Order를 찾지 못하면 metadata에서 직접 찾기
+              if (!order) {
+                const orderByMetadata = await prisma.order.findFirst({
+                  where: {
+                    userId: payload.userId,
+                  },
+                  orderBy: { createdAt: 'desc' },
+                  take: 10, // 최근 10개 주문 중에서 찾기
+                });
+                
+                // 최근 주문들의 metadata를 확인하여 sessionId가 일치하는 것 찾기
+                const orders = await prisma.order.findMany({
+                  where: {
+                    userId: payload.userId,
+                    createdAt: {
+                      gte: new Date(sessionRecord.createdAt.getTime() - 60000), // 세션 생성 1분 이내 주문
+                    },
+                  },
+                  orderBy: { createdAt: 'desc' },
+                  take: 5,
+                });
+                
+                for (const ord of orders) {
+                  const meta = ord.metadata as any;
+                  if (meta?.sessionId === payload.sessionId && meta?.documentId) {
+                    document = await prisma.documentResult.findUnique({
+                      where: { id: meta.documentId },
+                    });
+                    if (document) break;
+                  }
+                }
+              } else if (order.metadata) {
+                const metadata = order.metadata as any;
+                if (metadata.documentId) {
+                  document = await prisma.documentResult.findUnique({
+                    where: { id: metadata.documentId },
+                  });
+                }
+              }
             }
-          } else if (document && typeof document.content === 'string') {
-            // 저장된 문서가 있으면 파싱
-            try {
-              const parsedContent = JSON.parse(document.content);
-              document = {
-                ...document,
-                ...parsedContent,
-              };
-            } catch {
-              // 파싱 실패 시 원본 유지
+            
+            // 3. PaymentDetail에 documentId가 없고 Order metadata에도 없으면 세션 생성 시점에 생성된 문서 찾기
+            if (!document) {
+              // 세션 생성 시점에 생성된 문서는 같은 userId, category, createdAt이 비슷한 것으로 찾기
+              document = await prisma.documentResult.findFirst({
+                where: { 
+                  userId: payload.userId, 
+                  category: payload.category,
+                  createdAt: {
+                    gte: new Date(sessionRecord.createdAt.getTime() - 10000), // 세션 생성 10초 이내
+                    lte: new Date(sessionRecord.createdAt.getTime() + 30000), // 세션 생성 30초 이후까지 허용 (GPT 생성 시간 고려)
+                  },
+                },
+                orderBy: { createdAt: 'desc' },
+              });
             }
+
+            // 3. 문서가 없으면 GPT로 생성 (세션 생성 시 문서 생성 실패한 경우)
+            if (!document && sessionRecord.userInput) {
+              console.log('[결과 조회] 문서가 없어 GPT로 생성 시작:', { sessionId: payload.sessionId });
+              try {
+                const { documentResponse, documentId } = await this.documentUseCase.execute(
+                  payload.userId,
+                  payload.category,
+                  sessionRecord.userInput || '',
+                  sessionRecord.userData as Record<string, any> | undefined,
+                );
+
+                // 생성된 문서는 DB에 저장되므로, documentId로 조회
+                if (documentId) {
+                  document = await prisma.documentResult.findUnique({
+                    where: { id: documentId },
+                  });
+                }
+              } catch (error: any) {
+                console.error('[결과 조회] GPT 문서 생성 실패:', error);
+                // GPT 생성 실패해도 에러를 반환하지 않고 document를 null로 유지
+                document = null;
+              }
+            }
+
+            if (document && typeof document.content === 'string') {
+              // 저장된 문서가 있으면 파싱
+              try {
+                const parsedContent = JSON.parse(document.content);
+                document = {
+                  ...document,
+                  ...parsedContent,
+                };
+              } catch (parseError) {
+                console.error('[결과 조회] 문서 content 파싱 실패:', parseError);
+                // 파싱 실패 시 원본 유지
+              }
+            }
+          } catch (dbError: any) {
+            console.error('[결과 조회] 문서 조회 중 DB 에러:', dbError);
+            // DB 에러가 발생해도 document를 null로 유지하고 계속 진행
+            document = null;
           }
         }
 
@@ -665,15 +809,32 @@ export class FortuneController {
               isPaid: !!sessionRecord.remainingTime || sessionRecord.mode === 'DOCUMENT',
             },
             document,
-            lastChats: chats.map((chat: any) => ({
-              id: chat.id,
-              sessionId: chat.sessionId,
-              userInput: chat.userInput,
-              aiOutput: typeof chat.aiOutput === 'string' ? JSON.parse(chat.aiOutput) : chat.aiOutput,
-              elapsedTime: chat.elapsedTime,
-              isPaid: chat.isPaid,
-              createdAt: chat.createdAt,
-            })),
+            lastChats: chats.map((chat: any) => {
+              // aiOutput 파싱 (안전하게 처리)
+              let parsedAiOutput: any = null;
+              if (chat.aiOutput) {
+                if (typeof chat.aiOutput === 'string') {
+                  try {
+                    parsedAiOutput = JSON.parse(chat.aiOutput);
+                  } catch (e) {
+                    // JSON 파싱 실패 시 문자열 그대로 사용
+                    parsedAiOutput = chat.aiOutput;
+                  }
+                } else {
+                  parsedAiOutput = chat.aiOutput;
+                }
+              }
+
+              return {
+                id: chat.id,
+                sessionId: chat.sessionId,
+                userInput: chat.userInput || '',
+                aiOutput: parsedAiOutput,
+                elapsedTime: chat.elapsedTime || 0,
+                isPaid: chat.isPaid || false,
+                createdAt: chat.createdAt,
+              };
+            }),
             cta: { 
               label: '채팅으로 이어보기(홍시 사용)', 
               requiresPayment: sessionRecord.remainingTime <= 0 
@@ -693,6 +854,118 @@ export class FortuneController {
         });
         res.status(401).json({ success: false, error: 'TOKEN_INVALID', message: error?.message || '토큰이 유효하지 않거나 만료되었습니다.' });
       }
+    },
+  );
+
+  /**
+   * 결제 내역 조회
+   * GET /api/v1/fortune/payments
+   */
+  getPayments = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      if (!user) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const status = req.query.status as any;
+      const category = req.query.category as any;
+      const mode = req.query.mode as any;
+
+      const result = await this.getPaymentsUseCase.execute({
+        userId: user.sub,
+        page,
+        limit: Math.min(limit, 100), // 최대 100개로 제한
+        status,
+        category,
+        mode,
+      });
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+        message: '결제 내역을 조회했습니다.',
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    },
+  );
+
+  /**
+   * 결제 내역 상세 조회
+   * GET /api/v1/fortune/payments/:orderId
+   */
+  getPaymentDetail = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      if (!user) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      const { orderId } = req.params;
+
+      if (!orderId) {
+        throw new Error('주문 ID가 필요합니다.');
+      }
+
+      const result = await this.getPaymentDetailUseCase.execute(
+        user.sub,
+        orderId,
+      );
+
+      if (!result) {
+        res.status(404).json({
+          success: false,
+          error: 'ORDER_NOT_FOUND',
+          message: '결제 내역을 찾을 수 없습니다.',
+        });
+        return;
+      }
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+        message: '결제 내역 상세 정보를 조회했습니다.',
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    },
+  );
+
+  /**
+   * 문서 재생성
+   * POST /api/v1/fortune/document/regenerate
+   */
+  regenerateDocument = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      if (!user) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      const { sessionId } = req.body;
+
+      if (!sessionId) {
+        throw new Error('세션 ID가 필요합니다.');
+      }
+
+      const result = await this.regenerateDocumentUseCase.execute(
+        user.sub,
+        sessionId,
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+        message: '문서가 재생성되었습니다.',
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
     },
   );
 }

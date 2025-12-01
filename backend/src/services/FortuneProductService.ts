@@ -62,8 +62,8 @@ export class FortuneProductService {
         || DISCOUNT_RATES[category]?.default
         || 0;
 
-      // 실제 결제 금액 계산
-      const finalAmount = Math.floor(baseAmount * (1 - discountRate / 100));
+      // 실제 결제 금액 계산 (부동소수점 오차 방지를 위해 정수 연산 사용)
+      const finalAmount = Math.round(baseAmount * (1 - discountRate / 100));
 
       return {
         productId,
@@ -86,8 +86,8 @@ export class FortuneProductService {
         || DISCOUNT_RATES[category]?.default
         || 0;
 
-      // 실제 결제 금액 계산
-      const finalAmount = Math.floor(baseAmount * (1 - discountRate / 100));
+      // 실제 결제 금액 계산 (부동소수점 오차 방지를 위해 정수 연산 사용)
+      const finalAmount = Math.round(baseAmount * (1 - discountRate / 100));
 
       return {
         productId,

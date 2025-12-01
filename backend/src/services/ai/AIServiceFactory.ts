@@ -4,10 +4,12 @@
  */
 import { IAIService } from '../../interfaces/IAIService';
 import { OpenAIService } from './OpenAIService';
+import { GeminiService } from './GeminiService';
 
 export enum AIServiceType {
   OPENAI = 'openai',
-  // 향후 추가 가능: CLAUDE = 'claude', GEMINI = 'gemini', etc.
+  GEMINI = 'gemini',
+  // 향후 추가 가능: CLAUDE = 'claude', etc.
 }
 
 export class AIServiceFactory {
@@ -25,11 +27,11 @@ export class AIServiceFactory {
     switch (type) {
       case AIServiceType.OPENAI:
         return new OpenAIService(apiKey, modelName);
+      case AIServiceType.GEMINI:
+        return new GeminiService(apiKey, modelName);
       // 향후 다른 AI 서비스 추가 가능
       // case AIServiceType.CLAUDE:
       //   return new ClaudeService(apiKey, modelName);
-      // case AIServiceType.GEMINI:
-      //   return new GeminiService(apiKey, modelName);
       default:
         throw new Error(`지원하지 않는 AI 서비스 타입입니다: ${type}`);
     }

@@ -26,6 +26,9 @@ import { ExtendSessionTimeUseCase } from '../usecases/ExtendSessionTimeUseCase';
 import { CreatePaymentDetailUseCase } from '../usecases/CreatePaymentDetailUseCase';
 import { GetFortuneStatisticsUseCase } from '../usecases/GetFortuneStatisticsUseCase';
 import { PrepareFortunePaymentUseCase } from '../usecases/PrepareFortunePaymentUseCase';
+import { GetFortunePaymentsUseCase } from '../usecases/GetFortunePaymentsUseCase';
+import { GetFortunePaymentDetailUseCase } from '../usecases/GetFortunePaymentDetailUseCase';
+import { RegenerateDocumentUseCase } from '../usecases/RegenerateDocumentUseCase';
 import { FortuneProductService } from '../services/FortuneProductService';
 import { ResultTokenService } from '../services/ResultTokenService';
 import { PaymentService } from '../services/PaymentService';
@@ -92,7 +95,7 @@ class DIContainer {
     // Board Use Case
     this.boardPostUseCase = new BoardPostUseCase(new PrismaBoardPostRepository(this.prisma));
 
-    // Fortune GPT Service
+    // Fortune GPT Service (Gemini 우선, 없으면 OpenAI)
     this.fortuneGPTService = new FortuneGPTService(env.OPENAI_API_KEY);
 
     // Fortune Services (먼저 생성)
@@ -107,22 +110,24 @@ class DIContainer {
     const hongsiCreditRepository = new PrismaHongsiCreditRepository(this.prisma);
 
     // Fortune Use Cases
+    const documentUseCase = new DocumentFortuneUseCase(
+      documentRepository,
+      this.fortuneGPTService,
+    );
     const createSessionUseCase = new CreateFortuneSessionUseCase(
       fortuneSessionRepository,
       hongsiCreditRepository,
       this.prisma,
       fortuneProductService,
       paymentService,
+      documentUseCase, // 문서 생성 UseCase 주입
     );
     const chatUseCase = new ChatFortuneUseCase(
       fortuneSessionRepository,
       conversationLogRepository,
       this.fortuneGPTService,
     );
-    const documentUseCase = new DocumentFortuneUseCase(
-      documentRepository,
-      this.fortuneGPTService,
-    );
+    // documentUseCase는 위에서 이미 생성됨
     const getSessionUseCase = new GetSessionUseCase(fortuneSessionRepository);
     const getDocumentUseCase = new GetDocumentUseCase(documentRepository);
     const purchaseHongsiUseCase = new PurchaseHongsiUseCase(
@@ -136,6 +141,22 @@ class DIContainer {
     const preparePaymentUseCase = new PrepareFortunePaymentUseCase(
       fortuneProductService,
       paymentService,
+      this.prisma,
+    );
+
+    // Fortune Payment History UseCases
+    const getPaymentsUseCase = new GetFortunePaymentsUseCase(
+      this.prisma,
+      resultTokenService,
+    );
+    const getPaymentDetailUseCase = new GetFortunePaymentDetailUseCase(
+      this.prisma,
+      resultTokenService,
+    );
+    const regenerateDocumentUseCase = new RegenerateDocumentUseCase(
+      this.prisma,
+      documentUseCase,
+      resultTokenService,
     );
 
     // Controllers
@@ -151,6 +172,9 @@ class DIContainer {
       extendSessionTimeUseCase,
       getStatisticsUseCase,
       preparePaymentUseCase,
+      getPaymentsUseCase,
+      getPaymentDetailUseCase,
+      regenerateDocumentUseCase,
       paymentService,
       fortuneProductService,
       resultTokenService,

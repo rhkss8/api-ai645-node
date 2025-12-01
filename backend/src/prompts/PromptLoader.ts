@@ -4,6 +4,7 @@
  */
 import { FortuneCategory } from '../types/fortune';
 import { SessionMode } from '../types/fortune';
+import { extractFortuneTopicFromCategoryAndInput, generateAnalysisTarget } from '../utils/fortuneTopicExtractor';
 
 // 채팅형 프롬프트 import
 import { SASAChatPrompt } from './chat/sasa.prompt';
@@ -86,10 +87,16 @@ export function loadPrompt(
     throw new Error(`카테고리 ${category}에 대한 ${mode} 프롬프트를 찾을 수 없습니다.`);
   }
 
+  // 카테고리와 사용자 입력을 결합하여 운세 주제 추출
+  const topicInfo = extractFortuneTopicFromCategoryAndInput(category, params.userInput);
+  const analysisTarget = generateAnalysisTarget(topicInfo.topics, category);
+
   // 변수 치환
   let prompt = template
     .replace(/{userInput}/g, params.userInput || '')
-    .replace(/{userData}/g, params.userData ? JSON.stringify(params.userData, null, 2) : '없음');
+    .replace(/{userData}/g, params.userData ? JSON.stringify(params.userData, null, 2) : '없음')
+    .replace(/{focusArea}/g, topicInfo.focusArea)
+    .replace(/{analysisTarget}/g, analysisTarget);
 
   // 이전 맥락 추가 (채팅형만)
   if (mode === SessionMode.CHAT && params.previousContext) {

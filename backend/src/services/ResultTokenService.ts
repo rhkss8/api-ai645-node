@@ -9,10 +9,17 @@ export interface ResultTokenPayload {
   mode: SessionMode;
 }
 
+/**
+ * 결과 토큰 만료 시간 설정 (초 단위)
+ * 기본값: 1일 (86400초)
+ * 필요에 따라 이 값을 수정하세요.
+ */
+const RESULT_TOKEN_EXPIRES_IN_SECONDS = 86400; // 1일 = 24시간 * 60분 * 60초
+
 export class ResultTokenService {
   constructor(private readonly secret: string) {}
 
-  sign(payload: ResultTokenPayload, expiresInSeconds = 1800): string {
+  sign(payload: ResultTokenPayload, expiresInSeconds = RESULT_TOKEN_EXPIRES_IN_SECONDS): string {
     return jwt.sign(payload, this.secret, { expiresIn: expiresInSeconds });
   }
 

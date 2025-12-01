@@ -291,6 +291,8 @@ export class PaymentService {
     paymentId: string; // PortOne의 paymentId
     amount: number;
     status: 'PENDING' | 'PAID' | 'FAILED';
+    payMethod?: string; // 결제 방법 (웹훅에서 받은 실제 결제 방법)
+    easyPayProvider?: string; // 간편결제 제공자
   }): Promise<{ success: boolean }>{
     try {
       const order = await prisma.order.findUnique({ 
@@ -318,11 +320,26 @@ export class PaymentService {
 
       // 트랜잭션으로 Payment와 Order 상태를 함께 업데이트 (원자성 보장)
       await prisma.$transaction(async (tx) => {
+        // 결제 방법 결정 (웹훅에서 받은 정보 우선)
+        let finalPayMethod = payment.payMethod; // 기존 값 유지
+        if (params.payMethod) {
+          finalPayMethod = params.payMethod;
+        } else if (params.easyPayProvider) {
+          // easyPayProvider를 payMethod로 변환
+          const providerMap: Record<string, string> = {
+            'kakaopay': 'kakao',
+            'tosspay': 'toss',
+            'naverpay': 'naver',
+          };
+          finalPayMethod = providerMap[params.easyPayProvider.toLowerCase()] || params.easyPayProvider.toLowerCase();
+        }
+
         // 결제 상태 업데이트 (PortOne paymentId를 impUid에 저장)
         await tx.payment.update({
           where: { id: payment.id },
           data: {
             impUid: params.paymentId, // PortOne의 실제 paymentId 저장
+            payMethod: finalPayMethod, // 실제 결제 방법 업데이트
             status: params.status === 'PAID' ? PaymentStatus.COMPLETED : params.status === 'FAILED' ? PaymentStatus.FAILED : PaymentStatus.PENDING,
             paidAt: params.status === 'PAID' ? new Date() : null,
             updatedAt: new Date(),
