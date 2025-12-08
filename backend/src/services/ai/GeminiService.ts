@@ -15,8 +15,10 @@ export class GeminiService implements IAIService {
    * Gemini 모델 이름 설정
    * 사용 가능한 모델: 'gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash' 등
    * Google AI Studio에서 사용 가능한 모델을 확인하세요: https://aistudio.google.com/
+   * 
+   * 참고: gemini-2.5-pro는 무료 티어 할당량이 제한적이므로, 할당량 초과 시 gemini-2.5-flash 사용 권장
    */
-  private static readonly DEFAULT_MODEL_NAME = 'gemini-2.5-pro';
+  private static readonly DEFAULT_MODEL_NAME = 'gemini-2.5-flash';
 
   constructor(apiKey?: string, modelName: string = GeminiService.DEFAULT_MODEL_NAME) {
     if (!apiKey) {
@@ -39,7 +41,7 @@ export class GeminiService implements IAIService {
         model: this.modelName,
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 1500,
+          maxOutputTokens: 10000,
           // responseMimeType: 'application/json', // 일부 모델에서 지원하지 않을 수 있음
         },
       });

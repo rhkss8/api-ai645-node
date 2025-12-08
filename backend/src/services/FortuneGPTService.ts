@@ -16,12 +16,14 @@ const AI_SERVICE_PRIORITY: 'GEMINI' | 'OPENAI' = 'GEMINI';
 
 /**
  * Gemini 모델 이름 설정
- * 기본값: gemini-2.5-pro
+ * 기본값: gemini-2.5-flash (할당량 초과 시 flash 모델 사용)
  * 필요에 따라 이 값을 수정하세요.
  * 사용 가능한 모델: 'gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash' 등
  * Google AI Studio에서 사용 가능한 모델을 확인하세요: https://aistudio.google.com/
+ * 
+ * 참고: gemini-2.5-pro는 무료 티어 할당량이 제한적이므로, 할당량 초과 시 gemini-2.5-flash 사용 권장
  */
-const GEMINI_MODEL_NAME = 'gemini-2.5-pro';
+const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
 
 export class FortuneGPTService {
   private aiService: IAIService;

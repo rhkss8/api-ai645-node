@@ -113,10 +113,27 @@ Authorization: Bearer {access_token}
     "paymentId": "payment_1234567890",
     "amount": 10000,
     "productName": "사주팔자",
-    "merchantUid": "FORTUNE1723456789123ABCD"
+    "merchantUid": "FORTUNE1723456789123ABCD",
+    "buyerEmail": "user@example.com",
+    "buyerPhone": "010-1234-5678",
+    "hasExistingDocument": true,  // 기존 문서 존재 여부 (문서형 리포트만, 카테고리별 설정)
+    "existingDocumentId": "doc_abc123"  // 기존 문서 ID (있는 경우)
   }
 }
 ```
+
+**기존 문서 체크 설명:**
+- `hasExistingDocument`: 해당 카테고리에 만료되지 않은 기존 문서가 있는지 여부
+  - `true`: 기존 문서가 있음 → 프론트엔드에서 컨펌창 표시 필요
+  - `false`: 기존 문서 없음 또는 체크 대상이 아님
+- `existingDocumentId`: 기존 문서 ID (있는 경우)
+- **현재 체크 대상 카테고리**: TRADITIONAL (전통 운세) - SAJU, NEW_YEAR, MONEY, HAND, TOJEONG
+- **체크 대상이 아닌 카테고리**: ASK (자유 질문), DAILY (오늘의 운세) - 현재는 `false` 반환
+- 프론트엔드에서 `hasExistingDocument: true`인 경우:
+  1. 컨펌창 표시: "기존 문서가 있습니다. 기존 문서를 보시겠습니까, 아니면 새로 생성하시겠습니까?"
+  2. 사용자 선택에 따라:
+     - 기존 문서 보기: `existingDocumentId`로 결과 페이지 조회 (`GET /api/v1/fortune/result/{token}`)
+     - 새로 생성: 결제 진행 후 세션 생성
 
 #### 3단계: 프론트엔드에서 PortOne 결제 창 오픈
 

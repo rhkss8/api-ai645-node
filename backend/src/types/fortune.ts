@@ -52,6 +52,73 @@ export enum FortuneCategory {
   DAILY = 'DAILY',
 }
 
+/**
+ * 카테고리별 문서 유효기간 (일 단위)
+ * - TRADITIONAL (전통 운세): 1년 (365일)
+ * - ASK (자유 질문): 1일
+ * - DAILY (오늘의 운세): 1일
+ */
+export function getDocumentExpirationDays(category: FortuneCategory): number {
+  // TRADITIONAL (전통 운세)
+  const traditionalCategories = [
+    FortuneCategory.SAJU,
+    FortuneCategory.NEW_YEAR,
+    FortuneCategory.MONEY,
+    FortuneCategory.HAND,
+    FortuneCategory.TOJEONG,
+  ];
+  
+  if (traditionalCategories.includes(category)) {
+    return 365; // 1년
+  }
+  
+  // DAILY (오늘의 운세)
+  if (category === FortuneCategory.DAILY) {
+    return 1; // 1일
+  }
+  
+  // ASK (자유 질문) - 나머지 모든 카테고리
+  return 1; // 1일
+}
+
+/**
+ * 카테고리별 기존 문서 체크 여부
+ * true: 결제 전에 기존 문서 존재 여부를 체크하고 사용자에게 확인 요청
+ * false: 기존 문서 체크하지 않음
+ */
+export function shouldCheckExistingDocument(category: FortuneCategory): boolean {
+  // 모든 카테고리에 대해 설정 (현재는 TRADITIONAL만 true, 나중에 확장 가능)
+  const checkExistingDocumentMap: Record<FortuneCategory, boolean> = {
+    // TRADITIONAL (전통 운세) - 기존 문서 체크
+    [FortuneCategory.SAJU]: true,
+    [FortuneCategory.NEW_YEAR]: true,
+    [FortuneCategory.MONEY]: true,
+    [FortuneCategory.HAND]: true,
+    [FortuneCategory.TOJEONG]: true,
+    
+    // ASK (자유 질문) - 현재는 체크하지 않음 (나중에 필요시 true로 변경)
+    [FortuneCategory.BREAK_UP]: false,
+    [FortuneCategory.CAR_PURCHASE]: false,
+    [FortuneCategory.BUSINESS]: false,
+    [FortuneCategory.INVESTMENT]: false,
+    [FortuneCategory.LOVE]: false,
+    [FortuneCategory.DREAM]: false,
+    [FortuneCategory.LUCKY_NUMBER]: false,
+    [FortuneCategory.MOVING]: false,
+    [FortuneCategory.TRAVEL]: false,
+    [FortuneCategory.COMPATIBILITY]: false,
+    [FortuneCategory.TAROT]: false,
+    [FortuneCategory.CAREER]: false,
+    [FortuneCategory.LUCKY_DAY]: false,
+    [FortuneCategory.NAMING]: false,
+    
+    // DAILY (오늘의 운세) - 체크하지 않음
+    [FortuneCategory.DAILY]: false,
+  };
+  
+  return checkExistingDocumentMap[category] ?? false;
+}
+
 // 세션 모드
 export enum SessionMode {
   CHAT = 'CHAT',              // 채팅형

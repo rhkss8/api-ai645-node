@@ -6,6 +6,25 @@ import { PrismaClient, OrderStatus, PaymentStatus } from '@prisma/client';
 import { FortuneCategory, SessionMode, FormType } from '../types/fortune';
 import { ResultTokenService } from '../services/ResultTokenService';
 
+/**
+ * 결제 방법을 한글 표시명으로 변환
+ */
+function getPayMethodDisplay(payMethod?: string | null): string {
+  if (!payMethod) return '카드결제';
+  
+  const methodMap: Record<string, string> = {
+    'card': '카드결제',
+    'kakao': '카카오페이',
+    'toss': '토스페이',
+    'naver': '네이버페이',
+    'phone': '휴대폰결제',
+    'trans': '계좌이체',
+    'vbank': '가상계좌',
+  };
+  
+  return methodMap[payMethod.toLowerCase()] || payMethod;
+}
+
 export interface PaymentHistoryItem {
   id: string; // Order.id
   merchantUid: string;
@@ -14,7 +33,9 @@ export interface PaymentHistoryItem {
   status: OrderStatus;
   payment?: {
     status: PaymentStatus;
-    payMethod?: string;
+    payMethod?: string; // 원본 결제 방법 (card, kakao, toss 등)
+    payMethodDisplay?: string; // 한글 표시명 (카드결제, 카카오페이, 토스페이 등)
+    easyPayProvider?: string | null; // 간편결제 제공자 (kakaopay, tosspay, naverpay 등)
     paidAt?: Date | null;
   };
   metadata?: {
@@ -111,6 +132,11 @@ export class GetFortunePaymentsUseCase {
     // 상태 필터
     if (status) {
       where.status = status;
+    } else {
+      // 기본적으로 USER_CANCELLED는 제외 (명시적으로 요청하지 않는 한)
+      where.status = {
+        not: 'USER_CANCELLED',
+      };
     }
 
     // 전체 개수 조회
@@ -207,8 +233,21 @@ export class GetFortunePaymentsUseCase {
 
           // 문서형인 경우 문서 존재 여부 확인
           if (session.mode === 'DOCUMENT') {
-            // 1. PaymentDetail의 documentId 확인 (우선순위)
-            if (paymentDetail?.documentId) {
+            // 1. Order의 metadata에서 documentId 확인 (최우선 - 가장 정확함)
+            if (!hasDocument && metadata?.documentId) {
+              const document = await this.prisma.documentResult.findUnique({
+                where: { id: metadata.documentId },
+                select: { id: true },
+              });
+              if (document) {
+                hasDocument = true;
+                documentId = document.id;
+                console.log(`[결제 내역] Order metadata에서 문서 찾음: orderId=${order.id}, documentId=${documentId}`);
+              }
+            }
+            
+            // 2. PaymentDetail의 documentId 확인 (두 번째 우선순위)
+            if (!hasDocument && paymentDetail?.documentId) {
               const document = await this.prisma.documentResult.findUnique({
                 where: { id: paymentDetail.documentId },
                 select: { id: true },
@@ -216,10 +255,41 @@ export class GetFortunePaymentsUseCase {
               if (document) {
                 hasDocument = true;
                 documentId = document.id;
+                console.log(`[결제 내역] PaymentDetail에서 문서 찾음: orderId=${order.id}, documentId=${documentId}`);
               }
             }
             
-            // 2. PaymentDetail에 documentId가 없으면 세션 정보로 조회
+            // 3. 세션 생성 시점에 생성된 문서 찾기 (세션 생성 시간 기준)
+            if (!hasDocument && session.id) {
+              // 세션 생성 시간 기준으로 문서 찾기 (정확한 매칭)
+              const sessionRecord = await this.prisma.fortuneSession.findUnique({
+                where: { id: session.id },
+                select: { createdAt: true },
+              });
+              
+              if (sessionRecord) {
+                const document = await this.prisma.documentResult.findFirst({
+                  where: {
+                    userId,
+                    category: session.category,
+                    createdAt: {
+                      gte: new Date(sessionRecord.createdAt.getTime() - 30000), // 세션 생성 30초 이내
+                      lte: new Date(sessionRecord.createdAt.getTime() + 30000), // 세션 생성 30초 이후까지
+                    },
+                  },
+                  orderBy: { createdAt: 'desc' },
+                  select: { id: true },
+                });
+
+                if (document) {
+                  hasDocument = true;
+                  documentId = document.id;
+                  console.log(`[결제 내역] 세션 생성 시간 기준으로 문서 찾음: orderId=${order.id}, documentId=${documentId}`);
+                }
+              }
+            }
+            
+            // 4. 마지막 폴백: userId와 category로 최신 문서 찾기 (부정확할 수 있음)
             if (!hasDocument) {
               const document = await this.prisma.documentResult.findFirst({
                 where: {
@@ -233,6 +303,7 @@ export class GetFortunePaymentsUseCase {
               if (document) {
                 hasDocument = true;
                 documentId = document.id;
+                console.log(`[결제 내역] 폴백: userId/category로 문서 찾음 (부정확할 수 있음): orderId=${order.id}, documentId=${documentId}`);
               } else {
                 // 문서가 없고 결제가 완료되었으면 재생성 가능
                 canRegenerate =
@@ -242,8 +313,22 @@ export class GetFortunePaymentsUseCase {
             }
           }
         } else {
-          // 세션이 없어도 PaymentDetail의 documentId로 문서 확인
-          if (paymentDetail?.documentId) {
+          // 세션이 없어도 문서 확인 (Order metadata 또는 PaymentDetail 사용)
+          // 1. Order의 metadata에서 documentId 확인 (최우선)
+          if (!hasDocument && metadata?.documentId) {
+            const document = await this.prisma.documentResult.findUnique({
+              where: { id: metadata.documentId },
+              select: { id: true },
+            });
+            if (document) {
+              hasDocument = true;
+              documentId = document.id;
+              console.log(`[결제 내역] 세션 없음 - Order metadata에서 문서 찾음: orderId=${order.id}, documentId=${documentId}`);
+            }
+          }
+          
+          // 2. PaymentDetail의 documentId 확인
+          if (!hasDocument && paymentDetail?.documentId) {
             const document = await this.prisma.documentResult.findUnique({
               where: { id: paymentDetail.documentId },
               select: { id: true },
@@ -251,6 +336,7 @@ export class GetFortunePaymentsUseCase {
             if (document) {
               hasDocument = true;
               documentId = document.id;
+              console.log(`[결제 내역] 세션 없음 - PaymentDetail에서 문서 찾음: orderId=${order.id}, documentId=${documentId}`);
             }
           }
         }
@@ -264,7 +350,9 @@ export class GetFortunePaymentsUseCase {
           payment: order.payment
             ? {
                 status: order.payment.status,
-                payMethod: order.payment.payMethod,
+                payMethod: order.payment.payMethod, // 원본 값 (card, kakao, toss 등)
+                payMethodDisplay: getPayMethodDisplay(order.payment.payMethod), // 한글 표시명
+                easyPayProvider: order.payment.easyPayProvider, // 간편결제 제공자
                 paidAt: order.payment.paidAt,
               }
             : undefined,

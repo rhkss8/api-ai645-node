@@ -211,6 +211,12 @@ export class CreateFortuneSessionUseCase {
                 console.log(`[세션 생성] PaymentDetail 업데이트: paymentDetailId=${existingPaymentDetail.id}, documentId=${documentId}`);
               } else {
                 // PaymentDetail이 아직 없으면 생성 (문서형 세션은 PaymentDetail이 있어야 함)
+                // 문서의 유효기간을 가져오기 위해 문서 조회
+                const documentForExpiry = await this.prisma.documentResult.findUnique({
+                  where: { id: documentId },
+                  select: { expiresAt: true },
+                });
+                
                 await this.prisma.paymentDetail.create({
                   data: {
                     paymentId,
@@ -218,7 +224,7 @@ export class CreateFortuneSessionUseCase {
                     documentId,
                     sessionType: 'DOCUMENT',
                     category,
-                    expiredAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30일
+                    expiredAt: documentForExpiry?.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 문서 유효기간 또는 기본 1년
                   },
                 });
                 console.log(`[세션 생성] PaymentDetail 생성: paymentId=${paymentId}, documentId=${documentId}`);

@@ -124,7 +124,9 @@ export class GetFortunePaymentDetailUseCase {
       payment: order.payment
         ? {
             status: order.payment.status,
-            payMethod: order.payment.payMethod,
+            payMethod: order.payment.payMethod, // 원본 값 (card, kakao, toss 등)
+            payMethodDisplay: getPayMethodDisplay(order.payment.payMethod), // 한글 표시명
+            easyPayProvider: order.payment.easyPayProvider, // 간편결제 제공자
             paidAt: order.payment.paidAt,
           }
         : undefined,

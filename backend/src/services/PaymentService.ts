@@ -1,6 +1,6 @@
 import { PrismaClient, PaymentStatus, SubscriptionType, OrderStatus } from '@prisma/client';
 import { IdGenerator } from '../utils/idGenerator';
-import { PortOneService } from './PortOneService';
+import { PortOneService, PortOneV2PaymentResponse } from './PortOneService';
 
 const prisma = new PrismaClient();
 const portOneService = new PortOneService();
@@ -10,6 +10,7 @@ export interface CreatePaymentData {
   amount: number;
   subscriptionType: SubscriptionType;
   paymentMethod: string;
+  easyPayProvider?: string; // 간편결제 제공자 (kakaopay, tosspay, naverpay 등)
   description?: string;
   metadata?: any;
   merchantUidPrefix?: string;
@@ -48,17 +49,20 @@ export class PaymentService {
       });
 
       // 결제 생성
+      console.log(`[PaymentService] 결제 생성: paymentMethod=${data.paymentMethod}, easyPayProvider=${data.easyPayProvider}`);
       const payment = await prisma.payment.create({
         data: {
           orderId: order.id,
           impUid: IdGenerator.generateReference('IMP'),
           pgProvider: 'portone',
-          payMethod: data.paymentMethod,
+          payMethod: data.paymentMethod || 'card', // 기본값 'card'
+          easyPayProvider: data.easyPayProvider || null, // 간편결제 제공자 저장
           amount: data.amount,
           currency: data.currency || 'KRW',
           status: PaymentStatus.PENDING,
         },
       });
+      console.log(`[PaymentService] 결제 생성 완료: paymentId=${payment.id}, payMethod=${payment.payMethod}, easyPayProvider=${payment.easyPayProvider}`);
 
       return {
         success: true,
@@ -322,8 +326,11 @@ export class PaymentService {
       await prisma.$transaction(async (tx) => {
         // 결제 방법 결정 (웹훅에서 받은 정보 우선)
         let finalPayMethod = payment.payMethod; // 기존 값 유지
+        console.log(`[웹훅] 결제 방법 결정 시작: 기존=${payment.payMethod}, payMethod=${params.payMethod}, easyPayProvider=${params.easyPayProvider}`);
+        
         if (params.payMethod) {
           finalPayMethod = params.payMethod;
+          console.log(`[웹훅] payMethod 사용: ${finalPayMethod}`);
         } else if (params.easyPayProvider) {
           // easyPayProvider를 payMethod로 변환
           const providerMap: Record<string, string> = {
@@ -332,19 +339,41 @@ export class PaymentService {
             'naverpay': 'naver',
           };
           finalPayMethod = providerMap[params.easyPayProvider.toLowerCase()] || params.easyPayProvider.toLowerCase();
+          console.log(`[웹훅] easyPayProvider 변환: ${params.easyPayProvider} -> ${finalPayMethod}`);
+        } else {
+          console.log(`[웹훅] 결제 방법 정보 없음, 기존 값 유지: ${finalPayMethod}`);
+        }
+
+        // easyPayProvider 결정 (웹훅에서 받은 정보 우선)
+        let finalEasyPayProvider = payment.easyPayProvider; // 기존 값 유지
+        if (params.easyPayProvider) {
+          finalEasyPayProvider = params.easyPayProvider;
+          console.log(`[웹훅] easyPayProvider 사용: ${finalEasyPayProvider}`);
+        } else if (params.payMethod && ['kakao', 'toss', 'naver'].includes(params.payMethod.toLowerCase())) {
+          // payMethod가 간편결제인 경우 easyPayProvider 역변환
+          const reverseMap: Record<string, string> = {
+            'kakao': 'kakaopay',
+            'toss': 'tosspay',
+            'naver': 'naverpay',
+          };
+          finalEasyPayProvider = reverseMap[params.payMethod.toLowerCase()] || null;
+          console.log(`[웹훅] payMethod에서 easyPayProvider 역변환: ${params.payMethod} -> ${finalEasyPayProvider}`);
         }
 
         // 결제 상태 업데이트 (PortOne paymentId를 impUid에 저장)
+        console.log(`[웹훅] Payment 업데이트: paymentId=${payment.id}, finalPayMethod=${finalPayMethod}, finalEasyPayProvider=${finalEasyPayProvider}`);
         await tx.payment.update({
           where: { id: payment.id },
           data: {
             impUid: params.paymentId, // PortOne의 실제 paymentId 저장
             payMethod: finalPayMethod, // 실제 결제 방법 업데이트
+            easyPayProvider: finalEasyPayProvider, // 간편결제 제공자 업데이트
             status: params.status === 'PAID' ? PaymentStatus.COMPLETED : params.status === 'FAILED' ? PaymentStatus.FAILED : PaymentStatus.PENDING,
             paidAt: params.status === 'PAID' ? new Date() : null,
             updatedAt: new Date(),
           },
         });
+        console.log(`[웹훅] Payment 업데이트 완료: payMethod=${finalPayMethod}, easyPayProvider=${finalEasyPayProvider}`);
 
         // 주문 상태도 동기화
         await tx.order.update({
@@ -360,6 +389,19 @@ export class PaymentService {
     } catch (e) {
       console.error('웹훅 결제 확정 처리 오류:', e);
       return { success: false };
+    }
+  }
+
+  /**
+   * PortOne API로 결제 정보 조회 (웹훅에서 사용)
+   */
+  async getPortOnePaymentInfo(paymentId: string): Promise<PortOneV2PaymentResponse | null> {
+    try {
+      const payment = await portOneService.getPayment(paymentId);
+      return payment;
+    } catch (error) {
+      console.error(`[PaymentService] PortOne 결제 정보 조회 실패: ${paymentId}`, error);
+      return null;
     }
   }
 
@@ -443,19 +485,62 @@ export class PaymentService {
       console.log(`[폴링] PortOne API 호출: ${actualPortOnePaymentId}`);
       const portOnePayment = await portOneService.getPayment(actualPortOnePaymentId);
       console.log(`[폴링] PortOne 응답 상태: ${portOnePayment.status}`);
+      console.log(`[폴링] PortOne 응답 전체:`, JSON.stringify(portOnePayment, null, 2));
+      
+      // PortOne 응답에서 결제 방법 추출
+      let extractedPayMethod: string | undefined = undefined;
+      let extractedEasyPayProvider: string | undefined = undefined;
+      
+      if (portOnePayment.channel?.payMethod) {
+        extractedPayMethod = portOnePayment.channel.payMethod;
+        console.log(`[폴링] PortOne에서 payMethod 추출: ${extractedPayMethod}`);
+      }
+      
+      if (portOnePayment.channel?.easyPay?.provider) {
+        extractedEasyPayProvider = portOnePayment.channel.easyPay.provider.toLowerCase();
+        console.log(`[폴링] PortOne에서 easyPayProvider 추출: ${extractedEasyPayProvider}`);
+        
+        // easyPay provider가 있으면 payMethod로도 변환
+        if (!extractedPayMethod) {
+          const providerMap: Record<string, string> = {
+            'kakaopay': 'kakao',
+            'tosspay': 'toss',
+            'naverpay': 'naver',
+          };
+          extractedPayMethod = providerMap[extractedEasyPayProvider] || extractedEasyPayProvider;
+          console.log(`[폴링] easyPayProvider를 payMethod로 변환: ${extractedEasyPayProvider} -> ${extractedPayMethod}`);
+        }
+      }
       
       // 결제 상태 확인
       if (portOnePayment.status === 'PAID' || portOnePayment.status === 'paid') {
         // 결제 완료 - Payment와 Order 상태를 트랜잭션으로 함께 업데이트
         console.log(`[폴링] 결제 완료 확인, 상태 업데이트 시작: ${paymentId}`);
         await prisma.$transaction(async (tx) => {
+          // payMethod와 easyPayProvider 업데이트 (PortOne에서 추출한 값이 있으면 사용, 없으면 기존 값 유지)
+          const updateData: any = {
+            status: PaymentStatus.COMPLETED,
+            paidAt: portOnePayment.paidAt ? new Date(portOnePayment.paidAt) : new Date(),
+            updatedAt: new Date(),
+          };
+          
+          if (extractedPayMethod) {
+            updateData.payMethod = extractedPayMethod;
+            console.log(`[폴링] payMethod 업데이트: ${payment.payMethod} -> ${extractedPayMethod}`);
+          } else {
+            console.log(`[폴링] payMethod 정보 없음, 기존 값 유지: ${payment.payMethod}`);
+          }
+          
+          if (extractedEasyPayProvider) {
+            updateData.easyPayProvider = extractedEasyPayProvider;
+            console.log(`[폴링] easyPayProvider 업데이트: ${payment.easyPayProvider || '(없음)'} -> ${extractedEasyPayProvider}`);
+          } else {
+            console.log(`[폴링] easyPayProvider 정보 없음, 기존 값 유지: ${payment.easyPayProvider || '(없음)'}`);
+          }
+          
           await tx.payment.update({
             where: { id: paymentId },
-            data: {
-              status: PaymentStatus.COMPLETED,
-              paidAt: portOnePayment.paidAt ? new Date(portOnePayment.paidAt) : new Date(),
-              updatedAt: new Date(),
-            },
+            data: updateData,
           });
 
           // Order 상태도 함께 업데이트

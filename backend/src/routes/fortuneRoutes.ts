@@ -436,6 +436,14 @@ export const createFortuneRoutes = (
    *                 enum: [PAID, FAILED, PENDING, CANCELLED, USER_CANCELLED, REFUNDED]
    *                 description: 결제 상태
    *                 example: PAID
+   *               payMethod:
+   *                 type: string
+   *                 description: 결제 방법 (card, kakao, toss, naver 등, 선택, PortOne에서 자동 추출)
+   *                 example: "kakao"
+   *               easyPayProvider:
+   *                 type: string
+   *                 description: 간편결제 제공자 (kakaopay, tosspay, naverpay 등, 선택, PortOne에서 자동 추출)
+   *                 example: "kakaopay"
    *     responses:
    *       200:
    *         description: 웹훅 처리 성공
@@ -742,6 +750,14 @@ export const createFortuneRoutes = (
    *                 enum: [5, 10, 30]
    *                 description: 채팅형일 경우 시간 선택 (5, 10, 30분, 필수)
    *                 example: 10
+   *               payMethod:
+   *                 type: string
+   *                 description: 결제 방법 (card, kakao, toss, naver 등, 선택)
+   *                 example: "card"
+   *               easyPayProvider:
+   *                 type: string
+   *                 description: 간편결제 제공자 (kakaopay, tosspay, naverpay 등, 선택)
+   *                 example: "kakaopay"
    *     responses:
    *       200:
    *         description: 결제 준비 성공
@@ -872,6 +888,78 @@ export const createFortuneRoutes = (
   router.get(
     '/products',
     controller.getAllProducts,
+  );
+
+  /**
+   * @swagger
+   * /api/v1/fortune/payment/{paymentId}/cancel:
+   *   post:
+   *     operationId: cancelFortunePayment
+   *     summary: 운세 결제 취소
+   *     description: 사용자가 완료된 결제를 취소합니다. 결제 상태와 주문 상태가 CANCELLED로 변경되고, 관련 세션이 비활성화됩니다.
+   *     tags: [Fortune]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: paymentId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 취소할 결제 ID
+   *     requestBody:
+   *       required: false
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               reason:
+   *                 type: string
+   *                 description: 취소 사유 (선택)
+   *     responses:
+   *       200:
+   *         description: 결제 취소 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     paymentId:
+   *                       type: string
+   *                     orderId:
+   *                       type: string
+   *                 message:
+   *                   type: string
+   *       400:
+   *         description: 잘못된 요청 (이미 취소됨, 취소 불가능한 상태 등)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 error:
+   *                   type: string
+   *                 message:
+   *                   type: string
+   *       403:
+   *         description: 접근 권한 없음 (본인의 결제가 아님)
+   *       404:
+   *         description: 결제 정보를 찾을 수 없음
+   *       500:
+   *         description: 서버 오류
+   */
+  router.post(
+    '/payment/:paymentId/cancel',
+    authenticateAccess,
+    controller.cancelPayment,
   );
 
   /**

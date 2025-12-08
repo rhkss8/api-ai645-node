@@ -147,6 +147,8 @@ export class FortuneController {
         console.log('[결제 준비] 요청 시작:', {
           userId: (req as any).user?.sub,
           body: req.body,
+          payMethod: req.body?.payMethod,
+          easyPayProvider: req.body?.easyPayProvider,
         });
 
         const user = (req as any).user;
@@ -503,6 +505,27 @@ export class FortuneController {
         return;
       }
 
+      // PortOne API로 결제 정보 조회하여 실제 결제 방법 추출 (웹훅 body보다 정확함)
+      let extractedPayMethod: string | undefined = payMethod;
+      let extractedEasyPayProvider: string | undefined = easyPayProvider;
+      
+      try {
+        const portOnePayment = await this.paymentService.getPortOnePaymentInfo(paymentId);
+        if (portOnePayment) {
+          // PortOne 응답에서 결제 방법 추출
+          if (portOnePayment.channel?.payMethod) {
+            extractedPayMethod = portOnePayment.channel.payMethod;
+            console.log(`[웹훅] PortOne API에서 payMethod 추출: ${extractedPayMethod}`);
+          } else if (portOnePayment.channel?.easyPay?.provider) {
+            extractedEasyPayProvider = portOnePayment.channel.easyPay.provider;
+            console.log(`[웹훅] PortOne API에서 easyPayProvider 추출: ${extractedEasyPayProvider}`);
+          }
+        }
+      } catch (error) {
+        console.warn(`[웹훅] PortOne API 조회 실패 (웹훅 body 값 사용):`, error);
+        // PortOne API 조회 실패해도 웹훅 body의 값 사용
+      }
+
       // 간이 서명 검증 (비밀키 헤더 비교)
       // PortOne V2는 여러 헤더 이름을 사용할 수 있음
       const secretHeader = (
@@ -533,16 +556,16 @@ export class FortuneController {
         paymentId, 
         amount, 
         status, 
-        payMethod, 
-        easyPayProvider 
+        payMethod: extractedPayMethod, 
+        easyPayProvider: extractedEasyPayProvider 
       });
       const ok = await this.paymentService.confirmPaymentByWebhook({ 
         orderId, 
         paymentId, 
         amount, 
         status,
-        payMethod, // 웹훅에서 받은 결제 방법
-        easyPayProvider, // 웹훅에서 받은 간편결제 제공자
+        payMethod: extractedPayMethod, // PortOne API에서 추출한 결제 방법 (우선)
+        easyPayProvider: extractedEasyPayProvider, // PortOne API에서 추출한 간편결제 제공자 (우선)
       });
       if (!ok.success) {
         console.error('❌ 결제 확정 처리 실패:', { orderId, paymentId });
@@ -614,6 +637,72 @@ export class FortuneController {
   );
 
   /**
+   * 결제 취소
+   * POST /api/v1/fortune/payment/:paymentId/cancel
+   */
+  cancelPayment = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          error: '로그인이 필요합니다.',
+          errorCode: 'UNAUTHORIZED',
+        });
+        return;
+      }
+
+      const { paymentId } = req.params;
+      if (!paymentId) {
+        res.status(400).json({ success: false, error: 'PAYMENT_ID_REQUIRED' });
+        return;
+      }
+
+      const { reason } = req.body; // 취소 사유 (선택)
+
+      try {
+        const prisma = new (require('@prisma/client').PrismaClient)();
+        const cancelPaymentUseCase = new (require('../usecases/CancelFortunePaymentUseCase').CancelFortunePaymentUseCase)(prisma);
+        
+        const result = await cancelPaymentUseCase.execute({
+          paymentId,
+          userId: user.sub,
+          reason,
+        });
+
+        if (!result.success) {
+          const statusCode = result.error === 'PAYMENT_NOT_FOUND' ? 404 :
+                            result.error === 'PAYMENT_ACCESS_DENIED' ? 403 :
+                            result.error === 'ALREADY_CANCELLED' || result.error === 'CANNOT_CANCEL' ? 400 : 500;
+          
+          res.status(statusCode).json({
+            success: false,
+            error: result.error,
+            message: result.message,
+          });
+          return;
+        }
+
+        res.status(200).json({
+          success: true,
+          data: {
+            paymentId: result.paymentId,
+            orderId: result.orderId,
+          },
+          message: result.message,
+        });
+      } catch (error: any) {
+        console.error('[결제 취소] 에러:', error);
+        res.status(500).json({
+          success: false,
+          error: 'CANCEL_FAILED',
+          message: '결제 취소 처리 중 오류가 발생했습니다.',
+        });
+      }
+    },
+  );
+
+  /**
    * 결과 토큰으로 결과 조회
    * GET /api/v1/fortune/result/:token
    */
@@ -671,30 +760,39 @@ export class FortuneController {
 
             // 2. Order의 metadata에서 documentId 찾기 (세션 ID로 Order 찾기)
             if (!document) {
-              // 세션과 연결된 Order 찾기 (metadata.sessionId로 찾기)
-              const order = await prisma.order.findFirst({
+              // PaymentDetail을 먼저 조회하여 paymentId 찾기
+              const paymentDetail = await prisma.paymentDetail.findFirst({
                 where: {
-                  userId: payload.userId,
-                  payment: {
-                    paymentDetails: {
-                      some: {
-                        sessionId: payload.sessionId,
-                      },
-                    },
-                  },
+                  sessionId: payload.sessionId,
                 },
-                include: {
-                  payment: {
-                    include: {
-                      paymentDetails: {
-                        where: {
-                          sessionId: payload.sessionId,
-                        },
-                      },
-                    },
-                  },
+                select: {
+                  paymentId: true,
+                  documentId: true,
                 },
               });
+              
+              // PaymentDetail에서 documentId가 있으면 바로 사용
+              if (paymentDetail?.documentId) {
+                document = await prisma.documentResult.findUnique({
+                  where: { id: paymentDetail.documentId },
+                });
+              }
+              
+              // PaymentDetail에서 paymentId로 Order 찾기
+              let order = null;
+              if (paymentDetail?.paymentId && !document) {
+                order = await prisma.order.findFirst({
+                  where: {
+                    userId: payload.userId,
+                    payment: {
+                      id: paymentDetail.paymentId,
+                    },
+                  },
+                  include: {
+                    payment: true,
+                  },
+                });
+              }
               
               // Order를 찾지 못하면 metadata에서 직접 찾기
               if (!order) {
@@ -772,8 +870,17 @@ export class FortuneController {
                 }
               } catch (error: any) {
                 console.error('[결과 조회] GPT 문서 생성 실패:', error);
-                // GPT 생성 실패해도 에러를 반환하지 않고 document를 null로 유지
-                document = null;
+                // 문서 생성 실패 시 에러 응답 반환
+                const errorMessage = error?.message || '운세 리포트 생성에 실패했습니다.';
+                const errorCode = error?.status === 429 ? 'AI_QUOTA_EXCEEDED' : 'AI_GENERATION_FAILED';
+                
+                res.status(500).json({
+                  success: false,
+                  error: errorCode,
+                  message: errorMessage,
+                  timestamp: new Date().toISOString(),
+                });
+                return;
               }
             }
 

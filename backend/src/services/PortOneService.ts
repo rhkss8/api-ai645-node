@@ -12,6 +12,10 @@ export interface PortOneV2PaymentResponse {
   customData?: string;
   channel: {
     type: string;
+    payMethod?: string; // 결제 방법 (card, kakao, toss 등)
+    easyPay?: {
+      provider?: string; // 간편결제 제공자 (kakaopay, tosspay 등)
+    };
   };
   paidAt?: string;
   failedAt?: string;
