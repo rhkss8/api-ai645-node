@@ -18,17 +18,7 @@ echo "✅ 데이터베이스 연결 성공!"
 echo "🔄 Prisma 마이그레이션 실행 중..."
 DATABASE_URL="postgres://postgres:postgres@db:5432/main" npx prisma migrate deploy
 
-# 당첨번호 데이터 확인 및 import
-echo "📊 당첨번호 데이터 확인 중..."
-WINNING_COUNT=$(DATABASE_URL="postgres://postgres:postgres@db:5432/main" npx prisma db execute --stdin <<< "SELECT COUNT(*) as count FROM winning_numbers" | grep -o '[0-9]*' | tail -1)
-
-if [ "$WINNING_COUNT" -eq 0 ]; then
-    echo "⚠️  당첨번호 데이터가 없습니다. CSV에서 import를 시작합니다..."
-    DATABASE_URL="postgres://postgres:postgres@db:5432/main" npx ts-node src/scripts/importWinningNumbers.ts
-    echo "✅ 당첨번호 데이터 import 완료!"
-else
-    echo "✅ 당첨번호 데이터가 이미 존재합니다. (${WINNING_COUNT}개)"
-fi
+# 도메인별 초기 데이터는 별도 시드로 관리합니다 (운세 도메인 전환)
 
 # Prisma 클라이언트 생성
 echo "🔧 Prisma 클라이언트 생성 중..."

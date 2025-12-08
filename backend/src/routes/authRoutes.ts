@@ -77,6 +77,104 @@ export const createAuthRoutes = (controller: AuthController): Router => {
 
   /**
    * @swagger
+   * /api/auth/profile:
+   *   patch:
+   *     operationId: updateUserProfile
+   *     summary: 사용자 프로필 업데이트
+   *     description: 현재 로그인한 사용자의 정보를 부분 업데이트합니다. 값이 있는 필드만 업데이트됩니다.
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: false
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               nickname:
+   *                 type: string
+   *                 description: 닉네임
+   *                 example: "홍길동"
+   *               email:
+   *                 type: string
+   *                 format: email
+   *                 description: 이메일 주소
+   *                 example: "user@example.com"
+   *               phone:
+   *                 type: string
+   *                 description: 연락처
+   *                 example: "010-1234-5678"
+   *               termsAgreed:
+   *                 type: boolean
+   *                 description: 이용약관 동의 여부
+   *               privacyAgreed:
+   *                 type: boolean
+   *                 description: 개인정보 수집·이용 동의 여부
+   *               marketingAgreed:
+   *                 type: boolean
+   *                 description: 마케팅 정보 수신 동의 여부
+   *     responses:
+   *       200:
+   *         description: 프로필 업데이트 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                     nickname:
+   *                       type: string
+   *                     email:
+   *                       type: string
+   *                       nullable: true
+   *                     phone:
+   *                       type: string
+   *                       nullable: true
+   *                     role:
+   *                       type: string
+   *                       enum: [USER, ADMIN]
+   *                     termsAgreed:
+   *                       type: boolean
+   *                     privacyAgreed:
+   *                       type: boolean
+   *                     marketingAgreed:
+   *                       type: boolean
+   *                     authType:
+   *                       type: string
+   *                       nullable: true
+   *                     socialAccounts:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                     createdAt:
+   *                       type: string
+   *                       format: date-time
+   *                     updatedAt:
+   *                       type: string
+   *                       format: date-time
+   *                       nullable: true
+   *                 message:
+   *                   type: string
+   *                   example: "사용자 정보가 업데이트되었습니다."
+   *       400:
+   *         description: 잘못된 요청 (이메일 중복, 업데이트할 정보 없음 등)
+   *       401:
+   *         description: 인증 필요
+   *       404:
+   *         description: 사용자를 찾을 수 없음
+   */
+  router.patch('/profile', authenticateAccess, controller.updateProfile);
+
+  /**
+   * @swagger
    * /api/auth/refresh:
    *   post:
    *     operationId: refreshToken

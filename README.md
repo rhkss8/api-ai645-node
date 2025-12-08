@@ -1,28 +1,10 @@
-# 🎰 로또 번호 추천 API (TypeScript + Clean Architecture)
+# 🔮 운세 서비스 백엔드 (TypeScript + Clean Architecture)
 
-Node.js(TypeScript) + Express + PostgreSQL + OpenAI GPT를 사용하는 AI 기반 로또 번호 추천 웹서비스입니다.
+Node.js(TypeScript) + Express + PostgreSQL + OpenAI GPT 기반의 운세(포춘) 서비스 백엔드입니다.
 
 ## ✨ 주요 기능
 
-### 🆓 무료 번호 추천 API (`/api/recommend/free`)
-- GPT-3.5-turbo 사용
-- 사용자 조건 기반 추천 (제외번호, 포함번호, 최근구매이력, 선호사항)
-- 회차별 추천 저장
-
-### 💎 프리미엄 번호 추천 API (`/api/recommend/premium`)
-- GPT-4o 사용
-- 이미지 기반 번호 추출 및 분석 지원
-- 고급 패턴 분석 및 전략 제공
-
-### 📷 이미지 번호 추출 API (`/api/image/extract`)
-- GPT-4o Vision으로 로또 용지/번호표에서 번호 인식
-- OCR 신뢰도 측정
-- 다양한 형태의 번호 이미지 지원
-
-### 📊 당첨번호 매칭 회고 API (`/api/review/generate`)
-- 추천번호와 실제 당첨번호 비교 분석
-- AI 기반 패턴 분석 및 개선점 제시
-- 성공/실패 요인 분석
+향후 운세 도메인 기능(API 설계/문서)은 별도 섹션으로 제공될 예정입니다.
 
 ### 👑 관리자 API (`/api/admin/*`)
 - **사용자 관리**: 전체 사용자 목록 조회, 역할 변경
@@ -189,32 +171,7 @@ api-ai645-node/
 
 ## 🎯 API 사용 예제
 
-### 무료 번호 추천
-```bash
-curl -X POST http://localhost:3350/api/recommend/free \
-  -H "Content-Type: application/json" \
-  -d '{
-    "round": 1105,
-    "conditions": {
-      "excludeNumbers": [1, 2, 3],
-      "includeNumbers": [7, 14],
-      "preferences": "홀수 번호를 선호합니다"
-    }
-  }'
-```
-
-### 프리미엄 이미지 기반 추천
-```bash
-curl -X POST http://localhost:3350/api/recommend/premium \
-  -F "image=@lottery_numbers.jpg" \
-  -F "data={\"round\": 1105}"
-```
-
-### 이미지 번호 추출
-```bash
-curl -X POST http://localhost:3350/api/image/extract \
-  -F "image=@lottery_ticket.jpg"
-```
+운세 도메인 API 예시는 전환 작업 후 제공됩니다.
 
 ### 관리자 API (관리자 권한 필요)
 ```bash
@@ -293,9 +250,6 @@ curl -X GET http://localhost:3350/api/board/my \
 
 ### 주요 테이블
 - `user`: 회원 정보 (이메일/소셜 가입 구분, provider, providerId 등)
-- `recommendation_history`: 추천 내역 저장
-- `recommendation_review`: 회고 분석 결과
-- `winning_numbers`: 당첨번호 데이터
 - `api_usage`: API 사용량 통계
 - `ip_limit_records`: IP별 요청 제한 기록
 
@@ -342,17 +296,7 @@ curl -X GET http://localhost:3350/api/board/my \
 | updatedAt    | DateTime      | 수정일                       |
 | deletedAt    | DateTime?     | 삭제일 (소프트 삭제)         |
 
-### 6. WinningNumbers (당첨번호)
-| 필드명            | 타입     | 설명               |
-|-------------------|----------|--------------------|
-| id                | String   | 고유 식별자        |
-| round             | Int      | 당첨회차           |
-| numbers           | Json     | 당첨번호(보너스 포함) |
-| bonusNumber       | Int      | 보너스추첨번호     |
-| firstWinningAmount| BigInt   | 1등 당첨금         |
-| drawDate          | DateTime | 추첨일             |
-| createdAt         | DateTime | 생성일             |
-| updatedAt         | DateTime | 수정일             |
+ 
 
 ### 데이터베이스 관리
 ```bash
@@ -686,7 +630,7 @@ npm run test:coverage
 
 ---
 
-🎰 **Happy Lottery Number Recommending!** 🍀
+
 
 ## 🐳 Docker 환경 분리 (개발/배포)
 

@@ -87,7 +87,9 @@ model User {
   nickname        String                  @db.VarChar(40)
   email           String?                 @unique @db.VarChar(255) // 임시 ID/비밀번호 로그인용
   password        String?                 @db.VarChar(255) // 해시된 비밀번호
+  phone           String?                 @db.VarChar(20) // 연락처 (결제 시 필수)
   createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
   deletedAt       DateTime?
   role            UserRole                @default(USER)
   termsAgreed     Boolean                 @default(false)
@@ -100,6 +102,9 @@ model User {
   socialAccounts  SocialAccount[]
   subscriptions   Subscription[]
   params          RecommendationParams[]
+  fortuneSessions FortuneSession[]
+  documentResults DocumentResult[]
+  hongsiCredits   HongsiCredit[]
 
   @@map("users")
 }
@@ -139,21 +144,21 @@ model AccessTokenBlacklist {
 }
 
 model Order {
-  id          String      @id @default(cuid())
-  userId      String
-  merchantUid String      @unique
-  orderName   String      @default("로또 추천 서비스")
-  amount      Int
-  currency    String      @default("KRW")
-  status      OrderStatus @default(PENDING)
-  description String?
-  metadata    Json?
-  paramId     String?     // 추천 파라미터 ID 연결
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  payment     Payment?
-  params      RecommendationParams? @relation(fields: [paramId], references: [id])
+  id             String                 @id @default(cuid())
+  userId         String
+  merchantUid    String                 @unique
+  orderName      String                 @default("로또 추천 서비스")
+  amount         Int
+  currency       String                 @default("KRW")
+  status         OrderStatus            @default(PENDING)
+  description    String?
+  metadata       Json?
+  paramId        String? // 추천 파라미터 ID 연결
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment        Payment?
+  params         RecommendationParams?  @relation(fields: [paramId], references: [id])
   recommendation RecommendationHistory?
 
   @@index([userId])
@@ -165,19 +170,20 @@ model Order {
 }
 
 model Payment {
-  id          String        @id @default(cuid())
-  orderId     String        @unique
-  impUid      String        @unique
-  pgProvider  String
-  payMethod   String
-  amount      Int
-  currency    String        @default("KRW")
-  status      PaymentStatus @default(PENDING)
-  paidAt      DateTime?
-  rawResponse Json?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  order       Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id              String        @id @default(cuid())
+  orderId         String        @unique
+  impUid          String        @unique
+  pgProvider      String
+  payMethod       String
+  easyPayProvider String? // 간편결제 제공자 (kakaopay, tosspay, naverpay 등)
+  amount          Int
+  currency        String        @default("KRW")
+  status          PaymentStatus @default(PENDING)
+  paidAt          DateTime?
+  rawResponse     Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([impUid])
   @@index([status])
@@ -222,18 +228,18 @@ model BoardPost {
 }
 
 model RecommendationParams {
-  id         String                 @id @default(cuid())
+  id         String                    @id @default(cuid())
   userId     String
   type       RecommendationType
-  gameCount  Int                    @default(5)
-  conditions Json?                  // 사용자 조건 (includeNumbers에 이미지 추출 번호 포함)
-  round      Int?                   // 대상 회차
+  gameCount  Int                       @default(5)
+  conditions Json? // 사용자 조건 (includeNumbers에 이미지 추출 번호 포함)
+  round      Int? // 대상 회차
   status     RecommendationParamStatus @default(PENDING)
-  orderId    String?                // 연결된 주문 ID
-  expiresAt  DateTime               // 24시간 후 만료
-  createdAt  DateTime               @default(now())
-  updatedAt  DateTime               @updatedAt
-  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId    String? // 연결된 주문 ID
+  expiresAt  DateTime // 24시간 후 만료
+  createdAt  DateTime                  @default(now())
+  updatedAt  DateTime                  @updatedAt
+  user       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders     Order[]
 
   @@index([userId])
@@ -290,11 +296,142 @@ enum SubscriptionType {
 }
 
 enum RecommendationParamStatus {
-  PENDING           // 파라미터 저장됨
-  PAYMENT_PENDING   // 결제 대기
+  PENDING // 파라미터 저장됨
+  PAYMENT_PENDING // 결제 대기
   PAYMENT_COMPLETED // 결제 완료
-  GENERATING        // GPT 처리 중
-  COMPLETED         // 완료
-  FAILED            // 실패
-  EXPIRED           // 만료
+  GENERATING // GPT 처리 중
+  COMPLETED // 완료
+  FAILED // 실패
+  EXPIRED // 만료
+}
+
+// 포포춘 운세 서비스 모델
+model FortuneSession {
+  id               String            @id @default(cuid())
+  userId           String
+  category         FortuneCategory
+  formType         FormType? // ASK, DAILY, TRADITIONAL
+  mode             SessionMode
+  userInput        String? // 세션 생성 시 사용자 입력 (이름, 생년월일, 성별 등)
+  userData         Json? // 구조화된 운세 데이터 (이름, 생년월일시, 성별, 기타 메타데이터)
+  remainingTime    Int // 남은 시간 (초)
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  expiresAt        DateTime
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationLogs ConversationLog[]
+  paymentDetails   PaymentDetail[]
+
+  @@index([userId])
+  @@index([category])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("fortune_sessions")
+}
+
+model ConversationLog {
+  id          String         @id @default(cuid())
+  sessionId   String
+  userInput   String
+  aiOutput    String
+  elapsedTime Int // 소요 시간 (초)
+  isPaid      Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  session     FortuneSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("conversation_logs")
+}
+
+model DocumentResult {
+  id           String          @id @default(cuid())
+  userId       String
+  category     FortuneCategory
+  title        String          @db.VarChar(200)
+  content      String
+  issuedAt     DateTime        @default(now())
+  expiresAt    DateTime
+  documentLink String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([expiresAt])
+  @@map("document_results")
+}
+
+model PaymentDetail {
+  id          String          @id @default(cuid())
+  paymentId   String // Payment.id (기존 결제 시스템과 연결)
+  sessionId   String? // FortuneSession.id (채팅형 세션)
+  documentId  String? // DocumentResult.id (문서형 결과)
+  sessionType SessionMode // CHAT or DOCUMENT
+  category    FortuneCategory
+  result      Json? // 결과 데이터
+  createdAt   DateTime        @default(now())
+  expiredAt   DateTime? // 만료일시
+  session     FortuneSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId])
+  @@index([sessionId])
+  @@index([documentId])
+  @@map("payment_details")
+}
+
+model HongsiCredit {
+  id          String   @id @default(cuid())
+  userId      String
+  creditDate  String // YYYY-MM-DD 형식
+  freeUsed    Boolean  @default(false) // 무료 홍시 사용 여부
+  paidMinutes Int      @default(0) // 유료 구매 시간 (분)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, creditDate])
+  @@index([userId, creditDate])
+  @@map("hongsi_credits")
+}
+
+enum FortuneCategory {
+  // TRADITIONAL (전통 운세)
+  SAJU // 사주
+  NEW_YEAR // 신년운세
+  MONEY // 횡재수 & 금전운
+  HAND // 손금
+  TOJEONG // 토정비결
+
+  // ASK (자유 질문)
+  BREAK_UP // 헤어진 연인 재회
+  CAR_PURCHASE // 차구매
+  BUSINESS // 사업운
+  INVESTMENT // 투자 상담
+  LOVE // 연애운
+  DREAM // 꿈해몽
+  LUCKY_NUMBER // 행운번호(로또)
+  MOVING // 이사
+  TRAVEL // 여행운 & 방향
+  COMPATIBILITY // 궁합
+  TAROT // 타로
+  CAREER // 직장운
+  LUCKY_DAY // 길일
+  NAMING // 작명
+
+  // DAILY (오늘의 운세)
+  DAILY // 오늘의 운세
+}
+
+enum FormType {
+  ASK // 자유 질문
+  DAILY // 오늘의 운세
+  TRADITIONAL // 전통 운세
+}
+
+enum SessionMode {
+  CHAT // 채팅형
+  DOCUMENT // 문서형
 }

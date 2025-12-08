@@ -10,6 +10,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "typeRoots": ["./node_modules/@types"],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -33,7 +35,6 @@
       "@/repositories/*": ["repositories/*"],
       "@/middlewares/*": ["middlewares/*"],
       "@/routes/*": ["routes/*"],
-      "@/prompts/*": ["prompts/*"],
       "@/config/*": ["config/*"],
       "@/utils/*": ["utils/*"],
       "@/types/*": ["types/*"]

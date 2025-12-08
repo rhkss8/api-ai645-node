@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   # Backend service (Node.js + Express)
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: api-backend
     ports:
       - "3350:3350"  # 외부:내부 포트 매핑
@@ -13,16 +11,19 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/main
+      - PORT=3350
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
+      - ./backend:/app
       - /app/node_modules
     restart: unless-stopped
     networks:
       - app-network
-    command: npm run start
+    command: sh -c "npx prisma generate && npx prisma db push --accept-data-loss && npm run dev"
 
   # Database service (PostgreSQL)
   db:
@@ -51,6 +52,23 @@ services:
 volumes:
   postgres_data:
     driver: local
+
+  # ngrok (선택사항 - 웹훅 테스트용)
+  # ngrok:
+  #   image: ngrok/ngrok:latest
+  #   container_name: api-ngrok
+  #   command: start --all --config /etc/ngrok.yml
+  #   environment:
+  #     - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+  #   volumes:
+  #     - ./ngrok.yml:/etc/ngrok.yml:ro
+  #   ports:
+  #     - "4040:4040"  # ngrok Web Interface
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped
+  #   networks:
+  #     - app-network
 
 # 네트워크 정의
 networks:

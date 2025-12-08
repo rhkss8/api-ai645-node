@@ -43,5 +43,5 @@ fi
 # 4. 서버 시작
 echo ""
 echo "📊 4. 서버 시작"
-echo "🚀 TypeScript 로또 추천 API 서버가 시작되었습니다!"
+echo "🚀 서버가 시작되었습니다!"
 npm run start:prod 

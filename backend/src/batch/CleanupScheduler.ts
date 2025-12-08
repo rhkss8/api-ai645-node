@@ -1,12 +1,22 @@
 import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
 import env from '../config/env';
+import { CleanupExpiredSessionsUseCase } from '../usecases/CleanupExpiredSessionsUseCase';
+import { PrismaFortuneSessionRepository } from '../repositories/impl/PrismaFortuneSessionRepository';
+import { PrismaConversationLogRepository } from '../repositories/impl/PrismaConversationLogRepository';
 
 export class CleanupScheduler {
   private readonly prisma: PrismaClient;
+  private readonly cleanupSessionsUseCase: CleanupExpiredSessionsUseCase;
 
   constructor() {
     this.prisma = new PrismaClient();
+    const sessionRepository = new PrismaFortuneSessionRepository(this.prisma);
+    const logRepository = new PrismaConversationLogRepository(this.prisma);
+    this.cleanupSessionsUseCase = new CleanupExpiredSessionsUseCase(
+      sessionRepository,
+      logRepository,
+    );
   }
 
   /**
@@ -62,6 +72,21 @@ export class CleanupScheduler {
   }
 
   /**
+   * 만료된 운세 세션 정리
+   */
+  async cleanupExpiredSessions(): Promise<void> {
+    try {
+      console.log('🧹 만료된 운세 세션 정리 시작...');
+      
+      const result = await this.cleanupSessionsUseCase.execute();
+      
+      console.log(`✅ 만료된 운세 세션 ${result.cleanedCount}개 정리 완료`);
+    } catch (error) {
+      console.error('❌ 만료된 운세 세션 정리 실패:', error);
+    }
+  }
+
+  /**
    * 스케줄러 시작
    */
   start(): void {
@@ -90,8 +115,15 @@ export class CleanupScheduler {
         await this.collectUserActivityStats();
       });
 
+      // 매시간 30분 - 만료된 운세 세션 정리
+      cron.schedule('30 * * * *', async () => {
+        console.log('⏰ 만료된 운세 세션 정리 실행');
+        await this.cleanupExpiredSessions();
+      });
+
       console.log('✅ 정리 스케줄러 등록 완료 (프로덕션):');
       console.log('  - 매시간: 만료된 파라미터 정리');
+      console.log('  - 매시간 30분: 만료된 운세 세션 정리');
       console.log('  - 매일 02:00: 결제 실패한 주문 정리');
       console.log('  - 매일 03:00: 사용자 활동 통계 수집');
       
@@ -101,6 +133,7 @@ export class CleanupScheduler {
         console.log('⏰ 정리 작업 실행 (개발용 - 5분마다)');
         await this.cleanupExpiredParams();
         await this.cleanupFailedOrders();
+        await this.cleanupExpiredSessions();
         await this.collectUserActivityStats();
       });
 
@@ -115,6 +148,7 @@ export class CleanupScheduler {
     console.log('🧹 수동 정리 작업 실행');
     await this.cleanupExpiredParams();
     await this.cleanupFailedOrders();
+    await this.cleanupExpiredSessions();
     await this.collectUserActivityStats();
     console.log('✅ 수동 정리 작업 완료');
   }

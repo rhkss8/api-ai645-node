@@ -53,6 +53,38 @@ export class IdGenerator {
   }
 
   /**
+   * 운세 세션 ID 생성
+   */
+  static generateFortuneSessionId(): string {
+    return `session_${this.generateShortId()}`;
+  }
+
+  /**
+   * 대화 로그 ID 생성
+   */
+  static generateConversationLogId(): string {
+    return `log_${this.generateShortId()}`;
+  }
+
+  /**
+   * 문서 결과 ID 생성
+   */
+  static generateDocumentResultId(): string {
+    return `doc_${this.generateShortId()}`;
+  }
+
+  /**
+   * 외부 연동용 레퍼런스 ID 생성
+   * (특수문자 없이 prefix + timestamp + random 형식)
+   */
+  static generateReference(prefix: string): string {
+    const sanitizedPrefix = prefix.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || 'REF';
+    const timestamp = Date.now().toString();
+    const random = randomBytes(4).toString('hex').toUpperCase();
+    return `${sanitizedPrefix}${timestamp}${random}`;
+  }
+
+  /**
    * 짧은 ID 생성 (8자리)
    */
   private static generateShortId(): string {
@@ -76,16 +108,12 @@ export class IdGenerator {
  * 형식: AI645_{timestamp}_{random}
  */
 export function generateMerchantUid(): string {
-  const timestamp = Date.now();
-  const random = randomBytes(4).toString('hex').toUpperCase();
-  return `AI645_${timestamp}_${random}`;
+  return IdGenerator.generateReference('AI645');
 }
 
 /**
  * 주문 ID 생성
  */
 export function generateOrderId(): string {
-  const timestamp = Date.now();
-  const random = randomBytes(3).toString('hex').toUpperCase();
-  return `ORDER_${timestamp}_${random}`;
+  return IdGenerator.generateReference('ORDER');
 } 

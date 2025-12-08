@@ -371,6 +371,8 @@ export class AuthController {
           data: {
             id: userData.id,
             nickname: userData.nickname,
+            email: userData.email || null, // 이메일 정보 추가
+            phone: userData.phone || null, // 연락처 정보 추가
             role: userData.role,
             termsAgreed: userData.termsAgreed,
             privacyAgreed: userData.privacyAgreed,
@@ -382,9 +384,137 @@ export class AuthController {
               connectedAt: account.createdAt,
             })),
             createdAt: userData.createdAt,
+            updatedAt: userData.updatedAt || null,
           },
           message: '사용자 정보를 조회했습니다.',
         });
+    }
+  );
+
+  /**
+   * 사용자 정보 업데이트
+   * PATCH /api/auth/profile
+   * 값이 있는 필드만 업데이트 (부분 업데이트)
+   */
+  public updateProfile = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          error: '인증이 필요합니다.',
+          message: '다시 로그인해주세요.',
+        });
+        return;
+      }
+
+      const { nickname, email, phone, termsAgreed, privacyAgreed, marketingAgreed } = req.body;
+
+      // 업데이트할 데이터 객체 생성 (값이 있는 것만 포함)
+      const updateData: any = {};
+      
+      if (nickname !== undefined && nickname !== null && nickname !== '') {
+        updateData.nickname = nickname;
+      }
+      
+      if (email !== undefined && email !== null && email !== '') {
+        // 이메일 중복 체크 (다른 사용자가 사용 중인지 확인)
+        const existingUser = await prisma?.user?.findFirst({
+          where: {
+            email,
+            id: { not: user.sub },
+          },
+        });
+        
+        if (existingUser) {
+          res.status(400).json({
+            success: false,
+            error: '이미 사용 중인 이메일입니다.',
+            message: '다른 이메일을 사용해주세요.',
+          });
+          return;
+        }
+        
+        updateData.email = email;
+      }
+      
+      if (phone !== undefined && phone !== null && phone !== '') {
+        updateData.phone = phone;
+      }
+      
+      if (termsAgreed !== undefined && termsAgreed !== null) {
+        updateData.termsAgreed = Boolean(termsAgreed);
+      }
+      
+      if (privacyAgreed !== undefined && privacyAgreed !== null) {
+        updateData.privacyAgreed = Boolean(privacyAgreed);
+      }
+      
+      if (marketingAgreed !== undefined && marketingAgreed !== null) {
+        updateData.marketingAgreed = Boolean(marketingAgreed);
+      }
+
+      // 업데이트할 데이터가 없으면 에러
+      if (Object.keys(updateData).length === 0) {
+        res.status(400).json({
+          success: false,
+          error: '업데이트할 정보가 없습니다.',
+          message: '변경할 정보를 입력해주세요.',
+        });
+        return;
+      }
+
+      // 사용자 정보 업데이트
+      const updatedUser = await prisma?.user?.update({
+        where: { id: user.sub },
+        data: updateData,
+        include: {
+          socialAccounts: {
+            select: {
+              provider: true,
+              providerUid: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+
+      if (!updatedUser) {
+        res.status(404).json({
+          success: false,
+          error: '사용자를 찾을 수 없습니다.',
+          message: '다시 로그인해주세요.',
+        });
+        return;
+      }
+
+      // 소셜 인증 타입 정보 추가
+      const primarySocialAccount = updatedUser.socialAccounts[0];
+      const authType = primarySocialAccount ? primarySocialAccount.provider : null;
+
+      res.json({
+        success: true,
+        data: {
+          id: updatedUser.id,
+          nickname: updatedUser.nickname,
+          email: updatedUser.email || null,
+          phone: updatedUser.phone || null,
+          role: updatedUser.role,
+          termsAgreed: updatedUser.termsAgreed,
+          privacyAgreed: updatedUser.privacyAgreed,
+          marketingAgreed: updatedUser.marketingAgreed,
+          authType,
+          socialAccounts: updatedUser.socialAccounts.map((account: any) => ({
+            provider: account.provider,
+            providerUid: account.providerUid,
+            connectedAt: account.createdAt,
+          })),
+          createdAt: updatedUser.createdAt,
+          updatedAt: updatedUser.updatedAt || null,
+        },
+        message: '사용자 정보가 업데이트되었습니다.',
+      });
     }
   );
 

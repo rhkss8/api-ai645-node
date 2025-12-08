@@ -147,6 +147,14 @@ export const authenticateAccess = async (
           return;
         } catch (refreshError) {
           console.error('토큰 갱신 실패:', refreshError);
+          // 토큰 갱신 실패 시 401 에러 반환
+          res.status(401).json({
+            success: false,
+            error: '토큰 갱신에 실패했습니다.',
+            message: '다시 로그인해주세요.',
+            errorCode: 'TOKEN_REFRESH_FAILED',
+          });
+          return;
         }
       }
 
@@ -155,15 +163,21 @@ export const authenticateAccess = async (
         success: false,
         error: '토큰 검증에 실패했습니다.',
         message: '다시 로그인해주세요.',
+        errorCode: 'TOKEN_VERIFICATION_FAILED',
       });
+      return;
     }
   } catch (error) {
     console.error('액세스 토큰 검증 오류:', error);
-    res.status(401).json({
-      success: false,
-      error: '토큰 검증에 실패했습니다.',
-      message: '다시 로그인해주세요.',
-    });
+    // 응답이 이미 전송되었는지 확인
+    if (!res.headersSent) {
+      res.status(401).json({
+        success: false,
+        error: '토큰 검증에 실패했습니다.',
+        message: '다시 로그인해주세요.',
+        errorCode: 'TOKEN_VERIFICATION_ERROR',
+      });
+    }
   }
 };
 

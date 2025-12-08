@@ -3,41 +3,45 @@ import { PrismaClient } from '@prisma/client';
 import env from '../config/env';
 
 // Repository implementations
-import { PrismaRecommendationHistoryRepository } from '../repositories/impl/PrismaRecommendationHistoryRepository';
-import { PrismaRecommendationReviewRepository } from '../repositories/impl/PrismaRecommendationReviewRepository';
-import { PrismaWinningNumbersRepository } from '../repositories/impl/PrismaWinningNumbersRepository';
 import { PrismaIPLimitRepository } from '../repositories/impl/PrismaIPLimitRepository';
-import { OpenAIGPTService } from '../repositories/impl/OpenAIGPTService';
+import { PrismaFortuneSessionRepository } from '../repositories/impl/PrismaFortuneSessionRepository';
+import { PrismaConversationLogRepository } from '../repositories/impl/PrismaConversationLogRepository';
+import { PrismaDocumentResultRepository } from '../repositories/impl/PrismaDocumentResultRepository';
+import { PrismaHongsiCreditRepository } from '../repositories/impl/PrismaHongsiCreditRepository';
 
 // Services
 import { IPLimitService } from '../services/IPLimitService';
+import { FortuneGPTService } from '../services/FortuneGPTService';
 
 // Use cases
-import { GenerateRecommendationUseCase } from '../usecases/GenerateRecommendationUseCase';
-import { GenerateReviewUseCase } from '../usecases/GenerateReviewUseCase';
-import { ExtractImageNumbersUseCase } from '../usecases/ExtractImageNumbersUseCase';
-import { PaymentUseCase } from '../usecases/PaymentUseCase';
-import { PrepareRecommendationUseCase } from '../usecases/PrepareRecommendationUseCase';
-import { GenerateRecommendationFromOrderUseCase } from '../usecases/GenerateRecommendationFromOrderUseCase';
-import { PrismaRecommendationParamsRepository } from '../repositories/impl/PrismaRecommendationParamsRepository';
 import { BoardPostUseCase } from '../usecases/BoardPostUseCase';
 import { PrismaBoardPostRepository } from '../repositories/impl/PrismaBoardPostRepository';
+import { CreateFortuneSessionUseCase } from '../usecases/CreateFortuneSessionUseCase';
+import { ChatFortuneUseCase } from '../usecases/ChatFortuneUseCase';
+import { DocumentFortuneUseCase } from '../usecases/DocumentFortuneUseCase';
+import { GetSessionUseCase } from '../usecases/GetSessionUseCase';
+import { GetDocumentUseCase } from '../usecases/GetDocumentUseCase';
+import { PurchaseHongsiUseCase } from '../usecases/PurchaseHongsiUseCase';
+import { ExtendSessionTimeUseCase } from '../usecases/ExtendSessionTimeUseCase';
+import { CreatePaymentDetailUseCase } from '../usecases/CreatePaymentDetailUseCase';
+import { GetFortuneStatisticsUseCase } from '../usecases/GetFortuneStatisticsUseCase';
+import { PrepareFortunePaymentUseCase } from '../usecases/PrepareFortunePaymentUseCase';
+import { GetFortunePaymentsUseCase } from '../usecases/GetFortunePaymentsUseCase';
+import { GetFortunePaymentDetailUseCase } from '../usecases/GetFortunePaymentDetailUseCase';
+import { RegenerateDocumentUseCase } from '../usecases/RegenerateDocumentUseCase';
+import { FortuneProductService } from '../services/FortuneProductService';
+import { ResultTokenService } from '../services/ResultTokenService';
+import { PaymentService } from '../services/PaymentService';
 
 // Controllers
-import { RecommendationController } from '../controllers/RecommendationController';
-import { ReviewController } from '../controllers/ReviewController';
-import { DataController } from '../controllers/DataController';
 import { AuthController } from '../controllers/AuthController';
 import { BoardController } from '../controllers/BoardController';
-import { PaymentController } from '../controllers/PaymentController';
+import { FortuneController } from '../controllers/FortuneController';
 
 // Routes
-import { createRecommendationRoutes, createImageRoutes } from './recommendationRoutes';
-import { createReviewRoutes } from './reviewRoutes';
-import { createDataRoutes } from './dataRoutes';
 import { createAuthRoutes } from './authRoutes';
 import { createBoardRoutes } from './boardRoutes';
-import { createPaymentRoutes } from './paymentRoutes';
+import { createFortuneRoutes } from './fortuneRoutes';
 import adminRoutes from './adminRoutes';
 
 // Middleware
@@ -49,32 +53,22 @@ class DIContainer {
   private prisma!: PrismaClient;
   
   // Repositories
-  private recommendationHistoryRepository!: PrismaRecommendationHistoryRepository;
-  private recommendationReviewRepository!: PrismaRecommendationReviewRepository;
-  private winningNumbersRepository!: PrismaWinningNumbersRepository;
   private ipLimitRepository!: PrismaIPLimitRepository;
   private recommendationParamsRepository!: any; // PrismaRecommendationParamsRepository
-  private gptService!: OpenAIGPTService;
   
   // Services
   private ipLimitService!: IPLimitService;
   
   // Use Cases
-  private generateRecommendationUseCase!: GenerateRecommendationUseCase;
-  private generateReviewUseCase!: GenerateReviewUseCase;
-  private extractImageNumbersUseCase!: ExtractImageNumbersUseCase;
-  private prepareRecommendationUseCase!: any; // PrepareRecommendationUseCase
-  private generateFromOrderUseCase!: any; // GenerateRecommendationFromOrderUseCase
   private boardPostUseCase!: any; // BoardPostUseCase
-  private paymentUseCase!: PaymentUseCase;
   
   // Controllers
-  private recommendationController!: RecommendationController;
-  private reviewController!: ReviewController;
-  private dataController!: DataController;
   private authController!: AuthController;
   private boardController!: BoardController;
-  private paymentController!: PaymentController;
+  private fortuneController!: FortuneController;
+
+  // Fortune Services
+  private fortuneGPTService!: FortuneGPTService;
 
   private constructor() {
     this.initializeDependencies();
@@ -92,76 +86,99 @@ class DIContainer {
     this.prisma = new PrismaClient();
 
     // Repositories
-    this.recommendationHistoryRepository = new PrismaRecommendationHistoryRepository(this.prisma);
-    this.recommendationReviewRepository = new PrismaRecommendationReviewRepository(this.prisma);
-    this.winningNumbersRepository = new PrismaWinningNumbersRepository(this.prisma);
     this.ipLimitRepository = new PrismaIPLimitRepository(this.prisma);
-    this.gptService = new OpenAIGPTService(env.OPENAI_API_KEY);
 
     // Services
     this.ipLimitService = IPLimitService.getInstance(this.ipLimitRepository);
 
     // Use Cases
-    this.generateRecommendationUseCase = new GenerateRecommendationUseCase(
-      this.recommendationHistoryRepository,
-      this.winningNumbersRepository,
-      this.gptService,
-    );
-    this.generateReviewUseCase = new GenerateReviewUseCase(
-      this.recommendationHistoryRepository,
-      this.recommendationReviewRepository,
-      this.gptService,
-    );
-    this.extractImageNumbersUseCase = new ExtractImageNumbersUseCase(this.gptService);
-    
-    // 새로운 Use Cases
-    this.recommendationParamsRepository = new PrismaRecommendationParamsRepository(this.prisma);
-    this.prepareRecommendationUseCase = new PrepareRecommendationUseCase(this.recommendationParamsRepository);
-    this.generateFromOrderUseCase = new GenerateRecommendationFromOrderUseCase(
-      this.recommendationParamsRepository,
-      this.recommendationHistoryRepository,
-      this.winningNumbersRepository,
-      this.gptService,
-    );
-    
     // Board Use Case
     this.boardPostUseCase = new BoardPostUseCase(new PrismaBoardPostRepository(this.prisma));
 
-    // Payment Use Case
-    this.paymentUseCase = new PaymentUseCase(this.generateRecommendationUseCase);
+    // Fortune GPT Service (Gemini 우선, 없으면 OpenAI)
+    this.fortuneGPTService = new FortuneGPTService(env.OPENAI_API_KEY);
+
+    // Fortune Services (먼저 생성)
+    const fortuneProductService = new FortuneProductService();
+    const paymentService = new PaymentService();
+    const resultTokenService = new ResultTokenService(env.JWT_SECRET);
+
+    // Fortune Repositories
+    const fortuneSessionRepository = new PrismaFortuneSessionRepository(this.prisma);
+    const conversationLogRepository = new PrismaConversationLogRepository(this.prisma);
+    const documentRepository = new PrismaDocumentResultRepository(this.prisma);
+    const hongsiCreditRepository = new PrismaHongsiCreditRepository(this.prisma);
+
+    // Fortune Use Cases
+    const documentUseCase = new DocumentFortuneUseCase(
+      documentRepository,
+      this.fortuneGPTService,
+    );
+    const createSessionUseCase = new CreateFortuneSessionUseCase(
+      fortuneSessionRepository,
+      hongsiCreditRepository,
+      this.prisma,
+      fortuneProductService,
+      paymentService,
+      documentUseCase, // 문서 생성 UseCase 주입
+    );
+    const chatUseCase = new ChatFortuneUseCase(
+      fortuneSessionRepository,
+      conversationLogRepository,
+      this.fortuneGPTService,
+    );
+    // documentUseCase는 위에서 이미 생성됨
+    const getSessionUseCase = new GetSessionUseCase(fortuneSessionRepository);
+    const getDocumentUseCase = new GetDocumentUseCase(documentRepository);
+    const purchaseHongsiUseCase = new PurchaseHongsiUseCase(
+      hongsiCreditRepository,
+      fortuneSessionRepository,
+    );
+    const extendSessionTimeUseCase = new ExtendSessionTimeUseCase(fortuneSessionRepository);
+    const getStatisticsUseCase = new GetFortuneStatisticsUseCase(this.prisma);
+    
+    // Fortune Payment UseCase
+    const preparePaymentUseCase = new PrepareFortunePaymentUseCase(
+      fortuneProductService,
+      paymentService,
+      this.prisma,
+    );
+
+    // Fortune Payment History UseCases
+    const getPaymentsUseCase = new GetFortunePaymentsUseCase(
+      this.prisma,
+      resultTokenService,
+    );
+    const getPaymentDetailUseCase = new GetFortunePaymentDetailUseCase(
+      this.prisma,
+      resultTokenService,
+    );
+    const regenerateDocumentUseCase = new RegenerateDocumentUseCase(
+      this.prisma,
+      documentUseCase,
+      resultTokenService,
+    );
 
     // Controllers
-    this.recommendationController = new RecommendationController(
-      this.generateRecommendationUseCase,
-      this.prepareRecommendationUseCase,
-      this.generateFromOrderUseCase,
-      this.extractImageNumbersUseCase,
-      this.ipLimitService,
-    );
-    this.reviewController = new ReviewController(
-      this.generateReviewUseCase,
-      this.recommendationReviewRepository,
-    );
-    this.dataController = new DataController(
-      this.recommendationHistoryRepository,
-      this.winningNumbersRepository,
-      this.ipLimitService,
-    );
     this.authController = new AuthController();
     this.boardController = new BoardController(this.boardPostUseCase);
-    this.paymentController = new PaymentController(this.paymentUseCase);
-  }
-
-  public getRecommendationController(): RecommendationController {
-    return this.recommendationController;
-  }
-
-  public getReviewController(): ReviewController {
-    return this.reviewController;
-  }
-
-  public getDataController(): DataController {
-    return this.dataController;
+    this.fortuneController = new FortuneController(
+      createSessionUseCase,
+      chatUseCase,
+      documentUseCase,
+      getSessionUseCase,
+      getDocumentUseCase,
+      purchaseHongsiUseCase,
+      extendSessionTimeUseCase,
+      getStatisticsUseCase,
+      preparePaymentUseCase,
+      getPaymentsUseCase,
+      getPaymentDetailUseCase,
+      regenerateDocumentUseCase,
+      paymentService,
+      fortuneProductService,
+      resultTokenService,
+    );
   }
 
   public getAuthController(): AuthController {
@@ -172,8 +189,8 @@ class DIContainer {
     return this.boardController;
   }
 
-  public getPaymentController(): PaymentController {
-    return this.paymentController;
+  public getFortuneController(): FortuneController {
+    return this.fortuneController;
   }
 
   public getIPLimitService(): IPLimitService {
@@ -195,18 +212,13 @@ export const createApiRoutes = (): Router => {
     router.use('/dev/reset-ip-limits', resetIPLimits(container.getIPLimitService()));
   }
 
-  // 각 라우트 그룹 등록
+  // 각 라우트 그룹 등록 (운세 서비스 전환을 위한 최소 라우트만 유지)
   router.use('/auth', createAuthRoutes(container.getAuthController()));
-  router.use('/recommend', createRecommendationRoutes(
-    container.getRecommendationController(),
-    container.getIPLimitService()
-  ));
-  router.use('/image', createImageRoutes(container.getRecommendationController()));
-  router.use('/review', createReviewRoutes(container.getReviewController()));
-  router.use('/data', createDataRoutes(container.getDataController()));
   router.use('/board', createBoardRoutes(container.getBoardController()));
   router.use('/admin', adminRoutes);
-  router.use('/payment', createPaymentRoutes(container.getPaymentController()));
+  
+  // 운세 라우트 (v1 네임스페이스)
+  router.use('/v1/fortune', createFortuneRoutes(container.getFortuneController()));
 
   return router;
 };
