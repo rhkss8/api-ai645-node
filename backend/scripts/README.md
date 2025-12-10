@@ -19,7 +19,7 @@ cd backend && node scripts/create-admin.js
 **결제 심사용 임시 계정을 생성하는 스크립트입니다.**
 
 ```bash
-# 기본 계정 생성 (ai645@ai645.com / ai645!)
+# 기본 계정 생성 (44tune@44tune.co.kr / ai645!)
 docker-compose exec backend node scripts/create-temp-account.js
 
 # 사용자 정의 계정 생성
@@ -71,7 +71,7 @@ chmod +x backend/scripts/create-temp-account.sh
 
 ### 기본 계정 정보
 ```
-이메일: ai645@ai645.com
+이메일: 44tune@44tune.co.kr
 비밀번호: ai645!
 닉네임: AI645관리자
 ```
@@ -113,7 +113,7 @@ chmod +x create-temp-account.sh
 ```bash
 curl -X POST https://your-domain.com/api/auth/temp-login \
   -H "Content-Type: application/json" \
-  -d '{"email":"ai645@ai645.com","password":"ai645!"}'
+  -d '{"email":"44tune@44tune.co.kr","password":"ai645!"}'
 ```
 
 ## ⚠️ 주의사항

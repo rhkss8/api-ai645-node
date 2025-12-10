@@ -59,15 +59,15 @@ echo $KAKAO_CLIENT_SECRET
 
 ```bash
 # 1. 헬스체크
-curl https://api.ai645.com/health
+curl https://api.44tune.co.kr/health
 
 # 2. 임시 계정 생성 테스트
-curl -X POST https://api.ai645.com/api/auth/temp-register \
+curl -X POST https://api.44tune.co.kr/api/auth/temp-register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@test.com","password":"test123","nickname":"테스트"}'
 
 # 3. 소셜 로그인 테스트
-# 브라우저에서 https://api.ai645.com/api/auth/kakao 접속
+# 브라우저에서 https://api.44tune.co.kr/api/auth/kakao 접속
 ```
 
 ## ⚠️ 주의사항

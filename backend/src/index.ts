@@ -66,7 +66,7 @@ const swaggerOptions = {
     servers: [
       {
         url: process.env.NODE_ENV === 'production' 
-          ? 'https://api.ai645.com' 
+          ? 'https://api.44tune.co.kr' 
           : 'http://localhost:3350',
         description: process.env.NODE_ENV === 'production' 
           ? 'Production server' 

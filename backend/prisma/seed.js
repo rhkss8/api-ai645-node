@@ -14,18 +14,18 @@ async function main() {
   try {
     // 1. 기본 이메일 계정 생성
     console.log('📧 기본 이메일 계정 생성 중...');
-    
+
     try {
       const existingUser = await prisma.user.findUnique({
-        where: { email: 'ai645@ai645.com' }
+        where: { email: '44tune@44tune.co.kr' }
       });
 
       if (!existingUser) {
         const defaultUser = await prisma.user.create({
           data: {
-            email: 'ai645@ai645.com',
+            email: '44tune@44tune.co.kr',
             password: hashPassword('ai645!'),
-            nickname: 'AI645관리자',
+            nickname: '포포춘관리자',
             termsAgreed: true,
             privacyAgreed: true,
             marketingAgreed: false,
@@ -43,7 +43,7 @@ async function main() {
 
     // 2. 초기 당첨번호 데이터 생성
     console.log('🎯 초기 당첨번호 데이터 생성 중...');
-    
+
     // 최근 10회차의 샘플 당첨번호 생성
     const sampleWinningNumbers = [
       {
@@ -106,7 +106,7 @@ async function main() {
 
     // 3. 샘플 추천 파라미터 생성
     console.log('📊 샘플 추천 파라미터 생성 중...');
-    
+
     const sampleParams = await prisma.recommendationParams.create({
       data: {
         conditions: {
@@ -123,12 +123,12 @@ async function main() {
     console.log('🎉 데이터베이스 시드 완료!');
     console.log('');
     console.log('📋 생성된 데이터:');
-    console.log('- 기본 이메일 계정: ai645@ai645.com');
+    console.log('- 기본 이메일 계정: 44tune@44tune.co.kr');
     console.log('- 샘플 당첨번호: 5회차');
     console.log('- 샘플 추천 파라미터: 1개');
     console.log('');
     console.log('🔗 테스트 계정:');
-    console.log('이메일: ai645@ai645.com');
+    console.log('이메일: 44tune@44tune.co.kr');
     console.log('비밀번호: ai645!');
 
   } catch (error) {
@@ -146,4 +146,4 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
-  }); 
+  });

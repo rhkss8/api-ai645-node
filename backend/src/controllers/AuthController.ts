@@ -249,7 +249,7 @@ export class AuthController {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            domain: process.env.NODE_ENV === 'production' ? '.ai645.com' : 'localhost', // 서브도메인 공유
+            domain: process.env.NODE_ENV === 'production' ? '.44tune.co.kr' : 'localhost', // 서브도메인 공유
             maxAge: 14 * 24 * 60 * 60 * 1000, // 14일
           });
 
@@ -306,7 +306,7 @@ export class AuthController {
 
         // 쿠키 삭제
         res.clearCookie('refresh_token', {
-          domain: process.env.NODE_ENV === 'production' ? '.ai645.com' : undefined,
+          domain: process.env.NODE_ENV === 'production' ? '.44tune.co.kr' : undefined,
         });
 
         res.json({
@@ -545,7 +545,7 @@ export class AuthController {
 
         // 쿠키 삭제
         res.clearCookie('refresh_token', {
-          domain: process.env.NODE_ENV === 'production' ? '.ai645.com' : undefined,
+          domain: process.env.NODE_ENV === 'production' ? '.44tune.co.kr' : undefined,
         });
 
         res.json({
