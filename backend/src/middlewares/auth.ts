@@ -133,7 +133,7 @@ export const authenticateAccess = async (
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            domain: process.env.NODE_ENV === 'production' ? '.ai645.com' : 'localhost',
+            domain: process.env.NODE_ENV === 'production' ? '.44tune.co.kr' : 'localhost',
             maxAge: 14 * 24 * 60 * 60 * 1000, // 14일
           });
 
@@ -329,7 +329,7 @@ export const refreshToken = async (
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        domain: process.env.NODE_ENV === 'production' ? '.ai645.com' : 'localhost',
+        domain: process.env.NODE_ENV === 'production' ? '.44tune.co.kr' : 'localhost',
         maxAge: 14 * 24 * 60 * 60 * 1000, // 14일
       });
 

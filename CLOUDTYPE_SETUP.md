@@ -23,7 +23,7 @@ PORT=4000
 ### 🌐 선택 환경변수
 ```bash
 # CORS 설정
-CORS_ORIGIN=https://api.ai645.com,https://ai645.com,https://www.ai645.com
+CORS_ORIGIN=https://api.44tune.co.kr,https://44tune.co.kr,https://www.44tune.co.kr
 
 # 로깅 설정
 LOG_LEVEL=info
@@ -76,18 +76,18 @@ npx prisma db push
 
 ### 1. 헬스체크
 ```bash
-curl https://api.ai645.com/health
+curl https://api.44tune.co.kr/health
 ```
 
 ### 2. 새로운 API 테스트
 ```bash
 # 임시 계정 생성
-curl -X POST https://api.ai645.com/api/auth/temp-register \
+curl -X POST https://api.44tune.co.kr/api/auth/temp-register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@test.com","password":"test123","nickname":"테스트"}'
 
 # 추천 파라미터 준비
-curl -X POST https://api.ai645.com/api/recommend/prepare \
+curl -X POST https://api.44tune.co.kr/api/recommend/prepare \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{"conditions":{"includeNumbers":[1,2,3],"excludeNumbers":[4,5,6],"gameCount":5}}'
@@ -95,8 +95,8 @@ curl -X POST https://api.ai645.com/api/recommend/prepare \
 
 ### 3. Swagger 문서 확인
 ```bash
-curl https://api.ai645.com/api-docs
-curl https://api.ai645.com/openapi.json
+curl https://api.44tune.co.kr/api-docs
+curl https://api.44tune.co.kr/openapi.json
 ```
 
 ## ⚠️ 주의사항

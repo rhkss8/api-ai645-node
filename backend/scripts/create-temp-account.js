@@ -8,14 +8,14 @@ function hashPassword(password) {
 
 async function createTempAccount() {
   const prisma = new PrismaClient();
-  
+
   try {
     console.log('🔐 임시 계정 생성을 시작합니다...');
-    
-    const email = 'ai645@ai645.com';
+
+    const email = '44tune@44tune.co.kr';
     const password = 'ai645!';
-    const nickname = 'AI645관리자';
-    
+    const nickname = '포포춘관리자';
+
     // 이메일 중복 확인
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -58,7 +58,7 @@ async function createTempAccount() {
     console.log('🔗 로그인 테스트:');
     console.log('   POST /api/auth/temp-login');
     console.log('   Body: {"email":"' + email + '","password":"' + password + '"}');
-    
+
   } catch (error) {
     console.error('❌ 임시 계정 생성 실패:', error);
   } finally {
@@ -69,16 +69,16 @@ async function createTempAccount() {
 // 환경변수로 계정 정보 설정 가능
 async function createCustomAccount() {
   const prisma = new PrismaClient();
-  
+
   try {
-    const email = process.env.TEMP_EMAIL || 'ai645@ai645.com';
+    const email = process.env.TEMP_EMAIL || '44tune@44tune.co.kr';
     const password = process.env.TEMP_PASSWORD || 'ai645!';
-    const nickname = process.env.TEMP_NICKNAME || 'AI645관리자';
-    
+    const nickname = process.env.TEMP_NICKNAME || '포포춘관리자';
+
     console.log('🔐 사용자 정의 임시 계정 생성을 시작합니다...');
     console.log('📧 이메일:', email);
     console.log('👤 닉네임:', nickname);
-    
+
     // 이메일 중복 확인
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -111,7 +111,7 @@ async function createCustomAccount() {
     console.log('   - 이메일:', email);
     console.log('   - 비밀번호:', password);
     console.log('   - 닉네임:', nickname);
-    
+
   } catch (error) {
     console.error('❌ 사용자 정의 임시 계정 생성 실패:', error);
   } finally {
@@ -127,4 +127,4 @@ if (command === 'custom') {
   createCustomAccount();
 } else {
   createTempAccount();
-} 
+}

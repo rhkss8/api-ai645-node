@@ -105,10 +105,10 @@ export class IdGenerator {
 
 /**
  * merchant_uid 생성 (PortOne 형식)
- * 형식: AI645_{timestamp}_{random}
+ * 형식: 44TUNE_{timestamp}_{random}
  */
 export function generateMerchantUid(): string {
-  return IdGenerator.generateReference('AI645');
+  return IdGenerator.generateReference('44TUNE');
 }
 
 /**

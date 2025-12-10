@@ -19,10 +19,10 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 NAVER_CLIENT_ID=your-naver-client-id
 NAVER_CLIENT_SECRET=your-naver-client-secret
-OAUTH_REDIRECT_URI=https://api.ai645.com/api/auth
+OAUTH_REDIRECT_URI=https://api.44tune.co.kr/api/auth
 PORTONE_IMP_KEY=your-portone-imp-key
 PORTONE_IMP_SECRET=your-portone-imp-secret
-CORS_ORIGIN=https://api.ai645.com,https://ai645.com,https://www.ai645.com
+CORS_ORIGIN=https://api.44tune.co.kr,https://44tune.co.kr,https://www.44tune.co.kr
 ```
 
 ### 2. 데이터베이스 설정

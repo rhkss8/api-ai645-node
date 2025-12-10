@@ -31,10 +31,10 @@ echo "- GOOGLE_CLIENT_ID=..."
 echo "- GOOGLE_CLIENT_SECRET=..."
 echo "- NAVER_CLIENT_ID=..."
 echo "- NAVER_CLIENT_SECRET=..."
-echo "- OAUTH_REDIRECT_URI=https://api.ai645.com/api/auth"
+echo "- OAUTH_REDIRECT_URI=https://api.44tune.co.kr/api/auth"
 echo "- PORTONE_IMP_KEY=..."
 echo "- PORTONE_IMP_SECRET=..."
-echo "- CORS_ORIGIN=https://api.ai645.com,https://ai645.com,https://www.ai645.com"
+echo "- CORS_ORIGIN=https://api.44tune.co.kr,https://44tune.co.kr,https://www.44tune.co.kr"
 echo ""
 
 read -p "환경변수가 설정되었습니까? (y/N): " -n 1 -r

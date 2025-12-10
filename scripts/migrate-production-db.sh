@@ -18,7 +18,7 @@ fi
 # 2. 데이터베이스 연결 테스트
 echo ""
 echo "📊 2. 데이터베이스 연결 테스트"
-DB_TEST=$(curl -s -X GET https://api.ai645.com/api/data/winning-numbers/latest)
+DB_TEST=$(curl -s -X GET https://api.44tune.co.kr/api/data/winning-numbers/latest)
 if echo "$DB_TEST" | grep -q "success"; then
     echo "✅ 데이터베이스 연결 성공"
 else
@@ -43,7 +43,7 @@ echo ""
 echo "📊 4. 새로운 테이블 확인"
 
 # 임시 계정 생성 테스트
-TEMP_REGISTER=$(curl -s -X POST https://api.ai645.com/api/auth/temp-register \
+TEMP_REGISTER=$(curl -s -X POST https://api.44tune.co.kr/api/auth/temp-register \
   -H "Content-Type: application/json" \
   -d '{"email":"migration-test@test.com","password":"test123","nickname":"마이그레이션테스트"}')
 
@@ -59,7 +59,7 @@ echo ""
 echo "📊 5. 새로운 엔드포인트 테스트"
 
 # 추천 파라미터 준비 API
-PREPARE_CHECK=$(curl -s -X POST https://api.ai645.com/api/recommend/prepare \
+PREPARE_CHECK=$(curl -s -X POST https://api.44tune.co.kr/api/recommend/prepare \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer test-token" \
   -d '{"conditions":{"includeNumbers":[1,2,3],"excludeNumbers":[4,5,6],"gameCount":5}}')
@@ -76,7 +76,7 @@ echo ""
 echo "📊 6. 배치 작업 확인"
 
 # 로또 스케줄러 확인
-LOTTO_SCHEDULER=$(curl -s -X GET https://api.ai645.com/api/data/winning-numbers/latest)
+LOTTO_SCHEDULER=$(curl -s -X GET https://api.44tune.co.kr/api/data/winning-numbers/latest)
 if echo "$LOTTO_SCHEDULER" | grep -q "success"; then
     echo "✅ LottoScheduler 정상 작동"
 else

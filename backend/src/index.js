@@ -69,7 +69,7 @@ app.get('/health', async (req, res) => {
 // 기본 라우트
 app.get('/', (req, res) => {
   res.json({
-    message: '🚀 API AI645 Node.js Backend Server',
+    message: '🚀 API 44tune Node.js Backend Server',
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
     endpoints: {
