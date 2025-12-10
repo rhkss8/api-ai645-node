@@ -4,7 +4,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { ResultTokenService } from '../services/ResultTokenService';
-import { PaymentHistoryItem } from './GetFortunePaymentsUseCase';
+import { PaymentHistoryItem, getPayMethodDisplay } from './GetFortunePaymentsUseCase';
 
 export class GetFortunePaymentDetailUseCase {
   constructor(

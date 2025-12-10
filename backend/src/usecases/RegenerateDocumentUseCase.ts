@@ -5,7 +5,7 @@
 import { PrismaClient } from '@prisma/client';
 import { DocumentFortuneUseCase } from './DocumentFortuneUseCase';
 import { ResultTokenService } from '../services/ResultTokenService';
-import { FortuneCategory, FormType } from '../types/fortune';
+import { FortuneCategory, FormType, SessionMode } from '../types/fortune';
 
 export interface RegenerateDocumentResult {
   resultToken: string;
@@ -30,7 +30,7 @@ export class RegenerateDocumentUseCase {
       where: {
         id: sessionId,
         userId, // 본인 세션만
-        mode: 'DOCUMENT', // 문서형만
+        mode: SessionMode.DOCUMENT, // 문서형만
       },
     });
 
@@ -103,7 +103,7 @@ export class RegenerateDocumentUseCase {
       userId,
       category: session.category as FortuneCategory,
       formType: (session.formType || 'TRADITIONAL') as FormType,
-      mode: 'DOCUMENT',
+      mode: SessionMode.DOCUMENT,
     });
 
     return {

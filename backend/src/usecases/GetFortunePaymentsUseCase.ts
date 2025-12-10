@@ -9,7 +9,7 @@ import { ResultTokenService } from '../services/ResultTokenService';
 /**
  * 결제 방법을 한글 표시명으로 변환
  */
-function getPayMethodDisplay(payMethod?: string | null): string {
+export function getPayMethodDisplay(payMethod?: string | null): string {
   if (!payMethod) return '카드결제';
   
   const methodMap: Record<string, string> = {
