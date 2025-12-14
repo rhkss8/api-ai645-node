@@ -30,13 +30,17 @@ fi
 # 3. 데이터베이스 스키마 동기화
 echo ""
 echo "📊 3. 데이터베이스 스키마 동기화"
-npx prisma db push
+echo "⚠️ 기존 데이터는 보존됩니다. 새로운 컬럼만 추가됩니다."
+npx prisma db push --accept-data-loss=false 2>&1
 
-if [ $? -eq 0 ]; then
+MIGRATION_EXIT_CODE=$?
+if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
     echo "✅ 데이터베이스 스키마 동기화 성공"
+    echo "📋 적용된 변경사항을 확인하세요."
 else
-    echo "❌ 데이터베이스 스키마 동기화 실패"
-    echo "⚠️ 데이터베이스 연결을 확인해주세요."
+    echo "❌ 데이터베이스 스키마 동기화 실패 (종료 코드: $MIGRATION_EXIT_CODE)"
+    echo "⚠️ 데이터베이스 연결 및 권한을 확인해주세요."
+    echo "⚠️ 상세 오류는 위의 로그를 확인하세요."
     exit 1
 fi
 
