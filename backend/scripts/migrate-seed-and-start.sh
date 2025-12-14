@@ -193,12 +193,42 @@ fi
 # ============================================
 echo ""
 echo "📊 7. 시드 데이터 실행"
+echo "📋 관리자 계정 생성: 44tune@44tune.co.kr"
 
-if npx prisma db seed > /dev/null 2>&1; then
+# 시드 실행 (출력 표시하여 문제 파악 가능하도록)
+SEED_OUTPUT=$(npx prisma db seed 2>&1)
+SEED_EXIT_CODE=$?
+
+# 출력 표시
+echo "$SEED_OUTPUT"
+
+if [ $SEED_EXIT_CODE -eq 0 ]; then
+    echo ""
     echo "✅ 시드 데이터 실행 성공"
+    
+    # 관리자 계정 확인
+    echo ""
+    echo "🔍 관리자 계정 확인:"
+    ADMIN_EXISTS=$(npx prisma db execute --stdin <<< "SELECT email FROM users WHERE email = '44tune@44tune.co.kr';" 2>/dev/null | grep -c "44tune@44tune.co.kr" || echo "0")
+    
+    if [ "$ADMIN_EXISTS" -gt 0 ]; then
+        echo "   ✅ 관리자 계정이 존재합니다 (44tune@44tune.co.kr)"
+    else
+        echo "   ⚠️ 관리자 계정이 생성되지 않았습니다"
+        echo "   💡 수동으로 생성하세요: node scripts/create-temp-account.js"
+    fi
 else
-    echo "⚠️ 시드 데이터 실행 실패 (계속 진행)"
-    echo "   기존 데이터가 있으면 정상입니다."
+    echo ""
+    echo "❌ 시드 데이터 실행 실패 (종료 코드: $SEED_EXIT_CODE)"
+    echo ""
+    echo "🔍 오류 분석:"
+    echo "$SEED_OUTPUT" | grep -i "error\|fail\|exception" | head -5 || echo "   상세 오류는 위 로그를 확인하세요"
+    echo ""
+    echo "⚠️ 관리자 계정이 생성되지 않았을 수 있습니다."
+    echo "💡 수동으로 생성하세요:"
+    echo "   node scripts/create-temp-account.js"
+    echo ""
+    echo "⚠️ 시드 실패해도 서버는 계속 시작됩니다."
 fi
 
 # ============================================

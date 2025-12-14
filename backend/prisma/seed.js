@@ -11,12 +11,14 @@ function hashPassword(password) {
 async function main() {
   console.log('🌱 데이터베이스 시드 시작...');
 
+  let existingUser = null; // 스코프 문제 해결을 위해 상위에 선언
+
   try {
     // 1. 기본 이메일 계정 생성
     console.log('📧 기본 이메일 계정 생성 중...');
 
     try {
-      const existingUser = await prisma.user.findUnique({
+      existingUser = await prisma.user.findUnique({
         where: { email: '44tune@44tune.co.kr' }
       });
 
@@ -33,11 +35,14 @@ async function main() {
           }
         });
         console.log('✅ 기본 이메일 계정 생성 완료:', defaultUser.email);
+        existingUser = defaultUser; // 생성된 사용자로 업데이트
       } else {
         console.log('⚠️ 기본 이메일 계정이 이미 존재합니다:', existingUser.email);
       }
     } catch (error) {
       console.error('❌ 기본 이메일 계정 생성 실패:', error);
+      console.error('   상세 오류:', error.message);
+      console.error('   스택:', error.stack);
       console.log('⚠️ 계속 진행합니다...');
     }
 
@@ -104,32 +109,60 @@ async function main() {
       }
     }
 
-    // 3. 샘플 추천 파라미터 생성
-    console.log('📊 샘플 추천 파라미터 생성 중...');
-
-    const sampleParams = await prisma.recommendationParams.create({
-      data: {
-        conditions: {
-          includeNumbers: [1, 7, 15, 23, 35, 42],
-          excludeNumbers: [4, 8, 12, 16, 20, 24],
-          gameCount: 5
-        },
-        status: 'PENDING',
-        userId: existingUser ? existingUser.id : null
+    // 3. 샘플 추천 파라미터 생성 (관리자 계정이 있는 경우에만)
+    if (existingUser) {
+      console.log('📊 샘플 추천 파라미터 생성 중...');
+      
+      try {
+        const sampleParams = await prisma.recommendationParams.create({
+          data: {
+            userId: existingUser.id,
+            type: 'FREE',
+            conditions: {
+              includeNumbers: [1, 7, 15, 23, 35, 42],
+              excludeNumbers: [4, 8, 12, 16, 20, 24],
+              gameCount: 5
+            },
+            status: 'PENDING',
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24시간 후
+          }
+        });
+        console.log('✅ 샘플 추천 파라미터 생성 완료');
+      } catch (error) {
+        console.error('⚠️ 샘플 추천 파라미터 생성 실패:', error.message);
+        console.log('   계속 진행합니다...');
       }
+    } else {
+      console.log('⚠️ 관리자 계정이 없어 샘플 추천 파라미터를 생성하지 않습니다.');
+    }
+
+    // 최종 확인
+    const finalCheck = await prisma.user.findUnique({
+      where: { email: '44tune@44tune.co.kr' }
     });
-    console.log('✅ 샘플 추천 파라미터 생성 완료');
 
     console.log('🎉 데이터베이스 시드 완료!');
     console.log('');
     console.log('📋 생성된 데이터:');
-    console.log('- 기본 이메일 계정: 44tune@44tune.co.kr');
+    if (finalCheck) {
+      console.log('✅ 기본 이메일 계정: 44tune@44tune.co.kr (생성됨)');
+    } else {
+      console.log('⚠️ 기본 이메일 계정: 44tune@44tune.co.kr (생성 실패)');
+    }
     console.log('- 샘플 당첨번호: 5회차');
-    console.log('- 샘플 추천 파라미터: 1개');
+    if (existingUser) {
+      console.log('- 샘플 추천 파라미터: 1개');
+    }
     console.log('');
-    console.log('🔗 테스트 계정:');
-    console.log('이메일: 44tune@44tune.co.kr');
-    console.log('비밀번호: ai645!');
+    if (finalCheck) {
+      console.log('🔗 관리자 계정:');
+      console.log('이메일: 44tune@44tune.co.kr');
+      console.log('비밀번호: ai645!');
+      console.log('닉네임: 포포춘관리자');
+    } else {
+      console.log('⚠️ 관리자 계정이 생성되지 않았습니다.');
+      console.log('💡 수동으로 생성하세요: node scripts/create-temp-account.js');
+    }
 
   } catch (error) {
     console.error('❌ 시드 실행 중 오류 발생:', error);
