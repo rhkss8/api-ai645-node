@@ -9,19 +9,32 @@
 
 **재배포 없이 바로 해결 가능합니다!**
 
+**⚠️ 중요: Node 서버(`api-ai645-node`) 터미널에서 실행하세요!**
+
 1. **CloudType 대시보드 접속**
    - https://cloudtype.io 접속
    - 프로젝트: `api-ai645-node`
-   - **Terminal** 탭 클릭
 
-2. **다음 명령어 실행** (순서대로)
+2. **Node 서버 터미널 접속**
+   - **api-ai645-node** 카드 클릭
+   - 터미널 아이콘 (□ 안에 `>_`) 클릭
+   - ⚠️ PostgreSQL 카드가 아닌 **Node 서버 카드**에서 실행!
+
+3. **다음 명령어 실행**
+
+   **⚠️ 권한 오류가 발생하면 `generate` 단계를 건너뛰고 바로 `db push`를 실행하세요!**
+   
    ```bash
-   # 1. Prisma 클라이언트 재생성
-   npx prisma generate
+   # 1. DATABASE_URL 확인 (중요!)
+   echo $DATABASE_URL
    
    # 2. 데이터베이스 스키마 동기화 (핵심!)
-   npx prisma db push
+   # ⚠️ 이 명령은 자동으로 Prisma 클라이언트도 재생성합니다!
+   # ⚠️ DATABASE_URL을 통해 PostgreSQL에 자동 연결됩니다
+   npx prisma db push --accept-data-loss=false
    ```
+   
+   **참고:** `prisma db push`는 자동으로 `generate`도 실행하므로 별도로 실행할 필요 없습니다!
 
 3. **완료!** 
    - 서버 재시작 없이 바로 적용됩니다
