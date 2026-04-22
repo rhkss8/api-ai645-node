@@ -11,10 +11,10 @@ export interface ResultTokenPayload {
 
 /**
  * 결과 토큰 만료 시간 설정 (초 단위)
- * 기본값: 1일 (86400초)
+ * 기본값: 30일 (2592000초)
  * 필요에 따라 이 값을 수정하세요.
  */
-const RESULT_TOKEN_EXPIRES_IN_SECONDS = 86400; // 1일 = 24시간 * 60분 * 60초
+const RESULT_TOKEN_EXPIRES_IN_SECONDS = 2592000; // 30일 = 30 * 24시간 * 60분 * 60초
 
 export class ResultTokenService {
   constructor(private readonly secret: string) {}

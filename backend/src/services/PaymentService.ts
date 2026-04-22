@@ -1,6 +1,7 @@
 import { PrismaClient, PaymentStatus, SubscriptionType, OrderStatus } from '@prisma/client';
 import { IdGenerator } from '../utils/idGenerator';
 import { PortOneService, PortOneV2PaymentResponse } from './PortOneService';
+import { applyUserChatExtensionFromOrderTx } from '../utils/userChatEntitlement';
 
 const prisma = new PrismaClient();
 const portOneService = new PortOneService();
@@ -160,6 +161,80 @@ export class PaymentService {
   }
 
   /**
+   * 0원 결제 자동 완료 처리 (운세 서비스용)
+   * 구독 생성 없이 Payment와 Order만 완료 처리
+   */
+  async completeFreePayment(paymentId: string): Promise<PaymentResult> {
+    try {
+      const payment = await prisma.payment.findUnique({
+        where: { id: paymentId },
+        include: { order: true },
+      });
+
+      if (!payment) {
+        return {
+          success: false,
+          error: '결제 정보를 찾을 수 없습니다.',
+        };
+      }
+
+      if (payment.status !== PaymentStatus.PENDING) {
+        return {
+          success: true, // 이미 완료된 경우 성공으로 처리
+          paymentId: payment.id,
+          orderId: payment.orderId,
+        };
+      }
+
+      // 0원 결제만 자동 완료 처리
+      if (payment.amount !== 0) {
+        return {
+          success: false,
+          error: '0원 결제만 자동 완료할 수 있습니다.',
+        };
+      }
+
+      // 트랜잭션으로 Payment와 Order 상태 업데이트
+      await prisma.$transaction(async (tx: any) => {
+        // Payment 상태 업데이트
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            status: PaymentStatus.COMPLETED,
+            paidAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+
+        // Order 상태 업데이트
+        await tx.order.update({
+          where: { id: payment.orderId },
+          data: {
+            status: OrderStatus.PAID,
+            updatedAt: new Date(),
+          },
+        });
+
+        await applyUserChatExtensionFromOrderTx(tx, payment.orderId);
+      });
+
+      console.log(`[PaymentService] 0원 결제 자동 완료: paymentId=${paymentId}`);
+
+      return {
+        success: true,
+        paymentId: payment.id,
+        orderId: payment.orderId,
+      };
+    } catch (error) {
+      console.error('0원 결제 자동 완료 처리 오류:', error);
+      return {
+        success: false,
+        error: '0원 결제 자동 완료 처리에 실패했습니다.',
+      };
+    }
+  }
+
+  /**
    * 사용자의 활성 구독 확인
    */
   async checkActiveSubscription(userId: string): Promise<boolean> {
@@ -308,6 +383,7 @@ export class PaymentService {
       // Order에 연결된 Payment 찾기
       const payment = order.payment;
       if (!payment) return { success: false };
+      const priorPaymentStatus = payment.status;
 
       // 금액 검증 (다르면 실패 처리 가능)
       if (order.amount !== params.amount) {
@@ -383,6 +459,10 @@ export class PaymentService {
             updatedAt: new Date(),
           },
         });
+
+        if (params.status === 'PAID' && priorPaymentStatus !== PaymentStatus.COMPLETED) {
+          await applyUserChatExtensionFromOrderTx(tx, params.orderId);
+        }
       });
 
       return { success: params.status === 'PAID' };
@@ -552,6 +632,7 @@ export class PaymentService {
                 updatedAt: new Date(),
               },
             });
+            await applyUserChatExtensionFromOrderTx(tx, payment.order.id);
           }
         });
 

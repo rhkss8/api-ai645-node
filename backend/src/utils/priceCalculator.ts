@@ -18,9 +18,13 @@ export function calculateFinalAmount(
   baseAmount: number,
   discountRate: number
 ): number {
-    const discountedAmount = baseAmount * (100 - discountRate);
-    const finalAmount = Math.floor(discountedAmount / 10000) * 100;
-    return finalAmount;
+  // 할인 적용 후 금액 계산
+  const discountedAmount = baseAmount * (1 - discountRate / 100);
+  
+  // 10원 단위로 절삭 (내림)
+  const finalAmount = Math.floor(discountedAmount / 10) * 10;
+  
+  return finalAmount;
 }
 
 /**

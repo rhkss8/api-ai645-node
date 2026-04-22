@@ -126,9 +126,10 @@ class DIContainer {
       fortuneSessionRepository,
       conversationLogRepository,
       this.fortuneGPTService,
+      this.prisma,
     );
     // documentUseCase는 위에서 이미 생성됨
-    const getSessionUseCase = new GetSessionUseCase(fortuneSessionRepository);
+    const getSessionUseCase = new GetSessionUseCase(fortuneSessionRepository, this.prisma);
     const getDocumentUseCase = new GetDocumentUseCase(documentRepository);
     const purchaseHongsiUseCase = new PurchaseHongsiUseCase(
       hongsiCreditRepository,
@@ -178,6 +179,7 @@ class DIContainer {
       paymentService,
       fortuneProductService,
       resultTokenService,
+      this.fortuneGPTService,
     );
   }
 

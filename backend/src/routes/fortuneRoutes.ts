@@ -85,13 +85,8 @@ export const createFortuneRoutes = (
    *                 example: "clx1234567890"
    *               useFreeHongsi:
    *                 type: boolean
-   *                 description: 무료 홍시 사용 여부 (채팅형만, 하루 1회, 2분 무료). paymentId와 동시 사용 불가
+   *                 description: 무료 홍시 사용 여부 (채팅형만, 하루 1회, 5분 무료). paymentId와 동시 사용 불가
    *                 example: true
-   *               durationMinutes:
-   *                 type: number
-   *                 enum: [5, 10, 30]
-   *                 description: 채팅형 결제 시 시간 선택 (5, 10, 30분). paymentId 있을 때만 필수. useFreeHongsi 사용 시에는 무시됨 (자동으로 2분 고정)
-   *                 example: 10
    *     responses:
    *       201:
    *         description: 세션 생성 성공
@@ -122,6 +117,10 @@ export const createFortuneRoutes = (
    *                     expiresAt:
    *                       type: string
    *                       format: date-time
+   *                     chatEntitlementExpiresAt:
+   *                       type: string
+   *                       format: date-time
+   *                       description: 채팅 일 단위 이용권 만료 시각(해당 결제인 경우만)
    *                     isPaid:
    *                       type: boolean
    *                     resultToken:
@@ -134,7 +133,9 @@ export const createFortuneRoutes = (
    *                 message:
    *                   type: string
    *       400:
-   *         description: 잘못된 요청 (필수 필드 누락 등)
+   *         description: |
+   *           잘못된 요청. 채팅형에서 계정 이용 시간이 없으면 error=CHAT_ACCOUNT_TIME_EXHAUSTED,
+   *           data.requiresPayment=true 및 suggestedPass(1일권 가격 등)가 포함될 수 있음.
    *       401:
    *         description: 인증 필요
    */
@@ -185,22 +186,14 @@ export const createFortuneRoutes = (
    *                 data:
    *                   type: object
    *                   properties:
-   *                     summary:
+   *                     message:
    *                       type: string
-   *                       description: 핵심 요약
-   *                     points:
+   *                       description: 점술가가 말하듯 자연스럽게 이어지는 답변 텍스트
+   *                     nextQuestions:
    *                       type: array
    *                       items:
    *                         type: string
-   *                       description: 운세/조언 포인트
-   *                     tips:
-   *                       type: array
-   *                       items:
-   *                         type: string
-   *                       description: 실천 팁
-   *                     disclaimer:
-   *                       type: string
-   *                       description: 면책 문구
+   *                       description: 다음 단계로 이어지는 추천 질문(퀵 리플라이)
    *                     suggestPayment:
    *                       type: boolean
    *                       description: 결제 연장 제안 여부
@@ -211,8 +204,123 @@ export const createFortuneRoutes = (
    *                   type: string
    *       401:
    *         description: 인증 필요
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "AUTH_REQUIRED"
+   *                 message:
+   *                   type: string
+   *                   example: "로그인이 필요합니다."
    *       400:
-   *         description: 세션 없음 또는 시간 부족
+   *         description: 세션 없음, 시간 만료, 또는 잘못된 요청
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   enum:
+   *                     - SESSION_TIME_EXPIRED
+   *                     - SESSION_EXPIRED
+   *                     - SESSION_NOT_FOUND
+   *                     - INVALID_REQUEST
+   *                   example: "SESSION_TIME_EXPIRED"
+   *                 message:
+   *                   type: string
+   *                   example: "세션 시간이 만료되었습니다. 상담권을 구매하여 상담을 계속하세요."
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     requiresPayment:
+   *                       type: boolean
+   *                       description: 결제 유도 필요 여부
+   *                       example: true
+   *                     remainingTime:
+   *                       type: number
+   *                       description: 남은 시간 (초)
+   *                       example: 0
+   *                     expiresAt:
+   *                       type: string
+   *                       format: date-time
+   *                       description: 만료 시간
+   *       404:
+   *         description: 세션을 찾을 수 없음
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "SESSION_NOT_FOUND"
+   *                 message:
+   *                   type: string
+   *                   example: "세션을 찾을 수 없습니다."
+   *       429:
+   *         description: AI 서비스 할당량 초과
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   example: "AI_QUOTA_EXCEEDED"
+   *                 message:
+   *                   type: string
+   *                   example: "AI 서비스 할당량이 초과되었습니다. 잠시 후 다시 시도해주세요."
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     requiresPayment:
+   *                       type: boolean
+   *                       example: false
+   *                     retryAfter:
+   *                       type: number
+   *                       description: 재시도 권장 시간 (초)
+   *                       example: 60
+   *       500:
+   *         description: AI 응답 생성 실패 또는 서버 오류
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 error:
+   *                   type: string
+   *                   enum:
+   *                     - AI_GENERATION_FAILED
+   *                     - INTERNAL_ERROR
+   *                   example: "AI_GENERATION_FAILED"
+   *                 message:
+   *                   type: string
+   *                   example: "운세 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요."
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     requiresPayment:
+   *                       type: boolean
+   *                       example: false
    */
   router.post(
     '/chat',
@@ -449,7 +557,7 @@ export const createFortuneRoutes = (
    *         description: 웹훅 처리 성공
    *       400:
    *         description: 잘못된 요청 (필수 파라미터 누락)
-   *       403:
+   *       401:
    *         description: 웹훅 시크릿 불일치
    *       500:
    *         description: 웹훅 처리 실패
@@ -493,13 +601,17 @@ export const createFortuneRoutes = (
    *                       type: string
    *                     status:
    *                       type: string
-   *                       enum: [PENDING, COMPLETED, FAILED, CANCELLED]
+   *                       enum: [PENDING, COMPLETED, FAILED, CANCELLED, USER_CANCELLED, REFUNDED]
    *                     amount:
    *                       type: number
    *                     paidAt:
    *                       type: string
    *                       format: date-time
    *                       nullable: true
+   *       400:
+   *         description: 결제 ID 누락
+   *       401:
+   *         description: 인증 필요
    *       404:
    *         description: 결제 정보를 찾을 수 없음
    *       403:
@@ -582,6 +694,10 @@ export const createFortuneRoutes = (
    *         description: 토큰 유효성 검증 실패 (TOKEN_INVALID)
    *       404:
    *         description: 세션을 찾을 수 없음 (SESSION_EXPIRED)
+   *       429:
+   *         description: AI 서비스 할당량 초과 (AI_QUOTA_EXCEEDED)
+   *       503:
+   *         description: AI 서비스 일시 장애/과부하 (AI_SERVICE_UNAVAILABLE)
    *       500:
    *         description: 서버 오류
    */
@@ -745,11 +861,6 @@ export const createFortuneRoutes = (
    *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *                 description: 운세 카테고리
    *                 example: SAJU
-   *               durationMinutes:
-   *                 type: number
-   *                 enum: [5, 10, 30]
-   *                 description: 채팅형일 경우 시간 선택 (5, 10, 30분, 필수)
-   *                 example: 10
    *               payMethod:
    *                 type: string
    *                 description: 결제 방법 (card, kakao, toss, naver 등, 선택)
@@ -803,7 +914,9 @@ export const createFortuneRoutes = (
    *   get:
    *     operationId: getProductsByCategory
    *     summary: 카테고리별 상품 정보 조회
-   *     description: 특정 카테고리의 채팅형/문서형 상품 정보를 조회합니다. (인증 불필요)
+   *     description: 특정 카테고리의 채팅 이용권(1/7/30일) + 문서형 상품 정보를 조회합니다. (인증 불필요)
+   *       - path `category`: 운세 카테고리 (예: SAJU)
+   *       - response item `type`: 상품 타입 (CHAT_SESSION | DOCUMENT_REPORT)
    *     tags: [Fortune]
    *     parameters:
    *       - in: path
@@ -849,9 +962,10 @@ export const createFortuneRoutes = (
    *                         description: 실제 결제 금액 (할인 적용 후, 원)
    *                       description:
    *                         type: string
-   *                       duration:
+   *                       entitlementDays:
    *                         type: number
-   *                         description: 세션 시간 (초, 채팅형만)
+   *                         enum: [1, 7, 30]
+   *                         description: 채팅 이용권 일수 (채팅형 상품만)
    *       400:
    *         description: 잘못된 카테고리
    */
@@ -866,7 +980,7 @@ export const createFortuneRoutes = (
    *   get:
    *     operationId: getAllProducts
    *     summary: 전체 상품 정보 조회
-   *     description: 모든 카테고리의 상품 정보를 조회합니다. (인증 불필요)
+   *     description: 모든 카테고리의 채팅 이용권(1/7/30일) + 문서형 상품 정보를 조회합니다. (인증 불필요)
    *     tags: [Fortune]
    *     responses:
    *       200:
@@ -949,6 +1063,8 @@ export const createFortuneRoutes = (
    *                   type: string
    *                 message:
    *                   type: string
+   *       401:
+   *         description: 인증 필요
    *       403:
    *         description: 접근 권한 없음 (본인의 결제가 아님)
    *       404:

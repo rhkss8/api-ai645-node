@@ -1,40 +1,87 @@
 /**
  * 채팅형 운세 UseCase
  */
+import { PrismaClient } from '@prisma/client';
 import { FortuneSession } from '../entities/FortuneSession';
 import { ConversationLog } from '../entities/ConversationLog';
 import { IFortuneSessionRepository } from '../repositories/IFortuneSessionRepository';
 import { IConversationLogRepository } from '../repositories/IConversationLogRepository';
 import { FortuneGPTService } from '../services/FortuneGPTService';
 import { IdGenerator } from '../utils/idGenerator';
-import { ChatResponse } from '../types/fortune';
+import { ChatResponse, FortuneErrorCode, isChatResponseV2, SessionMode } from '../types/fortune';
 import { isCategoryMismatch, getSuggestedCategories } from '../utils/categoryDetection';
+import { buildPreviousContextForAI } from '../utils/buildPreviousContextForAI';
 import { CATEGORY_NAMES } from '../data/fortuneProducts';
+import { CustomError } from '../middlewares/errorHandler';
 
 export class ChatFortuneUseCase {
   constructor(
     private readonly sessionRepository: IFortuneSessionRepository,
     private readonly logRepository: IConversationLogRepository,
     private readonly gptService: FortuneGPTService,
+    private readonly prisma: PrismaClient,
   ) {}
 
   async execute(
     sessionId: string,
     userInput: string,
-  ): Promise<{ response: ChatResponse; session: FortuneSession }> {
+    userId: string,
+  ): Promise<{ response: ChatResponse; session: FortuneSession; effectiveRemainingSeconds: number }> {
     // 세션 조회
     const session = await this.sessionRepository.findById(sessionId);
     if (!session) {
-      throw new Error('세션을 찾을 수 없습니다.');
+      throw new CustomError(
+        '세션을 찾을 수 없습니다.',
+        404,
+        'SESSION_NOT_FOUND' as FortuneErrorCode,
+      );
     }
+    if (session.userId !== userId) {
+      throw new CustomError('권한이 없습니다.', 403, 'AUTH_REQUIRED' as FortuneErrorCode);
+    }
+
+    if (session.mode !== SessionMode.CHAT) {
+      throw new CustomError('채팅 세션이 아닙니다.', 400, 'INVALID_REQUEST' as FortuneErrorCode);
+    }
+
+    const now = new Date();
+    const userRow = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { chatUsableUntil: true },
+    });
+    const until = userRow?.chatUsableUntil;
+    const accountSec =
+      until && until.getTime() > now.getTime()
+        ? Math.floor((until.getTime() - now.getTime()) / 1000)
+        : 0;
+
+    console.log('[채팅 요청] 세션·계정 상태:', {
+      sessionId: session.id,
+      isActive: session.isActive,
+      chatUsableUntil: until?.toISOString(),
+      accountSec,
+    });
 
     if (!session.isActive) {
-      throw new Error('세션이 종료되었습니다.');
+      throw new CustomError(
+        '세션이 종료되었습니다.',
+        400,
+        'SESSION_EXPIRED' as FortuneErrorCode,
+        { requiresPayment: false },
+      );
     }
 
-    // 시간 확인
-    if (session.remainingTime <= 0) {
-      throw new Error('사용 가능한 시간이 없습니다. 결제를 진행해주세요.');
+    if (!until || until.getTime() <= now.getTime()) {
+      throw new CustomError(
+        '채팅 이용 가능 시간이 만료되었습니다. 이용권을 구매해 주세요.',
+        400,
+        'SESSION_TIME_EXPIRED' as FortuneErrorCode,
+        {
+          requiresPayment: true,
+          remainingTime: 0,
+          productType: 'CHAT',
+        },
+      );
     }
 
     const startTime = Date.now();
@@ -50,70 +97,92 @@ export class ChatFortuneUseCase {
       const suggestedNames = suggestions.map(c => CATEGORY_NAMES[c] || c);
 
       const mismatchResponse: ChatResponse = {
-        summary: `현재 세션은 "${currentCategoryName}" 카테고리로 진행 중입니다.\n다른 카테고리 질문은 해당 카테고리로 새 세션을 생성해주세요.`,
-        points: [
-          `이 세션에서는 "${currentCategoryName}"에 대한 질문만 답변 가능합니다.`,
-          `다른 카테고리 질문을 원하시면 새 세션을 생성해주세요.`,
-        ],
-        tips: [
+        message:
+          `현재 세션은 "${currentCategoryName}" 카테고리로 진행 중입니다.\n` +
+          `다른 카테고리 질문은 해당 카테고리로 새 세션을 생성해주세요.\n\n` +
           `관련 카테고리: ${suggestedNames.join(', ')}`,
-          `새 세션 생성 후 해당 카테고리로 질문해주세요.`,
+        nextQuestions: [
+          `지금 세션(${currentCategoryName})에서 질문을 이어갈게요.`,
+          '새 세션을 만들고 다른 주제로 질문할게요.',
         ],
-        disclaimer: '본 안내는 카테고리별 세션 제한 정책에 따라 표시됩니다.',
         suggestPayment: false,
       };
 
       return {
         response: mismatchResponse,
-        session, // 시간 소비 없음
+        session,
+        effectiveRemainingSeconds: accountSec,
       };
     }
 
-    // 이전 대화 맥락 조회
+    // 이전 대화 맥락 조회 (슬림화: 최근 N턴, message/summary만, 길이 상한)
     const previousLogs = await this.logRepository.findBySessionId(sessionId);
     const previousContext = previousLogs.length > 0
-      ? previousLogs.slice(-3).map(log => `Q: ${log.userInput}\nA: ${log.aiOutput}`).join('\n\n')
+      ? buildPreviousContextForAI(previousLogs, {
+          maxTurns: 5,
+          maxChars: 2000,
+          aiOutputSummaryOnly: true,
+        })
       : undefined;
 
     // GPT 응답 생성
-    const chatResponse = await this.gptService.generateChatResponse(
-      session.category,
-      userInput,
-      previousContext,
-    );
+    let chatResponse: ChatResponse;
+    try {
+      chatResponse = await this.gptService.generateChatResponse(
+        session.category,
+        userInput,
+        previousContext,
+        session.userData as Record<string, any> | undefined,
+      );
+    } catch (error: any) {
+      console.error('[채팅 응답 생성] AI 서비스 실패:', error);
+      
+      // AI 할당량 초과
+      if (error?.status === 429 || error?.message?.includes('quota') || error?.message?.includes('할당량')) {
+        throw new CustomError(
+          'AI 서비스 할당량이 초과되었습니다. 잠시 후 다시 시도해주세요.',
+          429,
+          'AI_QUOTA_EXCEEDED' as FortuneErrorCode,
+          {
+            requiresPayment: false,
+            retryAfter: 60, // 60초 후 재시도 권장
+          },
+        );
+      }
+      
+      // AI 생성 실패
+      throw new CustomError(
+        '운세 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요.',
+        500,
+        'AI_GENERATION_FAILED' as FortuneErrorCode,
+        {
+          requiresPayment: false,
+        },
+      );
+    }
 
     const endTime = Date.now();
-    const elapsedTime = Math.ceil((endTime - startTime) / 1000); // 초 단위
+    const elapsedTime = Math.ceil((endTime - startTime) / 1000);
 
-    // 시간 소비 (응답 생성 시간 + 5초 기본 대화 시간)
-    const consumedTime = elapsedTime + 5;
-    const updatedSession = session.consumeTime(consumedTime);
+    const userAfter = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { chatUsableUntil: true },
+    });
+    const untilAfter = userAfter?.chatUsableUntil;
+    const effectiveRemainingSeconds =
+      untilAfter && untilAfter.getTime() > Date.now()
+        ? Math.floor((untilAfter.getTime() - Date.now()) / 1000)
+        : 0;
 
-    // 결제 연장 필요 여부 확인 및 알림 메시지 추가
-    if (updatedSession.needsPaymentPrompt()) {
+    if (effectiveRemainingSeconds > 0 && effectiveRemainingSeconds <= 30) {
       chatResponse.suggestPayment = true;
-      
-      // 만료 임박 또는 만료된 경우 구체적인 안내 메시지 추가
-      if (updatedSession.remainingTime <= 0) {
-        chatResponse.summary = (chatResponse.summary || '') + '\n⏰ 사용 가능한 시간이 모두 소진되었습니다.';
-        if (!chatResponse.tips) {
-          chatResponse.tips = [];
-        }
-        chatResponse.tips.unshift(
-          '홍시를 구매하여 상담을 계속하세요! (5분/10분/30분 단위)',
-        );
-      } else if (updatedSession.remainingTime <= 30) {
-        // 30초 이하 남은 경우
-        if (!chatResponse.tips) {
-          chatResponse.tips = [];
-        }
-        chatResponse.tips.push(
-          `⏰ 남은 시간이 ${updatedSession.remainingTime}초입니다. 홍시를 구매하여 상담을 이어가세요!`,
-        );
+      if (isChatResponseV2(chatResponse)) {
+        chatResponse.message =
+          (chatResponse.message || '') +
+          `\n\n⏰ 계정 채팅 이용 시간이 ${effectiveRemainingSeconds}초 남았습니다. 1일/7일/30일 이용권을 구매해 이어가실 수 있습니다.`;
       }
     }
 
-    // 대화 로그 저장
     const logId = IdGenerator.generateConversationLogId();
     const log = ConversationLog.create(
       logId,
@@ -121,17 +190,15 @@ export class ChatFortuneUseCase {
       userInput,
       JSON.stringify(chatResponse),
       elapsedTime,
-      session.remainingTime !== updatedSession.remainingTime, // 시간이 소비되었으면 유료
+      false,
     );
 
     await this.logRepository.create(log);
 
-    // 세션 업데이트
-    const savedSession = await this.sessionRepository.update(updatedSession);
-
     return {
       response: chatResponse,
-      session: savedSession,
+      session,
+      effectiveRemainingSeconds,
     };
   }
 }

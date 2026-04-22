@@ -4,7 +4,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../middlewares/errorHandler';
 import { ApiResponse } from '../types/common';
-import { FortuneApiResponse, FortuneCategory, SessionMode, FormType } from '../types/fortune';
+import { FortuneApiResponse, FortuneCategory, SessionMode, FormType, isChatResponseV2 } from '../types/fortune';
 import { CreateFortuneSessionUseCase } from '../usecases/CreateFortuneSessionUseCase';
 import { ChatFortuneUseCase } from '../usecases/ChatFortuneUseCase';
 import { DocumentFortuneUseCase } from '../usecases/DocumentFortuneUseCase';
@@ -20,7 +20,193 @@ import { RegenerateDocumentUseCase } from '../usecases/RegenerateDocumentUseCase
 import { FortuneProductService } from '../services/FortuneProductService';
 import { ResultTokenService } from '../services/ResultTokenService';
 import { PaymentService } from '../services/PaymentService';
+import { FortuneGPTService } from '../services/FortuneGPTService';
+import { INITIAL_CHAT_GUIDES, CATEGORY_NAMES } from '../data/fortuneProducts';
 import { HongsiUnit, FortuneProductType } from '../types/fortune';
+import { CustomError } from '../middlewares/errorHandler';
+import { IdGenerator } from '../utils/idGenerator';
+
+function generateNextQuestionsByText(params: {
+  category: FortuneCategory;
+  text?: string;
+}): string[] {
+  const { category, text } = params;
+  const s = (text || '').toLowerCase();
+
+  // 이미지 업로드 기반 카테고리 (ASK에서도 사용)
+  if (category === FortuneCategory.HAND) {
+    return [
+      '손바닥 사진(오른손/왼손) 업로드했어요. 이제 봐주세요.',
+      '왼손이랑 오른손 중 어떤 손이 더 중요해요?',
+      '손금에서 어떤 부분(재물/연애/직장)을 먼저 봐주실래요?',
+      '손바닥을 어떻게 찍어야 잘 나오나요?',
+      '사진이 흐릿하면 다시 찍어야 하나요?',
+    ];
+  }
+
+  if (category === FortuneCategory.LUCKY_NUMBER) {
+    return [
+      '이미지 업로드했어요. 로또 번호 추천해 주세요.',
+      '이번 주 로또에 맞춰 1~2세트 추천해 줄 수 있나요?',
+      '숫자 조합을 추천한 이유도 같이 설명해 주세요.',
+      '피해야 할 숫자 조합이 있나요?',
+      '운이 강한 요일/시간대도 알려주세요.',
+    ];
+  }
+
+  switch (category) {
+    case FortuneCategory.BUSINESS: {
+      const hasTiming = s.includes('시기') || s.includes('타이밍') || s.includes('언제');
+      const hasMoney = s.includes('재물') || s.includes('수익') || s.includes('매출') || s.includes('투자') || s.includes('금전');
+      const hasPartner = s.includes('파트너') || s.includes('동업') || s.includes('협업') || s.includes('사람') || s.includes('인맥');
+
+      const base = [
+        '지금 사업에서 가장 큰 리스크(자금/인력/시장)는 무엇인가요?',
+        '앞으로 3개월 내에 꼭 잡아야 할 기회는 무엇일까요?',
+        '확장/독립/전환 중 어떤 선택이 더 유리한가요?',
+        '의사결정을 내릴 “좋은 시기”는 언제로 보이나요?',
+        '사업운을 살리기 위한 현실적인 액션 3가지를 알려주세요.',
+      ];
+      // summary 힌트가 있으면 우선순위만 살짝 조정
+      if (hasMoney) {
+        return [
+          '지금 돈이 새는 구간(지출/투자/운영)부터 잡아야 할까요?',
+          ...base.filter(q => !q.includes('돈이 새는')),
+        ].slice(0, 5);
+      }
+      if (hasPartner) {
+        return [
+          '동업/파트너십을 해도 괜찮을까요? 주의할 점은?',
+          ...base,
+        ].slice(0, 5);
+      }
+      if (hasTiming) {
+        return [
+          '결정/런칭/확장의 타이밍을 구체적으로 잡아주세요.',
+          ...base,
+        ].slice(0, 5);
+      }
+      return base;
+    }
+
+    case FortuneCategory.INVESTMENT:
+      return [
+        '지금은 공격/방어 중 어떤 투자 성향이 유리할까요?',
+        '단기 vs 장기 중 어떤 전략이 맞나요?',
+        '이번 달에 피해야 할 투자 실수는 무엇인가요?',
+        '수익을 키우는 핵심 포인트(정보/타이밍/분산)는 뭐예요?',
+        '투자금 비중(현금/주식/코인 등)을 어떻게 가져가면 좋을까요?',
+      ];
+
+    case FortuneCategory.LOVE:
+      return [
+        '상대의 마음은 지금 어떤 상태로 보이나요?',
+        '관계가 좋아지려면 제가 먼저 바꿔야 할 포인트는?',
+        '연락/만남을 시도하기 좋은 타이밍이 있을까요?',
+        '이 관계를 오래 끌어도 괜찮을까요? 결론이 보이나요?',
+        '연애운을 올리는 현실적인 행동 3가지를 알려주세요.',
+      ];
+
+    case FortuneCategory.BREAK_UP:
+      return [
+        '재회 가능성이 지금 얼마나 되나요?',
+        '연락을 먼저 해야 할까요, 기다려야 할까요?',
+        '재회에 유리한 시기/계기가 있을까요?',
+        '상대가 돌아오게 만드는 대화 방식이 있나요?',
+        '재회가 아니라면 새 인연 운은 언제쯤일까요?',
+      ];
+
+    case FortuneCategory.CAREER:
+      return [
+        '이직 vs 현 직장 유지 중 어떤 선택이 유리할까요?',
+        '승진/평가운이 강한 시기가 언제인가요?',
+        '현재 스트레스/관계 문제를 푸는 방법이 있을까요?',
+        '내 강점이 잘 발휘되는 직무/환경은 어떤 쪽인가요?',
+        '커리어 운을 올리는 액션(자격/프로젝트/인맥) 3가지를 알려주세요.',
+      ];
+
+    case FortuneCategory.MOVING:
+      return [
+        '이사하기 좋은 시기(월/주)는 언제인가요?',
+        '현재 집을 유지하는 게 나을까요, 옮기는 게 나을까요?',
+        '방향/지역 선택에서 유리한 포인트가 있나요?',
+        '이사 후 금전/직장/건강 운 흐름이 어떻게 바뀌나요?',
+        '계약/이사 준비 시 주의할 점이 있을까요?',
+      ];
+
+    case FortuneCategory.TRAVEL:
+      return [
+        '여행을 가기 좋은 시기와 피해야 할 시기가 있나요?',
+        '여행 방향(동/서/남/북) 중 유리한 쪽이 있나요?',
+        '여행에서 얻을 수 있는 기회(인연/일/휴식)는 무엇일까요?',
+        '이번 여행에서 조심해야 할 리스크가 있나요?',
+        '혼자 vs 동행 중 어떤 형태가 더 좋나요?',
+      ];
+
+    case FortuneCategory.COMPATIBILITY:
+      return [
+        '두 사람의 잘 맞는 점과 충돌 포인트는 무엇인가요?',
+        '궁합이 좋아지려면 어떤 대화/규칙이 필요할까요?',
+        '장기적으로 결혼/동거로 이어질 가능성은?',
+        '갈등이 생길 때 가장 피해야 할 행동은?',
+        '관계가 좋아지는 시기가 따로 있나요?',
+      ];
+
+    case FortuneCategory.TAROT:
+      return [
+        '제가 지금 가장 중요하게 봐야 할 메시지는 무엇인가요?',
+        '선택지 A/B 중 어떤 쪽이 더 유리한가요?',
+        '이 일이 진행되면 1~3개월 뒤 흐름은 어떻게 되나요?',
+        '제가 놓치고 있는 변수(사람/돈/타이밍)가 있나요?',
+        '불안 요소를 줄이기 위한 행동을 알려주세요.',
+      ];
+
+    case FortuneCategory.DREAM:
+      return [
+        '꿈에서 가장 강하게 남은 장면/상징은 무엇이었나요?',
+        '그 꿈을 꾸면서 느낀 감정(불안/기쁨 등)은 어땠나요?',
+        '최근에 현실에서 스트레스/고민이 있었나요?',
+        '꿈이 경고인지, 기회 신호인지 구분해 주세요.',
+        '이 꿈 이후에 조심하면 좋은 행동/선택이 있을까요?',
+      ];
+
+    case FortuneCategory.CAR_PURCHASE:
+      return [
+        '지금 차를 사는 게 유리한 시기인가요?',
+        '신차 vs 중고차 중 어떤 선택이 더 맞나요?',
+        '예산/할부/보험에서 조심할 점이 있나요?',
+        '차를 바꾸면 생활/일 운이 어떻게 바뀌나요?',
+        '구매 전 체크해야 할 “결정 포인트” 3가지를 알려주세요.',
+      ];
+
+    case FortuneCategory.LUCKY_DAY:
+      return [
+        '제가 원하는 일(계약/오픈/고백 등)에 가장 좋은 날짜를 추천해 주세요.',
+        '피해야 할 날/시간대도 같이 알려주세요.',
+        '좋은 날을 고르는 기준이 무엇인가요?',
+        '제게 특히 운이 붙는 요일/시간이 있나요?',
+        '그 날에 하면 좋은 행동/의식이 있을까요?',
+      ];
+
+    case FortuneCategory.NAMING:
+      return [
+        '원하는 이름 느낌(부드러움/강인함/지적 등)이 있나요?',
+        '피해야 할 발음/한자가 있나요?',
+        '이름이 운세(직장/재물/인간관계)에 미치는 포인트는?',
+        '후보 이름 2~3개가 있는데 비교해 줄 수 있나요?',
+        '이름 외에 함께 보면 좋은 요소(개명 시기 등)가 있나요?',
+      ];
+
+    default:
+      return [
+        '제가 지금 가장 집중해야 할 운세 포인트는 무엇인가요?',
+        '좋은 흐름을 더 키우려면 어떤 행동이 필요할까요?',
+        '조심해야 할 리스크/실수는 무엇인가요?',
+        '시기적으로 유리한 타이밍이 언제인가요?',
+        '한 문장으로 핵심 조언을 정리해 주세요.',
+      ];
+  }
+}
 
 export class FortuneController {
   constructor(
@@ -39,6 +225,7 @@ export class FortuneController {
     private readonly paymentService: PaymentService,
     private readonly productService: FortuneProductService,
     private readonly resultTokenService: ResultTokenService,
+    private readonly gptService: FortuneGPTService,
   ) {}
 
   /**
@@ -50,8 +237,7 @@ export class FortuneController {
    * - mode: SessionMode (필수)
    * - userInput: string (필수)
    * - paymentId?: string (선택, 채팅형/문서형 즉시 결제 시)
-   * - useFreeHongsi?: boolean (선택, 채팅형만, 무료 홍시 2분, 하루 1회, paymentId와 동시 사용 불가)
-   * - durationMinutes?: number (선택, 채팅형 결제 시 필수: 5/10/30분, 무료 홍시 사용 시 무시됨)
+   * - useFreeHongsi?: boolean (선택, 채팅형만, 무료 홍시 5분, 하루 1회, paymentId와 동시 사용 불가)
    */
   createSession = asyncHandler(
     async (req: Request, res: Response): Promise<void> => {
@@ -60,7 +246,7 @@ export class FortuneController {
         throw new Error('로그인이 필요합니다.');
       }
 
-      const { category, formType, mode, userInput, userData, paymentId, portOnePaymentId, useFreeHongsi, durationMinutes } = req.body;
+      const { category, formType, mode, userInput, userData, paymentId, portOnePaymentId, useFreeHongsi } = req.body;
 
       if (!category || !formType || !mode || !userInput) {
         throw new Error('카테고리, 폼타입, 모드, 사용자 입력은 필수입니다.');
@@ -78,20 +264,8 @@ export class FortuneController {
           throw new Error('결제와 무료 홍시를 동시에 선택할 수 없습니다.');
         }
 
-        // 결제일 경우: durationMinutes 필수 (5, 10, 30분)
-        if (paymentId && !durationMinutes) {
-          throw new Error('채팅형 결제는 시간 선택이 필수입니다. (5, 10, 30분)');
-        }
 
-        // 결제일 경우: durationMinutes 값 검증 (5, 10, 30분만 허용)
-        if (paymentId && durationMinutes && ![5, 10, 30].includes(durationMinutes)) {
-          throw new Error('시간은 5분, 10분, 30분 중에서만 선택 가능합니다.');
-        }
-
-        // 무료 홍시일 경우: durationMinutes 불필요 (자동으로 2분)
-        // durationMinutes가 전달되어도 무시됨 (2분 고정)
       }
-
       const session = await this.createSessionUseCase.execute({
         userId: user.sub,
         category: category as FortuneCategory,
@@ -102,7 +276,6 @@ export class FortuneController {
         paymentId,
         portOnePaymentId,
         useFreeHongsi,
-        durationMinutes,
       });
 
       // 결과 토큰 발급 (만료 시간은 ResultTokenService에서 설정)
@@ -124,11 +297,17 @@ export class FortuneController {
           remainingTime: session.remainingTime,
           isActive: session.isActive,
           expiresAt: session.expiresAt.toISOString(),
+          ...(session.chatEntitlementExpiresAt
+            ? {
+                chatEntitlementExpiresAt:
+                  session.chatEntitlementExpiresAt.toISOString(),
+              }
+            : {}),
           isPaid: !!paymentId,
           resultToken,
         },
         remainingTime: session.remainingTime,
-        isFreeHongsi: useFreeHongsi && session.remainingTime === 120,
+        isFreeHongsi: !!useFreeHongsi,
         message: '세션이 생성되었습니다.',
         timestamp: new Date().toISOString(),
       };
@@ -157,24 +336,31 @@ export class FortuneController {
           throw new Error('로그인이 필요합니다.');
         }
 
-        const { productType, category, durationMinutes, payMethod, easyPayProvider } = req.body;
+        const {
+          productType,
+          category,
+          chatEntitlementDays,
+          payMethod,
+          easyPayProvider,
+        } = req.body;
 
         if (!productType || !category) {
           console.error('[결제 준비] 필수 파라미터 누락:', { productType, category });
           throw new Error('상품 타입과 카테고리는 필수입니다.');
         }
 
-        // 채팅형일 경우 durationMinutes 필수
-        if (productType === FortuneProductType.CHAT_SESSION && !durationMinutes) {
-          console.error('[결제 준비] 채팅형 시간 누락:', { productType, durationMinutes });
-          throw new Error('채팅형은 시간 선택이 필수입니다. (5, 10, 30분)');
+        if (productType === FortuneProductType.CHAT_SESSION) {
+          if (chatEntitlementDays == null || ![1, 7, 30].includes(Number(chatEntitlementDays))) {
+            throw new Error('채팅형은 chatEntitlementDays(1, 7, 30)가 필요합니다.');
+          }
         }
+
 
         console.log('[결제 준비] UseCase 실행 시작:', {
           userId: user.sub,
           productType,
           category,
-          durationMinutes,
+          chatEntitlementDays,
           payMethod,
           easyPayProvider,
         });
@@ -183,9 +369,11 @@ export class FortuneController {
           user.sub,
           productType as FortuneProductType,
           category as FortuneCategory,
-          durationMinutes,
-          payMethod, // 결제 방법 전달
-          easyPayProvider, // 간편결제 제공자 전달
+          payMethod,
+          easyPayProvider,
+          productType === FortuneProductType.CHAT_SESSION
+            ? (Number(chatEntitlementDays) as 1 | 7 | 30)
+            : undefined,
         );
 
         console.log('[결제 준비] 성공:', {
@@ -268,21 +456,23 @@ export class FortuneController {
     async (req: Request, res: Response): Promise<void> => {
       const user = (req as any).user;
       if (!user) {
-        throw new Error('로그인이 필요합니다.');
+        throw new CustomError('로그인이 필요합니다.', 401, 'AUTH_REQUIRED');
       }
 
       const { sessionId, message } = req.body;
 
       if (!sessionId || !message) {
-        throw new Error('세션 ID와 메시지는 필수입니다.');
+        throw new CustomError('세션 ID와 메시지는 필수입니다.', 400, 'INVALID_REQUEST', {
+          required: ['sessionId', 'message'],
+        });
       }
 
-      const result = await this.chatUseCase.execute(sessionId, message);
+      const result = await this.chatUseCase.execute(sessionId, message, user.sub);
 
       const response: FortuneApiResponse = {
         success: true,
         data: result.response,
-        remainingTime: result.session.remainingTime,
+        remainingTime: result.effectiveRemainingSeconds,
         message: '응답이 생성되었습니다.',
         timestamp: new Date().toISOString(),
       };
@@ -714,10 +904,12 @@ export class FortuneController {
         return;
       }
       try {
+        const tStart = Date.now();
         console.log('[결과 조회] 토큰 검증 시작:', { token: token.substring(0, 20) + '...', tokenLength: token.length });
         const payload = this.resultTokenService.verify(token);
-        console.log('[결과 조회] 토큰 검증 성공:', { sessionId: payload.sessionId, userId: payload.userId });
-        
+        console.log('[결과 조회] 토큰 검증 성공:', { sessionId: payload.sessionId, userId: payload.userId, ms: Date.now() - tStart });
+
+        const tDbStart = Date.now();
         // 세션 조회 (userInput, userData 포함)
         const prisma = new (require('@prisma/client').PrismaClient)();
         const sessionRecord = await prisma.fortuneSession.findUnique({
@@ -734,12 +926,165 @@ export class FortuneController {
           return;
         }
 
-        // 최근 채팅 N개 조회
+        // 최근 채팅 N개 조회 (초기 가이드 행 제외: userInput !== '' 만)
         const chats = await prisma.conversationLog.findMany({
-          where: { sessionId: payload.sessionId },
+          where: {
+            sessionId: payload.sessionId,
+            userInput: { not: '' },
+          },
           orderBy: { createdAt: 'desc' },
           take: 5,
         });
+        console.log('[결과 조회] DB 조회 완료:', { ms: Date.now() - tDbStart, sessionId: payload.sessionId, chatsCount: chats.length });
+
+        // ASK+CHAT: 초기 가이드는 DB에서 먼저 조회, 없으면 생성 후 저장
+        let initialChatGuide: any = null;
+        if (payload.formType === 'ASK' && sessionRecord.mode === 'CHAT') {
+          const existingInitial = await prisma.conversationLog.findFirst({
+            where: { sessionId: payload.sessionId, userInput: '' },
+          });
+          if (existingInitial) {
+            let parsed: any = null;
+            try {
+              parsed = typeof existingInitial.aiOutput === 'string'
+                ? JSON.parse(existingInitial.aiOutput)
+                : existingInitial.aiOutput;
+            } catch {
+              parsed = { message: String(existingInitial.aiOutput) };
+            }
+            initialChatGuide = {
+              id: 'initial_guide',
+              sessionId: payload.sessionId,
+              userInput: '',
+              aiOutput: parsed,
+              elapsedTime: existingInitial.elapsedTime ?? 0,
+              isPaid: existingInitial.isPaid ?? false,
+              createdAt: existingInitial.createdAt,
+            };
+          } else if (chats.length === 0) {
+            const guide = INITIAL_CHAT_GUIDES[sessionRecord.category as FortuneCategory];
+            if (guide) {
+              try {
+                if (guide.type === 'AI_GENERATED') {
+                // 사주 정보 기반으로 AI가 초기 메시지 생성 (외부 API 호출 → 대부분 지연 원인)
+                const userData = sessionRecord.userData as Record<string, any> | undefined;
+                const categoryName = CATEGORY_NAMES[sessionRecord.category as FortuneCategory];
+                
+                const tAiStart = Date.now();
+                // 초기 인사말 생성 (userInput은 빈 문자열, userData 기반으로 생성)
+                const aiResponse = await this.gptService.generateChatResponse(
+                  sessionRecord.category as FortuneCategory,
+                  guide.prompt || `${categoryName} 상담을 시작하겠습니다. 어떤 도움이 필요하신가요?`,
+                  undefined,
+                  userData,
+                );
+                console.log('[결과 조회] 초기 가이드 AI 생성 완료:', { ms: Date.now() - tAiStart, category: sessionRecord.category });
+
+                const ensured = (() => {
+                  // AI가 nextQuestions를 내려주는 것이 정상 흐름
+                  if (aiResponse && typeof aiResponse === 'object') {
+                    const existing = (aiResponse as any).nextQuestions;
+                    if (Array.isArray(existing) && existing.length > 0) {
+                      return aiResponse;
+                    }
+                    const baseText = isChatResponseV2(aiResponse as any)
+                      ? (aiResponse as any).message
+                      : (aiResponse as any).summary;
+                    return {
+                      ...(aiResponse as any),
+                      nextQuestions: generateNextQuestionsByText({
+                        category: sessionRecord.category as FortuneCategory,
+                        text: baseText,
+                      }),
+                    };
+                  }
+                  return aiResponse;
+                })();
+
+                initialChatGuide = {
+                  id: 'initial_guide',
+                  sessionId: payload.sessionId,
+                  userInput: '',
+                  aiOutput: ensured,
+                  elapsedTime: 0,
+                  isPaid: false,
+                  createdAt: sessionRecord.createdAt,
+                };
+                await prisma.conversationLog.create({
+                  data: {
+                    id: IdGenerator.generateConversationLogId(),
+                    sessionId: payload.sessionId,
+                    userInput: '',
+                    aiOutput: JSON.stringify(ensured),
+                    elapsedTime: 0,
+                    isPaid: false,
+                  },
+                });
+              } else if (guide.type === 'STATIC' && guide.content) {
+                // 단순 안내 문구
+                const nextQuestions = generateNextQuestionsByText({
+                  category: sessionRecord.category as FortuneCategory,
+                  text: guide.content,
+                });
+                const staticOutput = {
+                  message: guide.content,
+                  nextQuestions,
+                };
+                initialChatGuide = {
+                  id: 'initial_guide',
+                  sessionId: payload.sessionId,
+                  userInput: '',
+                  aiOutput: staticOutput,
+                  elapsedTime: 0,
+                  isPaid: false,
+                  createdAt: sessionRecord.createdAt,
+                };
+                await prisma.conversationLog.create({
+                  data: {
+                    id: IdGenerator.generateConversationLogId(),
+                    sessionId: payload.sessionId,
+                    userInput: '',
+                    aiOutput: JSON.stringify(staticOutput),
+                    elapsedTime: 0,
+                    isPaid: false,
+                  },
+                });
+              }
+              } catch (error) {
+              console.error('[결과 조회] 초기 채팅 가이드 생성 실패:', error);
+              // 초기 가이드는 채팅 유도에 필수이므로, 최종 실패 시 에러 응답 반환
+              const status = Number((error as any)?.status || (error as any)?.cause?.status);
+              if (status === 429) {
+                res.status(429).json({
+                  success: false,
+                  error: 'AI_QUOTA_EXCEEDED',
+                  message: 'AI 서비스 할당량이 초과되었습니다. 잠시 후 다시 시도해주세요.',
+                  timestamp: new Date().toISOString(),
+                });
+                return;
+              }
+
+              if (status === 503) {
+                res.status(503).json({
+                  success: false,
+                  error: 'AI_SERVICE_UNAVAILABLE',
+                  message: 'AI 모델이 혼잡합니다. 잠시 후 다시 시도해주세요.',
+                  timestamp: new Date().toISOString(),
+                });
+                return;
+              }
+
+              res.status(500).json({
+                success: false,
+                error: 'AI_GENERATION_FAILED',
+                message: '운세 응답 생성에 실패했습니다. 잠시 후 다시 시도해주세요.',
+                timestamp: new Date().toISOString(),
+              });
+              return;
+            }
+            }
+          }
+        }
 
         // 문서형 세션인 경우: 문서 결과 조회 또는 생성
         let document: any = null;
@@ -912,44 +1257,124 @@ export class FortuneController {
               category: sessionRecord.category,
               formType: payload.formType,
               mode: sessionRecord.mode,
-              remainingTime: sessionRecord.remainingTime,
-              isPaid: !!sessionRecord.remainingTime || sessionRecord.mode === 'DOCUMENT',
+              remainingTime: (() => {
+                const ent = sessionRecord.chatEntitlementExpiresAt as Date | null | undefined;
+                if (ent) {
+                  return Math.max(
+                    0,
+                    Math.floor((ent.getTime() - Date.now()) / 1000),
+                  );
+                }
+                return sessionRecord.remainingTime;
+              })(),
+              chatEntitlementExpiresAt: sessionRecord.chatEntitlementExpiresAt
+                ? (sessionRecord.chatEntitlementExpiresAt as Date).toISOString()
+                : undefined,
+              isPaid:
+                !!sessionRecord.chatEntitlementExpiresAt ||
+                !!sessionRecord.remainingTime ||
+                sessionRecord.mode === 'DOCUMENT',
             },
             document,
-            lastChats: chats.map((chat: any) => {
-              // aiOutput 파싱 (안전하게 처리)
-              let parsedAiOutput: any = null;
-              if (chat.aiOutput) {
-                if (typeof chat.aiOutput === 'string') {
-                  try {
-                    parsedAiOutput = JSON.parse(chat.aiOutput);
-                  } catch (e) {
-                    // JSON 파싱 실패 시 문자열 그대로 사용
+            lastChats: (() => {
+              // 기존 채팅 매핑
+              const mappedChats = chats.map((chat: any) => {
+                // aiOutput 파싱 (안전하게 처리)
+                let parsedAiOutput: any = null;
+                if (chat.aiOutput) {
+                  if (typeof chat.aiOutput === 'string') {
+                    try {
+                      parsedAiOutput = JSON.parse(chat.aiOutput);
+                    } catch (e) {
+                      // JSON 파싱 실패 시 문자열 그대로 사용
+                      parsedAiOutput = chat.aiOutput;
+                    }
+                  } else {
                     parsedAiOutput = chat.aiOutput;
                   }
-                } else {
-                  parsedAiOutput = chat.aiOutput;
                 }
+
+                return {
+                  id: chat.id,
+                  sessionId: chat.sessionId,
+                  userInput: chat.userInput || '',
+                  aiOutput: (() => {
+                    // aiOutput가 객체이고 summary/message가 있는 경우: nextQuestions를 추가로 붙임(저장된 데이터는 변경하지 않음)
+                    if (parsedAiOutput && typeof parsedAiOutput === 'object') {
+                      const existing = (parsedAiOutput as any).nextQuestions;
+                      if (Array.isArray(existing) && existing.length > 0) {
+                        return parsedAiOutput;
+                      }
+
+                      const baseText =
+                        typeof (parsedAiOutput as any).message === 'string'
+                          ? (parsedAiOutput as any).message
+                          : typeof (parsedAiOutput as any).summary === 'string'
+                            ? (parsedAiOutput as any).summary
+                            : undefined;
+
+                      if (!baseText) return parsedAiOutput;
+
+                      return {
+                        ...(parsedAiOutput as any),
+                        nextQuestions: generateNextQuestionsByText({
+                          category: sessionRecord.category as FortuneCategory,
+                          text: baseText,
+                        }),
+                      };
+                    }
+                    return parsedAiOutput;
+                  })(),
+                  elapsedTime: chat.elapsedTime || 0,
+                  isPaid: chat.isPaid || false,
+                  createdAt: chat.createdAt,
+                };
+              });
+
+              // 초기 가이드가 있으면 맨 앞에 추가 (nextQuestions는 카테고리/메시지 기반으로 항상 재생성)
+              if (initialChatGuide) {
+                const guideOutput = initialChatGuide.aiOutput;
+                const baseText =
+                  guideOutput && typeof (guideOutput as any).message === 'string'
+                    ? (guideOutput as any).message
+                    : guideOutput && typeof (guideOutput as any).summary === 'string'
+                      ? (guideOutput as any).summary
+                      : undefined;
+                const normalizedGuide = {
+                  ...initialChatGuide,
+                  aiOutput: baseText
+                    ? {
+                        ...(typeof guideOutput === 'object' && guideOutput !== null ? guideOutput : {}),
+                        nextQuestions: generateNextQuestionsByText({
+                          category: sessionRecord.category as FortuneCategory,
+                          text: baseText,
+                        }),
+                      }
+                    : initialChatGuide.aiOutput,
+                };
+                return [normalizedGuide, ...mappedChats];
               }
 
-              return {
-                id: chat.id,
-                sessionId: chat.sessionId,
-                userInput: chat.userInput || '',
-                aiOutput: parsedAiOutput,
-                elapsedTime: chat.elapsedTime || 0,
-                isPaid: chat.isPaid || false,
-                createdAt: chat.createdAt,
-              };
-            }),
-            cta: { 
-              label: '채팅으로 이어보기(홍시 사용)', 
-              requiresPayment: sessionRecord.remainingTime <= 0 
+              return mappedChats;
+            })(),
+            cta: {
+              label: '채팅으로 이어보기(홍시 사용)',
+              requiresPayment: (() => {
+                if (sessionRecord.mode !== 'CHAT') {
+                  return sessionRecord.remainingTime <= 0;
+                }
+                const ent = sessionRecord.chatEntitlementExpiresAt as Date | null | undefined;
+                if (ent) {
+                  return ent.getTime() <= Date.now();
+                }
+                return sessionRecord.remainingTime <= 0;
+              })(),
             },
           },
           timestamp: new Date().toISOString(),
         };
 
+        console.log('[결과 조회] 전체 완료:', { totalMs: Date.now() - tStart, sessionId: payload.sessionId, hasInitialGuide: !!initialChatGuide });
         res.status(200).json(response);
       } catch (error: any) {
         console.error('[결과 조회] 토큰 검증 실패:', {

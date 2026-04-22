@@ -140,19 +140,42 @@ export enum FortuneProductType {
 
 // 홍시(복채) 단위 (시간 구매)
 export enum HongsiUnit {
-  FREE = 'FREE',              // 무료 홍시 (1일 1회, 2분)
+  FREE = 'FREE',              // 무료 홍시 (1일 1회, 5분)
   MINUTES_5 = 'MINUTES_5',    // 5분
   MINUTES_10 = 'MINUTES_10',  // 10분
   MINUTES_30 = 'MINUTES_30',  // 30분
 }
 
-// 채팅형 운세 응답
-export interface ChatResponse {
+// 채팅형 운세 응답 (프롬프트 버전에 따라 스키마가 다를 수 있음)
+export interface ChatResponseV1 {
   summary: string;
   points: string[];
   tips: string[];
   disclaimer: string;
-  suggestPayment?: boolean;  // 결제 연장 제안 여부
+  suggestPayment?: boolean; // 결제 연장 제안 여부
+  /**
+   * 요약(summary)에 기반한 다음 질문 추천 (채팅 유도용)
+   * - 프론트에서 퀵 리플라이/버튼으로 사용 가능
+   */
+  nextQuestions?: string[];
+}
+
+export interface ChatResponseV2 {
+  /**
+   * 점술가가 말하듯 자연스럽게 이어지는 한 덩어리의 답변 텍스트
+   */
+  message: string;
+  /**
+   * 다음 단계로 이어지는 추천 질문(퀵 리플라이)
+   */
+  nextQuestions?: string[];
+  suggestPayment?: boolean; // 결제 연장 제안 여부
+}
+
+export type ChatResponse = ChatResponseV1 | ChatResponseV2;
+
+export function isChatResponseV2(response: ChatResponse): response is ChatResponseV2 {
+  return typeof (response as any)?.message === 'string';
 }
 
 // 문서형 운세 응답
@@ -182,7 +205,6 @@ export interface CreateFortuneSessionRequest {
   userInput: string;
   paymentId?: string;          // 즉시 결제 시 결제 ID (선택)
   useFreeHongsi?: boolean;     // 무료 홍시 사용 여부 (채팅형만)
-  durationMinutes?: number;    // 채팅형 유료 결제 시 필수 (5/10/30)
 }
 
 // 세션 생성 응답
@@ -194,25 +216,32 @@ export interface CreateFortuneSessionResponse {
   remainingTime: number;
   isActive: boolean;
   expiresAt: string;
+  /** 일 단위 채팅 이용권 만료 시각(있을 때만) */
+  chatEntitlementExpiresAt?: string;
   isPaid: boolean;             // 결제 여부
 }
 
 // 에러 코드 표준
 export type FortuneErrorCode =
-  | 'NEED_PAYMENT'
-  | 'HONGSI_ALREADY_USED'
-  | 'SESSION_EXPIRED'
-  | 'CATEGORY_MISMATCH'
-  | 'TOKEN_INVALID'
-  | 'PAYMENT_UNVERIFIED'
-  | 'INVALID_FORMTYPE';
+  | 'NEED_PAYMENT'              // 결제 필요
+  | 'HONGSI_ALREADY_USED'       // 무료 홍시 이미 사용
+  | 'SESSION_EXPIRED'           // 세션 만료
+  | 'SESSION_NOT_FOUND'         // 세션을 찾을 수 없음
+  | 'SESSION_TIME_EXPIRED'      // 세션 시간 만료 (결제 유도 필요)
+  | 'CHAT_ACCOUNT_TIME_EXHAUSTED' // 계정 chatUsableUntil 없음/만료 — 세션 생성 불가, 이용권 구매 유도
+  | 'CATEGORY_MISMATCH'         // 카테고리 불일치
+  | 'TOKEN_INVALID'             // 토큰 무효
+  | 'PAYMENT_UNVERIFIED'        // 결제 미검증
+  | 'INVALID_FORMTYPE'          // 잘못된 폼 타입
+  | 'INVALID_REQUEST'           // 잘못된 요청
+  | 'AUTH_REQUIRED'             // 인증 필요
+  | 'AI_QUOTA_EXCEEDED'         // AI 할당량 초과
+  | 'AI_SERVICE_UNAVAILABLE'    // AI 서비스 일시 장애(과부하 등)
+  | 'AI_GENERATION_FAILED';     // AI 생성 실패
 
-// 채팅형 시간 옵션 (분 단위)
-export enum ChatDurationMinutes {
-  MINUTES_5 = 5,
-  MINUTES_10 = 10,
-  MINUTES_30 = 30,
-}
+
+/** 채팅 일 단위 이용권 (결제 후 달력 기준 만료) */
+export type ChatEntitlementDays = 1 | 7 | 30;
 
 // 결제 상품 정보
 export interface FortuneProduct {
@@ -224,13 +253,15 @@ export interface FortuneProduct {
   discountRate: number;         // 할인률 (0~100, 예: 10 = 10% 할인)
   finalAmount: number;          // 실제 결제 금액 (할인 적용 후, 원)
   description: string;
-  duration?: number;            // 채팅형 세션 시간 (초)
+  duration?: number;            // 채팅형 세션 시간 (초) — 분 단위 상품
+  /** 일 단위 채팅 이용권일 때만 설정 (1·7·30) */
+  entitlementDays?: ChatEntitlementDays;
 }
 
 // 결제 준비 요청
 export interface PreparePaymentRequest {
   productType: FortuneProductType;
   category: FortuneCategory;
-  durationMinutes?: number;     // 채팅형일 경우 시간 (5, 10, 30분)
+  chatEntitlementDays?: ChatEntitlementDays;
   sessionId?: string;          // 기존 세션 연장 시
 }

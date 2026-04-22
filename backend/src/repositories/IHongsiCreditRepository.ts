@@ -19,7 +19,7 @@ export interface IHongsiCreditRepository {
 
   /**
    * 오늘 사용 가능한 총 시간(초) 반환
-   * 무료 홍시 사용 가능하면 120초, 아니면 0초 + 유료 구매 시간
+   * 무료 홍시 사용 가능하면 300초(5분), 아니면 0초 + 유료 구매 시간
    */
   getAvailableTimeToday(userId: string): Promise<number>;
 }

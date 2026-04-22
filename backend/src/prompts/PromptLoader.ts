@@ -2,9 +2,10 @@
  * 프롬프트 로더
  * 카테고리별 프롬프트 파일을 동적으로 로드
  */
-import { FortuneCategory } from '../types/fortune';
-import { SessionMode } from '../types/fortune';
+import { FortuneCategory, SessionMode } from '../types/fortune';
 import { extractFortuneTopicFromCategoryAndInput, generateAnalysisTarget } from '../utils/fortuneTopicExtractor';
+import { CHAT_CATEGORY_OVERRIDES, DOCUMENT_CATEGORY_OVERRIDES } from './categoryPromptOverrides';
+import { CATEGORY_NAMES } from '../data/fortuneProducts';
 
 // 채팅형 프롬프트 import
 import { SASAChatPrompt } from './chat/sasa.prompt';
@@ -91,12 +92,23 @@ export function loadPrompt(
   const topicInfo = extractFortuneTopicFromCategoryAndInput(category, params.userInput);
   const analysisTarget = generateAnalysisTarget(topicInfo.topics, category);
 
+  // 카테고리별 추가 지침 (Instruction, 다음 단계 유도 규칙, 말투 가이드)
+  const overrides = mode === SessionMode.CHAT ? CHAT_CATEGORY_OVERRIDES[category] : DOCUMENT_CATEGORY_OVERRIDES[category];
+  const categoryInstruction = overrides?.instruction ?? '';
+  const categoryNextStepRules = overrides?.nextStepRules ?? '';
+  const categoryToneGuide = overrides?.toneGuide ?? '';
+
   // 변수 치환
+  const categoryLabel = CATEGORY_NAMES[category] || category;
   let prompt = template
+    .replace(/{fortuneCategory}/g, categoryLabel)
     .replace(/{userInput}/g, params.userInput || '')
     .replace(/{userData}/g, params.userData ? JSON.stringify(params.userData, null, 2) : '없음')
     .replace(/{focusArea}/g, topicInfo.focusArea)
-    .replace(/{analysisTarget}/g, analysisTarget);
+    .replace(/{analysisTarget}/g, analysisTarget)
+    .replace(/{categoryInstruction}/g, categoryInstruction)
+    .replace(/{categoryNextStepRules}/g, categoryNextStepRules)
+    .replace(/{categoryToneGuide}/g, categoryToneGuide);
 
   // 이전 맥락 추가 (채팅형만)
   if (mode === SessionMode.CHAT && params.previousContext) {

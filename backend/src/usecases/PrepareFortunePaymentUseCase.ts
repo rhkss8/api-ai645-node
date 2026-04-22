@@ -3,7 +3,12 @@
  * 결제 전 주문 생성 및 결제 정보 반환
  */
 import { PrismaClient, SubscriptionType } from '@prisma/client';
-import { FortuneProductType, FortuneCategory, shouldCheckExistingDocument } from '../types/fortune';
+import {
+  FortuneProductType,
+  FortuneCategory,
+  shouldCheckExistingDocument,
+  ChatEntitlementDays,
+} from '../types/fortune';
 import { FortuneProductService } from '../services/FortuneProductService';
 import { PaymentService } from '../services/PaymentService';
 
@@ -30,12 +35,19 @@ export class PrepareFortunePaymentUseCase {
     userId: string,
     productType: FortuneProductType,
     category: FortuneCategory,
-    durationMinutes?: number,
     payMethod?: string, // 결제 방법 (card, kakao, toss 등)
     easyPayProvider?: string, // 간편결제 제공자 (카카오페이, 토스페이 등)
+    chatEntitlementDays?: ChatEntitlementDays,
   ): Promise<PreparePaymentResult> {
-    // 상품 정보 조회 (할인 적용된 가격 포함)
-    const product = this.productService.getProduct(productType, category, durationMinutes);
+    let product;
+    if (productType === FortuneProductType.CHAT_SESSION) {
+      if (chatEntitlementDays == null || ![1, 7, 30].includes(Number(chatEntitlementDays))) {
+        throw new Error('채팅형은 chatEntitlementDays(1, 7, 30)가 필요합니다.');
+      }
+      product = this.productService.getChatEntitlementProduct(chatEntitlementDays);
+    } else {
+      product = this.productService.getProduct(productType, category);
+    }
 
     // 결제 방법 결정 (우선순위: payMethod > easyPayProvider > 기본값 'card')
     let paymentMethod = 'card'; // 기본값
@@ -82,6 +94,7 @@ export class PrepareFortunePaymentUseCase {
         productType,
         category,
         duration: product.duration,
+        chatEntitlementDays: product.entitlementDays,
         originalAmount: product.amount,
         discountRate: product.discountRate,
         finalAmount: product.finalAmount,
@@ -92,6 +105,18 @@ export class PrepareFortunePaymentUseCase {
 
     if (!paymentResult.success || !paymentResult.paymentId || !paymentResult.orderId || !paymentResult.merchantUid) {
       throw new Error('결제 준비에 실패했습니다.');
+    }
+
+    // 0원 결제는 자동으로 완료 처리 (PortOne 결제 없이도 세션 생성 가능)
+    if (product.finalAmount === 0) {
+      console.log(`[결제 준비] 0원 결제 자동 완료 처리: paymentId=${paymentResult.paymentId}`);
+      const freePaymentResult = await this.paymentService.completeFreePayment(paymentResult.paymentId);
+      if (!freePaymentResult.success) {
+        console.error('[결제 준비] 0원 결제 자동 완료 실패:', freePaymentResult.error);
+        // 실패해도 계속 진행 (나중에 웹훅으로 처리될 수 있음)
+      } else {
+        console.log(`[결제 준비] 0원 결제 자동 완료 성공: paymentId=${paymentResult.paymentId}`);
+      }
     }
 
     // 사용자 정보 조회 (이메일, 연락처)

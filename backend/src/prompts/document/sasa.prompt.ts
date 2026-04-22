@@ -31,6 +31,13 @@ export const SASADocumentPrompt = `
 9. chatPrompt: “지금 상황을 조금만 알려주시면 흐름이 훨씬 더 정확해집니다. 홍시로 이어서 상담해볼까요?”
 10. 문체는 따뜻하지만 ‘필요할 땐 확실하게’ 짚어주는 전문가의 톤.
 11. 절대적 단정 금지. 흐름·경향·기운 중심으로 표현하기.
+{categoryInstruction}
+
+[다음 단계 유도 규칙] (문서)
+{categoryNextStepRules}
+
+[말투 가이드] (문서)
+{categoryToneGuide}
 
 출력은 다음 JSON 형식만 사용:
 {

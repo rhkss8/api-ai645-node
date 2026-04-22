@@ -1,146 +1,106 @@
 /**
- * 운세 상품 정보 서비스
- *
- * 상품 데이터는 src/data/fortuneProducts.ts 파일에서 관리합니다.
+ * Fortune product service — catalog lives in src/data/fortuneProducts.ts
  */
-import { FortuneProductType, FortuneCategory, FortuneProduct, ChatDurationMinutes } from '../types/fortune';
 import {
-  CHAT_PRICE_PER_MINUTE,
+  FortuneProductType,
+  FortuneCategory,
+  FortuneProduct,
+  ChatEntitlementDays,
+} from '../types/fortune';
+import {
   DOCUMENT_PRICES,
   DISCOUNT_RATES,
   PRODUCT_DESCRIPTIONS,
   PRODUCT_NAMES,
   CATEGORY_NAMES,
   DOCUMENT_PRODUCT_NAMES,
-  AVAILABLE_CHAT_DURATIONS,
+  CHAT_ENTITLEMENT_DAYS,
+  getChatEntitlementAmount,
 } from '../data/fortuneProducts';
-import { IdGenerator } from '../utils/idGenerator';
 import { calculateFinalAmount } from '../utils/priceCalculator';
 
+/** TS shape only; real session category is on Order.metadata */
+const CHAT_PRODUCT_CATEGORY_PLACEHOLDER = FortuneCategory.SAJU;
 
 export class FortuneProductService {
-  /**
-   * 상품 고유 ID 생성
-   */
-  private generateProductId(
-    productType: FortuneProductType,
-    category: FortuneCategory,
-    durationMinutes?: number,
-  ): string {
-    const base = `${productType}_${category}`;
-    const duration = durationMinutes ? `_${durationMinutes}min` : '';
+  private generateDocumentProductId(category: FortuneCategory): string {
     const timestamp = Date.now().toString(36);
-    return `prod_${base}${duration}_${timestamp}`;
+    return `prod_${FortuneProductType.DOCUMENT_REPORT}_${category}_${timestamp}`;
   }
 
-  /**
-   * 상품 정보 조회
-   *
-   * @param productType 상품 타입
-   * @param category 카테고리
-   * @param durationMinutes 채팅형일 경우 시간 (5, 10, 30분) - 필수
-   */
-  getProduct(
-    productType: FortuneProductType,
-    category: FortuneCategory,
-    durationMinutes?: number,
-  ): FortuneProduct {
+  /** Global chat pass: 1 / 7 / 30 days (same price for all categories) */
+  getChatEntitlementProduct(days: ChatEntitlementDays): FortuneProduct {
+    const baseAmount = getChatEntitlementAmount(days);
+    const discountRate = 0;
+    const finalAmount = calculateFinalAmount(baseAmount, discountRate);
+    const productId = `prod_chat_topup_${days}d_global`;
+
+    return {
+      productId,
+      type: FortuneProductType.CHAT_SESSION,
+      category: CHAT_PRODUCT_CATEGORY_PLACEHOLDER,
+      name: `Chat pass (${days}d)`,
+      amount: baseAmount,
+      discountRate,
+      finalAmount,
+      description: `Account chat access for ${days} day(s) (24h each), stacked from payment time.`,
+      entitlementDays: days,
+    };
+  }
+
+  /** Document product only; chat uses getChatEntitlementProduct */
+  getProduct(productType: FortuneProductType, category: FortuneCategory): FortuneProduct {
     const categoryName = CATEGORY_NAMES[category];
-    const productId = this.generateProductId(productType, category, durationMinutes);
 
     if (productType === FortuneProductType.CHAT_SESSION) {
-      // 채팅형: 시간이 필수
-      if (!durationMinutes || !AVAILABLE_CHAT_DURATIONS.includes(durationMinutes as any)) {
-        throw new Error(`채팅형은 시간이 필수입니다. (5, 10, 30분 중 선택)`);
-      }
-
-      // 기본 가격 계산 (분당 가격 * 시간)
-      const pricePerMinute = CHAT_PRICE_PER_MINUTE[category];
-      const baseAmount = pricePerMinute * durationMinutes;
-
-      // 할인률 조회
-      const discountRate = DISCOUNT_RATES[category]?.chat?.[durationMinutes]
-        || DISCOUNT_RATES[category]?.default
-        || 0;
-
-      // 실제 결제 금액 계산 (10원 단위 절삭)
-      const finalAmount = calculateFinalAmount(baseAmount, discountRate);
-
-      return {
-        productId,
-        type: FortuneProductType.CHAT_SESSION,
-        category,
-        name: `${categoryName} 채팅 상담 (${durationMinutes}분)`,
-        amount: baseAmount,
-        discountRate,
-        finalAmount,
-        description: PRODUCT_DESCRIPTIONS[FortuneProductType.CHAT_SESSION](
-          categoryName,
-          durationMinutes * 60, // 초 단위로 변환
-        ),
-        duration: durationMinutes * 60, // 초 단위
-      };
-    } else {
-      // 문서형
-      const baseAmount = DOCUMENT_PRICES[category];
-      const discountRate = DISCOUNT_RATES[category]?.document
-        || DISCOUNT_RATES[category]?.default
-        || 0;
-
-      // 실제 결제 금액 계산 (10원 단위 절삭)
-      const finalAmount = calculateFinalAmount(baseAmount, discountRate);
-
-      return {
-        productId,
-        type: FortuneProductType.DOCUMENT_REPORT,
-        category,
-        name: DOCUMENT_PRODUCT_NAMES[category] || PRODUCT_NAMES[FortuneProductType.DOCUMENT_REPORT](categoryName),
-        amount: baseAmount,
-        discountRate,
-        finalAmount,
-        description: PRODUCT_DESCRIPTIONS[FortuneProductType.DOCUMENT_REPORT](categoryName),
-      };
+      throw new Error('Use getChatEntitlementProduct(1|7|30) for chat SKUs.');
     }
+
+    const baseAmount = DOCUMENT_PRICES[category];
+    const discountRate =
+      DISCOUNT_RATES[category]?.documentDiscountRate ??
+      DISCOUNT_RATES[category]?.defaultDiscountRate ??
+      0;
+    const finalAmount = calculateFinalAmount(baseAmount, discountRate);
+    const productId = this.generateDocumentProductId(category);
+
+    return {
+      productId,
+      type: FortuneProductType.DOCUMENT_REPORT,
+      category,
+      name:
+        DOCUMENT_PRODUCT_NAMES[category] ||
+        PRODUCT_NAMES[FortuneProductType.DOCUMENT_REPORT](categoryName),
+      amount: baseAmount,
+      discountRate,
+      finalAmount,
+      description: PRODUCT_DESCRIPTIONS[FortuneProductType.DOCUMENT_REPORT](categoryName),
+    };
   }
 
-  /**
-   * 카테고리별 상품 목록 조회
-   * 채팅형은 5분/10분/30분 모두 포함
-   */
+  /** Per category: three global chat passes + one document SKU */
   getProductsByCategory(category: FortuneCategory): FortuneProduct[] {
     const products: FortuneProduct[] = [];
 
-    // 채팅형 상품들 (5분, 10분, 30분)
-    for (const duration of AVAILABLE_CHAT_DURATIONS) {
-      products.push(
-        this.getProduct(FortuneProductType.CHAT_SESSION, category, duration),
-      );
+    for (const days of CHAT_ENTITLEMENT_DAYS) {
+      products.push(this.getChatEntitlementProduct(days));
     }
 
-    // 문서형 상품
-    products.push(
-      this.getProduct(FortuneProductType.DOCUMENT_REPORT, category),
-    );
+    products.push(this.getProduct(FortuneProductType.DOCUMENT_REPORT, category));
 
     return products;
   }
 
-  /**
-   * 모든 카테고리의 상품 목록 조회
-   */
   getAllProducts(): Record<FortuneCategory, FortuneProduct[]> {
     const result: Partial<Record<FortuneCategory, FortuneProduct[]>> = {};
 
-    for (const category of Object.values(FortuneCategory)) {
-      result[category] = this.getProductsByCategory(category);
+    for (const c of Object.values(FortuneCategory)) {
+      result[c] = this.getProductsByCategory(c);
     }
 
     return result as Record<FortuneCategory, FortuneProduct[]>;
   }
 
-  /**
-   * 카테고리 한글명 조회
-   */
   getCategoryName(category: FortuneCategory): string {
     return CATEGORY_NAMES[category] || category;
   }

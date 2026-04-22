@@ -10,6 +10,8 @@ import { FortuneCategory, SessionMode, FortuneProductType } from '../types/fortu
 import { FortuneProductService } from '../services/FortuneProductService';
 import { PaymentService } from '../services/PaymentService';
 import { DocumentFortuneUseCase } from './DocumentFortuneUseCase';
+import { CustomError } from '../middlewares/errorHandler';
+import type { FortuneErrorCode } from '../types/fortune';
 
 export interface CreateSessionParams {
   userId: string;
@@ -21,7 +23,6 @@ export interface CreateSessionParams {
   paymentId?: string;        // 우리 DB의 Payment.id
   portOnePaymentId?: string; // PortOne에서 반환한 paymentId (로컬: 콜백에서 전달, 실운영: 웹훅에서 저장)
   useFreeHongsi?: boolean;   // 무료 홍시 사용 여부 (채팅형만)
-  durationMinutes?: number;  // 채팅형 결제 시 시간 (5, 10, 30분)
 }
 
 export class CreateFortuneSessionUseCase {
@@ -34,8 +35,61 @@ export class CreateFortuneSessionUseCase {
     private readonly documentUseCase: DocumentFortuneUseCase, // 문서 생성 UseCase 추가
   ) {}
 
+  private async getUserChatUsableUntil(userId: string): Promise<Date | null> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { chatUsableUntil: true },
+    });
+    return u?.chatUsableUntil ?? null;
+  }
+
+  private assertChatAccessOrThrow(chatUsableUntil: Date | null): Date {
+    const now = new Date();
+    if (!chatUsableUntil || chatUsableUntil.getTime() <= now.getTime()) {
+      const p = this.productService.getChatEntitlementProduct(1);
+      throw new CustomError(
+        `채팅 이용 가능 시간이 없습니다. 1일 이용권은 ${p.finalAmount.toLocaleString()}원부터 구매할 수 있습니다.`,
+        400,
+        'CHAT_ACCOUNT_TIME_EXHAUSTED' as FortuneErrorCode,
+        {
+          requiresPayment: true,
+          suggestedPass: {
+            productType: FortuneProductType.CHAT_SESSION,
+            productId: p.productId,
+            chatEntitlementDays: 1,
+            finalAmountWon: p.finalAmount,
+          },
+        },
+      );
+    }
+    return chatUsableUntil;
+  }
+
+  private buildChatSession(
+    userId: string,
+    category: FortuneCategory,
+    mode: SessionMode,
+    until: Date,
+    formType: any,
+    userInput: string,
+    userData?: Record<string, any>,
+  ): FortuneSession {
+    const sessionId = IdGenerator.generateFortuneSessionId();
+    const seconds = Math.max(60, Math.floor((until.getTime() - Date.now()) / 1000));
+    return FortuneSession.create(
+      sessionId,
+      userId,
+      category,
+      mode,
+      seconds,
+      formType,
+      userInput,
+      userData,
+    );
+  }
+
   async execute(params: CreateSessionParams): Promise<FortuneSession> {
-    const { userId, category, formType, mode, userInput, userData, paymentId, portOnePaymentId, useFreeHongsi, durationMinutes } = params;
+    const { userId, category, formType, mode, userInput, userData, paymentId, portOnePaymentId, useFreeHongsi } = params;
 
     // 문서형은 무조건 결제 필수
     if (mode === SessionMode.DOCUMENT) {
@@ -243,9 +297,8 @@ export class CreateFortuneSessionUseCase {
       return createdSession;
     }
 
-    // 채팅형: 결제 또는 무료 홍시 선택
+    // 채팅형: 계정 User.chatUsableUntil 기준 (결제 완료 시 PaymentService에서 이용권 연장)
     if (mode === SessionMode.CHAT) {
-      // 기존 활성 세션 확인
       const existingSession = await this.sessionRepository.findActiveByUserIdAndCategory(
         userId,
         category,
@@ -255,9 +308,8 @@ export class CreateFortuneSessionUseCase {
         return existingSession;
       }
 
-      let sessionTime = 0;
+      let sessionToCreate: FortuneSession | null = null;
 
-      // 결제 완료된 경우
       if (paymentId) {
         const payment = await this.prisma.payment.findUnique({
           where: { id: paymentId },
@@ -272,16 +324,13 @@ export class CreateFortuneSessionUseCase {
           throw new Error('결제 정보가 일치하지 않습니다.');
         }
 
-        // 결제 상태가 PENDING이면 PortOne API로 결제 완료 여부 확인 (로컬: 폴링, 실운영: 웹훅)
         if (payment.status === 'PENDING') {
-          // portOnePaymentId가 없으면 에러
           if (!portOnePaymentId) {
             throw new Error('PortOne 결제 ID가 필요합니다. 결제를 완료해주세요.');
           }
 
-          // 로컬: 짧은 폴링으로 결제 완료 확인 (최대 5초, 5회 시도)
           const maxRetries = 5;
-          const retryDelay = 1000; // 1초
+          const retryDelay = 1000;
           let verifyResult: { success: boolean; status?: PaymentStatus } = { success: false };
 
           console.log(`[세션 생성] 결제 상태 폴링 시작: paymentId=${paymentId}, portOnePaymentId=${portOnePaymentId}`);
@@ -295,7 +344,6 @@ export class CreateFortuneSessionUseCase {
               break;
             }
 
-            // 마지막 시도가 아니면 대기
             if (i < maxRetries - 1) {
               console.log(`[세션 생성] 결제 대기 중... ${retryDelay}ms 후 재시도`);
               await new Promise((resolve) => setTimeout(resolve, retryDelay));
@@ -303,14 +351,12 @@ export class CreateFortuneSessionUseCase {
           }
 
           if (!verifyResult.success || verifyResult.status !== 'COMPLETED') {
-            // 로컬: PENDING 상태면 프론트엔드에서 폴링하도록 안내
             console.warn(`[세션 생성] 폴링 실패: paymentId=${paymentId}, status=${verifyResult.status}`);
             throw new Error(
               '결제가 아직 완료되지 않았습니다. 잠시 후 다시 시도해주세요. (프론트엔드에서 폴링 권장)',
             );
           }
 
-          // Payment 상태가 업데이트되었으므로 다시 조회
           const updatedPayment = await this.prisma.payment.findUnique({
             where: { id: paymentId },
             include: { order: true },
@@ -325,62 +371,70 @@ export class CreateFortuneSessionUseCase {
           throw new Error('결제가 완료되지 않았거나 취소되었습니다.');
         }
 
-        // 결제 상품 정보 조회
-        // durationMinutes가 없으면 에러 (채팅형 결제는 시간 필수: 5, 10, 30분)
-        if (!durationMinutes) {
-          throw new Error('채팅형 결제는 시간 선택이 필수입니다. (5, 10, 30분 중 선택)');
+        const latestPayment = await this.prisma.payment.findUnique({
+          where: { id: paymentId },
+          include: { order: true },
+        });
+        if (!latestPayment?.order) {
+          throw new Error('주문 정보를 찾을 수 없습니다.');
         }
 
-        // durationMinutes 값 검증 (5, 10, 30분만 허용)
-        if (![5, 10, 30].includes(durationMinutes)) {
-          throw new Error('시간은 5분, 10분, 30분 중에서만 선택 가능합니다.');
+        const meta = (latestPayment.order.metadata as Record<string, unknown>) || {};
+        const rawEnt = meta.chatEntitlementDays as number | undefined;
+        if (rawEnt !== 1 && rawEnt !== 7 && rawEnt !== 30) {
+          throw new Error('채팅 결제 주문에 chatEntitlementDays(1·7·30)가 없습니다.');
         }
 
-        const product = this.productService.getProduct(
-          FortuneProductType.CHAT_SESSION,
+        const until = this.assertChatAccessOrThrow(await this.getUserChatUsableUntil(userId));
+        sessionToCreate = this.buildChatSession(
+          userId,
           category,
-          durationMinutes,
+          mode,
+          until,
+          formType as any,
+          userInput,
+          userData,
         );
-        sessionTime = product.duration || durationMinutes * 60;
       } else if (useFreeHongsi) {
-        // 무료 홍시 사용 (durationMinutes 무시, 항상 2분 고정)
-        const isFreeUsed = await this.hongsiCreditRepository.isFreeHongsiUsedToday(userId);
-        if (isFreeUsed) {
-          throw new Error('오늘 무료 홍시를 이미 사용했습니다.');
+        const isFreeCategory = formType === 'ASK' || formType === 'DAILY';
+
+        if (!isFreeCategory) {
+          const isFreeUsed = await this.hongsiCreditRepository.isFreeHongsiUsedToday(userId);
+          if (isFreeUsed) {
+            throw new Error('오늘 무료 홍시를 이미 사용했습니다.');
+          }
+          await this.hongsiCreditRepository.useFreeHongsi(userId);
         }
 
-        sessionTime = 120; // 무료 홍시는 항상 2분(120초) 고정
-        await this.hongsiCreditRepository.useFreeHongsi(userId);
-      } else {
-        // 결제도 안 했고 무료 홍시도 선택 안 함
-        // 기본 10분 기준으로 안내
-        const sampleProduct = this.productService.getProduct(
-          FortuneProductType.CHAT_SESSION,
+        const until = this.assertChatAccessOrThrow(await this.getUserChatUsableUntil(userId));
+        sessionToCreate = this.buildChatSession(
+          userId,
           category,
-          10, // 기본 10분으로 안내
+          mode,
+          until,
+          formType as any,
+          userInput,
+          userData,
         );
-        throw new Error(
-          `채팅 상담을 시작하려면 결제(5분: ${sampleProduct.finalAmount.toLocaleString()}원부터) 또는 무료 홍시를 선택해주세요.`,
+      } else {
+        const until = this.assertChatAccessOrThrow(await this.getUserChatUsableUntil(userId));
+        sessionToCreate = this.buildChatSession(
+          userId,
+          category,
+          mode,
+          until,
+          formType as any,
+          userInput,
+          userData,
         );
       }
 
-            // 새 세션 생성
-            const sessionId = IdGenerator.generateFortuneSessionId();
-            const session = FortuneSession.create(
-              sessionId,
-              userId,
-              category,
-              mode,
-              sessionTime,
-              formType as any,
-              userInput,
-              userData,
-            );
-
-            session.validate();
-            return await this.sessionRepository.create(session);
+      if (!sessionToCreate) {
+        throw new Error('세션을 생성할 수 없습니다.');
+      }
+      sessionToCreate.validate();
+      return await this.sessionRepository.create(sessionToCreate);
     }
-
     throw new Error('유효하지 않은 세션 모드입니다.');
   }
 }

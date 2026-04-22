@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ApiResponse } from '../types/common';
+import { OauthEncryptionConfigError, socialOAuthTokensNeedRelink } from '../utils/oauthTokenCrypto';
 
 export interface ApiError extends Error {
   statusCode?: number;
@@ -85,6 +86,26 @@ export class GPTServiceError extends CustomError {
   }
 }
 
+/** 소셜 OAuth 저장값을 복호화할 수 없을 때(키 교체·구버전 데이터 등) */
+export class SocialRelinkRequiredError extends CustomError {
+  constructor(
+    message: string = '소셜 계정 연동이 만료되었습니다. 소셜 로그인을 다시 진행해 주세요.',
+  ) {
+    super(message, 401, 'SOCIAL_RELINK_REQUIRED');
+    this.name = 'SocialRelinkRequiredError';
+  }
+}
+
+/** DB에 저장된 소셜 토큰을 더 이상 쓸 수 없으면 던짐 — API에서 401 + 안내 메시지 */
+export function throwIfSocialOAuthNeedsRelink(
+  refreshToken: string | null,
+  accessToken: string | null,
+): void {
+  if (socialOAuthTokensNeedRelink(refreshToken, accessToken)) {
+    throw new SocialRelinkRequiredError();
+  }
+}
+
 // 글로벌 에러 핸들러
 export const globalErrorHandler = (
   error: ApiError,
@@ -92,15 +113,24 @@ export const globalErrorHandler = (
   res: Response,
   next: NextFunction,
 ): void => {
-  console.error('API 오류 발생:', {
-    message: error.message,
-    stack: error.stack,
-    url: req.url,
-    method: req.method,
-    body: req.body,
-    params: req.params,
-    query: req.query,
-  });
+  if (process.env.NODE_ENV === 'production') {
+    console.error('API 오류 발생:', {
+      message: error.message,
+      name: error.name,
+      url: req.url,
+      method: req.method,
+    });
+  } else {
+    console.error('API 오류 발생:', {
+      message: error.message,
+      stack: error.stack,
+      url: req.url,
+      method: req.method,
+      body: req.body,
+      params: req.params,
+      query: req.query,
+    });
+  }
 
   // 기본 상태 코드와 메시지 설정
   let statusCode = error.statusCode || 500;
@@ -147,6 +177,35 @@ export const globalErrorHandler = (
       stack: error.stack,
       ...error.details,
     } : undefined;
+  } else if (error instanceof OauthEncryptionConfigError) {
+    statusCode = 503;
+    message = error.message;
+    code = error.code;
+    details = undefined;
+  } else if (error instanceof SocialRelinkRequiredError) {
+    statusCode = 401;
+    message = error.message;
+    code = 'SOCIAL_RELINK_REQUIRED';
+    details = undefined;
+  }
+
+  // CustomError인 경우 구조화된 에러 응답 (운세 서비스 에러 코드 포함)
+  if (error.name === 'CustomError' && code) {
+    // 프로덕션 환경에서는 민감한 정보 숨기기
+    if (process.env.NODE_ENV === 'production' && statusCode >= 500) {
+      message = '서버 내부 오류가 발생했습니다.';
+      details = undefined;
+    }
+
+    const response: ApiResponse = {
+      success: false,
+      error: code, // 에러 코드 (예: SESSION_TIME_EXPIRED)
+      message: message, // 에러 메시지
+      data: details || undefined, // 추가 정보 (requiresPayment, remainingTime 등)
+      timestamp: new Date().toISOString(),
+    };
+    res.status(statusCode).json(response);
+    return;
   }
 
   // 프로덕션 환경에서는 민감한 정보 숨기기
@@ -158,10 +217,12 @@ export const globalErrorHandler = (
     // ImageProcessingError는 프로덕션에서도 상세 메시지 유지 (사용자에게 유용)
   }
 
+  // 일반 에러 응답
   const response: ApiResponse = {
     success: false,
-    error: message,
-    data: details ? { code, details } : code ? { code } : undefined,
+    error: code || 'INTERNAL_ERROR',
+    message: message,
+    data: details || undefined,
     timestamp: new Date().toISOString(),
   };
 
