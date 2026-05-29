@@ -4,7 +4,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { ResultTokenService } from '../services/ResultTokenService';
-import { PaymentHistoryItem, getPayMethodDisplay } from './GetFortunePaymentsUseCase';
+import { PaymentHistoryItem, getDisplayPaymentStatus, getPayMethodDisplay } from './GetFortunePaymentsUseCase';
 
 export class GetFortunePaymentDetailUseCase {
   constructor(
@@ -30,6 +30,20 @@ export class GetFortunePaymentDetailUseCase {
 
     const metadata = order.metadata as any;
     const sessionId = metadata?.sessionId;
+    let paymentDetail: {
+      documentId?: string | null;
+      session?: {
+        id: string;
+        category: string;
+        formType: string | null;
+        mode: string;
+        remainingTime: number;
+        isActive: boolean;
+        expiresAt: Date;
+        userInput: string | null;
+        userData: unknown;
+      } | null;
+    } | null = null;
 
     // 세션 정보 조회
     let session: any = null;
@@ -51,8 +65,8 @@ export class GetFortunePaymentDetailUseCase {
     }
 
     // PaymentDetail 조회 (세션 정보가 없을 경우)
-    if (!session && order.payment) {
-      const paymentDetail = await this.prisma.paymentDetail.findFirst({
+    if (order.payment) {
+      paymentDetail = await this.prisma.paymentDetail.findFirst({
         where: { paymentId: order.payment.id },
         include: {
           session: {
@@ -71,7 +85,7 @@ export class GetFortunePaymentDetailUseCase {
         },
       });
 
-      if (paymentDetail?.session) {
+      if (!session && paymentDetail?.session) {
         session = paymentDetail.session;
       }
     }
@@ -94,20 +108,27 @@ export class GetFortunePaymentDetailUseCase {
 
       // 문서형인 경우 문서 존재 여부 확인
       if (session.mode === 'DOCUMENT') {
-        const document = await this.prisma.documentResult.findFirst({
-          where: {
-            userId,
-            category: session.category,
-          },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true },
-        });
+        let document = null;
+
+        if (paymentDetail?.documentId) {
+          document = await this.prisma.documentResult.findUnique({
+            where: { id: paymentDetail.documentId },
+            select: { id: true },
+          });
+        }
+
+        if (!document && metadata?.documentId) {
+          document = await this.prisma.documentResult.findUnique({
+            where: { id: metadata.documentId },
+            select: { id: true },
+          });
+        }
 
         if (document) {
           hasDocument = true;
           documentId = document.id;
         } else {
-          // 문서가 없고 결제가 완료되었으면 재생성 가능
+          // 결제와 세션은 연결돼 있지만 linked document가 없을 때만 재생성 허용
           canRegenerate =
             order.status === 'PAID' &&
             order.payment?.status === 'COMPLETED';
@@ -115,12 +136,17 @@ export class GetFortunePaymentDetailUseCase {
       }
     }
 
+    const displayStatus = getDisplayPaymentStatus({
+      orderStatus: order.status,
+      paymentStatus: order.payment?.status,
+    });
+
     return {
       id: order.id,
       merchantUid: order.merchantUid,
       orderName: order.orderName,
       amount: order.amount,
-      status: order.status,
+      status: displayStatus,
       payment: order.payment
         ? {
             status: order.payment.status,
@@ -161,4 +187,3 @@ export class GetFortunePaymentDetailUseCase {
     };
   }
 }
-

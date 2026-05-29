@@ -37,7 +37,6 @@ export class AdminController {
           },
           _count: {
             select: {
-              recommendations: true,
               orders: true,
             },
           },
@@ -66,7 +65,6 @@ export class AdminController {
             authType: user.socialAccounts[0]?.provider || null,
             hasActiveSubscription: user.subscriptions.length > 0,
             subscriptionEndDate: user.subscriptions[0]?.endDate || null,
-            recommendationCount: user._count.recommendations,
             paymentCount: user._count.orders,
           })),
           pagination: {
@@ -281,16 +279,6 @@ export class AdminController {
         },
       });
 
-      // 추천 내역 통계
-      const totalRecommendations = await prisma.recommendationHistory.count();
-      const todayRecommendations = await prisma.recommendationHistory.count({
-        where: {
-          createdAt: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          },
-        },
-      });
-
       // 결제 통계
       const totalPayments = await prisma.payment.count();
       const completedPayments = await prisma.payment.count({
@@ -308,10 +296,6 @@ export class AdminController {
           users: {
             total: totalUsers,
             activeSubscriptions,
-          },
-          recommendations: {
-            total: totalRecommendations,
-            today: todayRecommendations,
           },
           payments: {
             total: totalPayments,

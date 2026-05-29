@@ -14,7 +14,7 @@
 - **Chat product catalog is code-managed**: No DB table for product definitions; `backend/src/data/fortuneProducts.ts` (and related TS types/services) is the source of truth.
 - Prompt work stays in **templates + category overrides**.
 - Performance work (document latency): **instrument first**, no guesswork fixes.
-- **Swagger**: When an API changes, update `src/routes/fortuneRoutes.ts` (and related route comments) at **item completion**; sync `FORTUNE_API_GUIDE.md` if needed.
+- **Swagger**: When an API changes, update `src/routes/fortuneRoutes.ts` (and related route comments) at **item completion**; regenerate repo-root `swagger.json` / `openapi.json` and keep `forfortune_codex/API_CONTRACT.md` aligned if needed.
 - After each phase:
   - `npx tsc --noEmit`
   - Smoke-test critical APIs
@@ -70,7 +70,7 @@ Today **`FortuneSession`** stores `remainingTime`, `expiresAt`, `chatEntitlement
 | Middleware | `backend/src/middlewares/sessionExpiryNotifier.ts` — derive “remaining” from **user** field when appropriate |
 | Get session | `backend/src/usecases/GetSessionUseCase.ts` — expose remaining time from **account** rule |
 | Payment list UI data | `backend/src/usecases/GetFortunePaymentsUseCase.ts`, `GetFortunePaymentDetailUseCase.ts` — stop implying session `remainingTime` is quota source |
-| Docs | `backend/src/routes/fortuneRoutes.ts`, repo-root `FORTUNE_API_GUIDE.md`, `CHAT_API_ERROR_CODES.md` |
+| Docs | `backend/src/routes/fortuneRoutes.ts`, repo-root `swagger.json` / `openapi.json`, `forfortune_codex/API_CONTRACT.md`, `CHAT_API_ERROR_CODES.md` |
 
 ### 1.5 Chat payment products — catalog, prepare, and completion (same initiative as §1)
 
@@ -122,11 +122,11 @@ Account-level `chatUsableUntil` only works if **paid chat SKUs**, **order metada
 
 ### 2. `nextQuestions` — follow-ups from **this** assistant reply
 
-- **Files**: `src/prompts/chat/sasa.prompt.ts`, `src/services/ai/OpenAIService.ts`, `src/services/ai/GeminiService.ts`, `src/controllers/FortuneController.ts` (`generateNextQuestionsByText` as fallback only)
+- **Files**: `src/prompts/chat/saju.prompt.ts`, `src/services/ai/OpenAIService.ts`, `src/services/ai/GeminiService.ts`, `src/controllers/FortuneController.ts` (`generateNextQuestionsByText` as fallback only)
 
 ### 3. Consultation prompts (direct, fortune-grounded, intent)
 
-- **Files**: `src/prompts/chat/sasa.prompt.ts`, `src/prompts/document/sasa.prompt.ts`, `src/prompts/categoryPromptOverrides.ts`, AI services
+- **Files**: `src/prompts/chat/saju.prompt.ts`, `src/prompts/document/saju.prompt.ts`, `src/prompts/categoryPromptOverrides.ts`, AI services
 
 ### 4. Off-topic handling — softer mismatch policy
 
@@ -138,11 +138,11 @@ Account-level `chatUsableUntil` only works if **paid chat SKUs**, **order metada
 
 ### 6. New Year: quarters + year correctness
 
-- **Files**: `categoryPromptOverrides.ts`, `document/sasa.prompt.ts`, `PromptLoader.ts`, `fortuneTopicExtractor.ts`
+- **Files**: `categoryPromptOverrides.ts`, `document/saju.prompt.ts`, `PromptLoader.ts`, `fortuneTopicExtractor.ts`
 
 ### 7. Document subtitle phrase cleanup
 
-- **Files**: `document/sasa.prompt.ts`, `categoryPromptOverrides.ts`, optional `documentTitleNormalizer.ts`
+- **Files**: `document/saju.prompt.ts`, `categoryPromptOverrides.ts`, optional `documentTitleNormalizer.ts`
 
 ### 8. Chat history list API
 
@@ -188,7 +188,7 @@ Account-level `chatUsableUntil` only works if **paid chat SKUs**, **order metada
 ## 4) Doc / API sync targets
 
 - `src/routes/fortuneRoutes.ts` — Swagger for **`chatUsableUntil`** (or agreed name) and “seconds left” semantics  
-- `FORTUNE_API_GUIDE.md` — single entitlement model  
+- `swagger.json` / `openapi.json`, `forfortune_codex/API_CONTRACT.md` — single entitlement model  
 - `CHAT_API_ERROR_CODES.md` — 403 ownership, entitlement expired, migration notes  
 
 ---
@@ -251,7 +251,7 @@ Account-level `chatUsableUntil` only works if **paid chat SKUs**, **order metada
 ### 7.6 Docs & API contract
 
 - [ ] `backend/src/routes/fortuneRoutes.ts` Swagger: chat products = 1d/7d/30d only; document `chatUsableUntil` / computed `remainingSeconds` if exposed.
-- [ ] Sync `FORTUNE_API_GUIDE.md`, `CHAT_API_ERROR_CODES.md`.
+- [ ] Sync `swagger.json` / `openapi.json`, `forfortune_codex/API_CONTRACT.md`, `CHAT_API_ERROR_CODES.md`.
 
 ### 7.7 Verify
 

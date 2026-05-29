@@ -2,6 +2,7 @@
  * 포포춘 문서 결과 엔티티
  */
 import { FortuneCategory } from '../types/fortune';
+import { DocumentChatBridgeContext } from '../types/fortune';
 
 export class DocumentResult {
   constructor(
@@ -10,6 +11,8 @@ export class DocumentResult {
     public readonly category: FortuneCategory,
     public readonly title: string,
     public readonly content: string,
+    public readonly chatContext: DocumentChatBridgeContext | null,
+    public readonly chatContextVersion: number,
     public readonly issuedAt: Date,
     public readonly expiresAt: Date,
     public readonly documentLink?: string,
@@ -22,6 +25,8 @@ export class DocumentResult {
     title: string,
     content: string,
     expiresInDays: number = 30,  // 기본 30일 유효
+    chatContext: DocumentChatBridgeContext | null = null,
+    chatContextVersion: number = 1,
     documentLink?: string,
   ): DocumentResult {
     const now = new Date();
@@ -33,6 +38,8 @@ export class DocumentResult {
       category,
       title,
       content,
+      chatContext,
+      chatContextVersion,
       now,
       expiresAt,
       documentLink,

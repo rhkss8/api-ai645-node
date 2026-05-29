@@ -3,6 +3,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { IFortuneSessionRepository } from '../repositories/IFortuneSessionRepository';
+import { FortuneSession } from '../entities/FortuneSession';
 import { SessionMode } from '../types/fortune';
 
 export class GetSessionUseCase {
@@ -12,7 +13,7 @@ export class GetSessionUseCase {
   ) {}
 
   async execute(sessionId: string, userId: string): Promise<any> {
-    const session = await this.sessionRepository.findById(sessionId);
+    let session = await this.sessionRepository.findById(sessionId);
 
     if (!session) {
       throw new Error('세션을 찾을 수 없습니다.');
@@ -37,6 +38,24 @@ export class GetSessionUseCase {
         until && until.getTime() > now.getTime()
           ? Math.max(0, Math.floor((until.getTime() - now.getTime()) / 1000))
           : 0;
+
+      if (!session.isActive && remainingTime > 0) {
+        session = new FortuneSession(
+          session.id,
+          session.userId,
+          session.category,
+          session.mode,
+          remainingTime,
+          true,
+          session.createdAt,
+          until!,
+          session.formType,
+          session.userInput,
+          session.userData,
+          until!,
+        );
+        await this.sessionRepository.update(session);
+      }
     } else {
       remainingTime = session.chatEntitlementExpiresAt
         ? Math.max(

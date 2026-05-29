@@ -34,16 +34,17 @@ export class FortuneProductService {
     const discountRate = 0;
     const finalAmount = calculateFinalAmount(baseAmount, discountRate);
     const productId = `prod_chat_topup_${days}d_global`;
+    const durationLabel = days === 30 ? '1개월' : `${days}일`;
 
     return {
       productId,
       type: FortuneProductType.CHAT_SESSION,
       category: CHAT_PRODUCT_CATEGORY_PLACEHOLDER,
-      name: `Chat pass (${days}d)`,
+      name: `채팅 이용권 (${durationLabel})`,
       amount: baseAmount,
       discountRate,
       finalAmount,
-      description: `Account chat access for ${days} day(s) (24h each), stacked from payment time.`,
+      description: `구매 시점부터 ${durationLabel} 동안 계정 기준으로 채팅 상담을 이용할 수 있어요.`,
       entitlementDays: days,
     };
   }

@@ -13,6 +13,7 @@ import { isCategoryMismatch, getSuggestedCategories } from '../utils/categoryDet
 import { buildPreviousContextForAI } from '../utils/buildPreviousContextForAI';
 import { CATEGORY_NAMES } from '../data/fortuneProducts';
 import { CustomError } from '../middlewares/errorHandler';
+import { buildMeaninglessChatResponse, isMeaninglessChatInput } from '../utils/chatInputGuard';
 
 export class ChatFortuneUseCase {
   constructor(
@@ -26,9 +27,14 @@ export class ChatFortuneUseCase {
     sessionId: string,
     userInput: string,
     userId: string,
+    image?: {
+      mimeType: string;
+      base64Data: string;
+      filename?: string;
+    },
   ): Promise<{ response: ChatResponse; session: FortuneSession; effectiveRemainingSeconds: number }> {
     // 세션 조회
-    const session = await this.sessionRepository.findById(sessionId);
+    let session = await this.sessionRepository.findById(sessionId);
     if (!session) {
       throw new CustomError(
         '세션을 찾을 수 없습니다.',
@@ -42,6 +48,14 @@ export class ChatFortuneUseCase {
 
     if (session.mode !== SessionMode.CHAT) {
       throw new CustomError('채팅 세션이 아닙니다.', 400, 'INVALID_REQUEST' as FortuneErrorCode);
+    }
+
+    if (image && session.category !== 'HAND') {
+      throw new CustomError(
+        '이미지 업로드는 현재 손금 상담에서만 지원됩니다.',
+        400,
+        'INVALID_REQUEST' as FortuneErrorCode,
+      );
     }
 
     const now = new Date();
@@ -61,6 +75,26 @@ export class ChatFortuneUseCase {
       chatUsableUntil: until?.toISOString(),
       accountSec,
     });
+
+    if (!session.isActive && until && until.getTime() > now.getTime()) {
+      const revivedSession = new FortuneSession(
+        session.id,
+        session.userId,
+        session.category,
+        session.mode,
+        accountSec,
+        true,
+        session.createdAt,
+        until,
+        session.formType,
+        session.userInput,
+        session.userData,
+        until,
+      );
+
+      await this.sessionRepository.update(revivedSession);
+      session = revivedSession;
+    }
 
     if (!session.isActive) {
       throw new CustomError(
@@ -86,34 +120,29 @@ export class ChatFortuneUseCase {
 
     const startTime = Date.now();
 
-    // 카테고리 이탈 감지
-    const categoryMismatch = isCategoryMismatch(session.category, userInput);
+    if (isMeaninglessChatInput(userInput)) {
+      const chatResponse = buildMeaninglessChatResponse();
+      const logId = IdGenerator.generateConversationLogId();
+      const log = ConversationLog.create(
+        logId,
+        sessionId,
+        userInput,
+        JSON.stringify(chatResponse),
+        0,
+        false,
+      );
 
-    if (categoryMismatch) {
-      // 카테고리 이탈 시 안내 메시지 반환
-      const suggestions = getSuggestedCategories(session.category, 3);
-
-      const currentCategoryName = CATEGORY_NAMES[session.category] || session.category;
-      const suggestedNames = suggestions.map(c => CATEGORY_NAMES[c] || c);
-
-      const mismatchResponse: ChatResponse = {
-        message:
-          `현재 세션은 "${currentCategoryName}" 카테고리로 진행 중입니다.\n` +
-          `다른 카테고리 질문은 해당 카테고리로 새 세션을 생성해주세요.\n\n` +
-          `관련 카테고리: ${suggestedNames.join(', ')}`,
-        nextQuestions: [
-          `지금 세션(${currentCategoryName})에서 질문을 이어갈게요.`,
-          '새 세션을 만들고 다른 주제로 질문할게요.',
-        ],
-        suggestPayment: false,
-      };
+      await this.logRepository.create(log);
 
       return {
-        response: mismatchResponse,
+        response: chatResponse,
         session,
         effectiveRemainingSeconds: accountSec,
       };
     }
+
+    // 카테고리 이탈 감지
+    const categoryMismatch = isCategoryMismatch(session.category, userInput);
 
     // 이전 대화 맥락 조회 (슬림화: 최근 N턴, message/summary만, 길이 상한)
     const previousLogs = await this.logRepository.findBySessionId(sessionId);
@@ -124,6 +153,29 @@ export class ChatFortuneUseCase {
           aiOutputSummaryOnly: true,
         })
       : undefined;
+    const seedContext =
+      session.userInput && session.userInput.trim() && session.userInput.trim() !== userInput.trim()
+        ? [
+            '이 세션은 아래 초기 요청으로 시작되었다. 현재 질문이 후속 질문이라면 이 초기 요청의 핵심 맥락을 잊지 말고 함께 반영하라.',
+            `초기 요청: ${session.userInput.trim()}`,
+          ].join('\n')
+        : undefined;
+
+    const currentCategoryName = CATEGORY_NAMES[session.category] || session.category;
+    const mismatchContext = categoryMismatch
+      ? (() => {
+          const suggestions = getSuggestedCategories(session.category, 3);
+          const suggestedNames = suggestions.map((c) => CATEGORY_NAMES[c] || c);
+          return [
+            `현재 상담 세션 카테고리는 "${currentCategoryName}"입니다.`,
+            '사용자가 다른 주제를 섞어 물어봐도 첫 문장에서 거절하지 말고, 현재 세션 맥락과 겹치는 핵심 의도부터 최대한 자연스럽게 이어서 답변하세요.',
+            '완전히 다른 전문 영역이라 현재 세션으로 답하기 어렵다면, 지금 세션 기준으로 답할 수 있는 부분을 먼저 짚고 답변 마지막에만 짧게 다른 카테고리 세션을 권하세요.',
+            '세션 이탈 자체를 강조하지 말고, 사용자가 왜 그 질문을 했는지의 흐름을 먼저 읽어 답변하세요.',
+            `필요하면 관련 카테고리 예시로 ${suggestedNames.join(', ')} 정도만 가볍게 언급하세요.`,
+          ].join('\n');
+        })()
+      : undefined;
+    const effectivePreviousContext = [seedContext, previousContext, mismatchContext].filter(Boolean).join('\n\n') || undefined;
 
     // GPT 응답 생성
     let chatResponse: ChatResponse;
@@ -131,8 +183,9 @@ export class ChatFortuneUseCase {
       chatResponse = await this.gptService.generateChatResponse(
         session.category,
         userInput,
-        previousContext,
+        effectivePreviousContext,
         session.userData as Record<string, any> | undefined,
+        image,
       );
     } catch (error: any) {
       console.error('[채팅 응답 생성] AI 서비스 실패:', error);

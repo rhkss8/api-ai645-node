@@ -1,6 +1,6 @@
 /**
  * 운세 상품 정보 데이터
- * 
+ *
  * 이 파일을 수정하여 상품 가격 및 정보를 관리합니다.
  * 변경 후 서버 재시작이 필요합니다.
  */
@@ -8,20 +8,17 @@
 import { FortuneCategory, FortuneProductType, ChatEntitlementDays } from '../types/fortune';
 
 /**
- * 채팅형 시간별 가격 (분당 가격, 원)
- * 각 카테고리별로 1분당 가격이 설정됩니다.
- * 실제 가격 = 분당가격 * 시간(분)
- * 
- * 무료 상품은 0원으로 설정 (무료 홍시 시스템 사용)
- */ 
+ * 문서형 운세 상품의 기준 판매가 (KRW)
+ * 문서형 최종 결제 금액은 아래 기준가와 DISCOUNT_RATES 조합으로 계산된다.
+ */
 export const DOCUMENT_PRICES: Record<FortuneCategory, number> = {
   // TRADITIONAL
-  [FortuneCategory.SAJU]: 15000,          // 사주팔자: 15000원 (할인 전)
-  [FortuneCategory.NEW_YEAR]: 30000,       // 신년운세: 30000원 (할인 전)
-  [FortuneCategory.MONEY]: 5000,           // 횡재수 & 금전운: 5000원 (할인 전)
-  [FortuneCategory.HAND]: 18000,           // 손금: 18000원 (할인 전)
-  [FortuneCategory.TOJEONG]: 15000,        // 토정비결: 15000원 (할인 전)
-  
+  [FortuneCategory.SAJU]: 3800,
+  [FortuneCategory.NEW_YEAR]: 3800,
+  [FortuneCategory.MONEY]: 3800,
+  [FortuneCategory.HAND]: 3800,
+  [FortuneCategory.TOJEONG]: 3800,
+
   // ASK (대부분 문서형 없음)
   [FortuneCategory.BREAK_UP]: 5000,        // 기본값
   [FortuneCategory.CAR_PURCHASE]: 3000,    // 차구매: 기본값
@@ -37,7 +34,7 @@ export const DOCUMENT_PRICES: Record<FortuneCategory, number> = {
   [FortuneCategory.CAREER]: 5000,          // 직장운: 기본값
   [FortuneCategory.LUCKY_DAY]: 5000,       // 길일: 기본값
   [FortuneCategory.NAMING]: 5000,          // 작명: 기본값
-  
+
   // DAILY
   [FortuneCategory.DAILY]: 5000,           // 오늘의 운세: 기본값
 };
@@ -52,11 +49,11 @@ export const DISCOUNT_RATES: Record<
     defaultDiscountRate?: number;
   }
 > = {
-  [FortuneCategory.SAJU]: { documentDiscountRate: 33 },
-  [FortuneCategory.NEW_YEAR]: { documentDiscountRate: 33 },
+  [FortuneCategory.SAJU]: { documentDiscountRate: 50 },
+  [FortuneCategory.NEW_YEAR]: { documentDiscountRate: 50 },
   [FortuneCategory.MONEY]: { documentDiscountRate: 50 },
-  [FortuneCategory.HAND]: { documentDiscountRate: 33 },
-  [FortuneCategory.TOJEONG]: { documentDiscountRate: 33 },
+  [FortuneCategory.HAND]: { documentDiscountRate: 50 },
+  [FortuneCategory.TOJEONG]: { documentDiscountRate: 50 },
   [FortuneCategory.BREAK_UP]: { documentDiscountRate: 0, defaultDiscountRate: 100 },
   [FortuneCategory.CAR_PURCHASE]: { documentDiscountRate: 0, defaultDiscountRate: 100 },
   [FortuneCategory.BUSINESS]: { documentDiscountRate: 0, defaultDiscountRate: 100 },
@@ -79,9 +76,9 @@ export const CHAT_ENTITLEMENT_DAYS: readonly ChatEntitlementDays[] = [1, 7, 30];
 
 /** Global chat top-up prices (KRW) */
 const CHAT_TOPUP_AMOUNTS: Record<ChatEntitlementDays, number> = {
-  1: 3900,
-  7: 14900,
-  30: 49000,
+  1: 900,
+  7: 5900,
+  30: 9900,
 };
 
 export function getChatEntitlementAmount(days: ChatEntitlementDays): number {
@@ -126,7 +123,7 @@ export const CATEGORY_NAMES: Record<FortuneCategory, string> = {
   [FortuneCategory.MONEY]: '횡재수 & 금전운',
   [FortuneCategory.HAND]: '손금',
   [FortuneCategory.TOJEONG]: '토정비결',
-  
+
   // ASK
   [FortuneCategory.BREAK_UP]: '헤어진 연인 재회',
   [FortuneCategory.CAR_PURCHASE]: '차구매',
@@ -142,7 +139,7 @@ export const CATEGORY_NAMES: Record<FortuneCategory, string> = {
   [FortuneCategory.CAREER]: '직장운',
   [FortuneCategory.LUCKY_DAY]: '길일',
   [FortuneCategory.NAMING]: '작명',
-  
+
   // DAILY
   [FortuneCategory.DAILY]: '오늘의 운세',
 };
@@ -157,7 +154,7 @@ export const DOCUMENT_PRODUCT_NAMES: Record<FortuneCategory, string> = {
   [FortuneCategory.MONEY]: '횡재수 & 금전운',
   [FortuneCategory.HAND]: '손금',
   [FortuneCategory.TOJEONG]: '토정비결',
-  
+
   // ASK (대부분 문서형 없음, 기본값 사용)
   [FortuneCategory.BREAK_UP]: '헤어진 연인 재회 리포트',
   [FortuneCategory.CAR_PURCHASE]: '차구매 리포트',
@@ -173,7 +170,7 @@ export const DOCUMENT_PRODUCT_NAMES: Record<FortuneCategory, string> = {
   [FortuneCategory.CAREER]: '직장운 리포트',
   [FortuneCategory.LUCKY_DAY]: '길일 리포트',
   [FortuneCategory.NAMING]: '작명',
-  
+
   // DAILY
   [FortuneCategory.DAILY]: '오늘의 운세',
 };
@@ -198,7 +195,7 @@ export const CHAT_PRODUCT_NAMES: Partial<Record<FortuneCategory, string[]>> = {
 /**
  * ASK 카테고리별 초기 채팅 가이드 설정
  * 채팅 운세 시작 시 기본 채팅 문구를 보여주기 위한 설정
- * 
+ *
  * 타입:
  * - 'AI_GENERATED': 사주 정보 기반 + category로 AI를 통해 답변 생성
  * - 'STATIC': 단순 안내 문구 (직접 문구 사용)
@@ -223,7 +220,7 @@ export const INITIAL_CHAT_GUIDES: Record<FortuneCategory, InitialChatGuide | nul
       '손금 운세는 손바닥 사진이 필요해요. 손바닥(양손 가능)을 밝은 곳에서 선명하게 찍어서 이미지를 업로드해 주세요.',
   },
   [FortuneCategory.TOJEONG]: null,
-  
+
   // ASK 카테고리
   [FortuneCategory.BREAK_UP]: {
     type: 'AI_GENERATED',
@@ -282,7 +279,7 @@ export const INITIAL_CHAT_GUIDES: Record<FortuneCategory, InitialChatGuide | nul
     type: 'STATIC',
     content: '작명을 원하시는 분의 생년월일시와 성별을 알려주세요.',
   },
-  
+
   // DAILY
   [FortuneCategory.DAILY]: null,
 };

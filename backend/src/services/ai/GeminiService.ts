@@ -6,6 +6,7 @@ import { IAIService, AIGenerateChatParams, AIGenerateDocumentParams } from '../.
 import { ChatResponse, DocumentResponse } from '../../types/fortune';
 import { generateChatFortunePrompt } from '../../prompts/chatFortunePrompt';
 import { generateDocumentFortunePrompt } from '../../prompts/documentFortunePrompt';
+import { normalizeChatResponseCopy, normalizeDocumentResponseCopy } from '../../utils/normalizeFortuneCopy';
 
 export class GeminiService implements IAIService {
   private genAI: GoogleGenerativeAI;
@@ -35,6 +36,7 @@ export class GeminiService implements IAIService {
         userInput: params.userInput,
         previousContext: params.previousContext,
         userData: params.userData,
+        hasImageInput: Boolean(params.image),
       });
 
       const model = this.genAI.getGenerativeModel({ 
@@ -49,7 +51,17 @@ export class GeminiService implements IAIService {
       const systemInstruction = '당신은 전문 운세 상담사입니다. 응답은 반드시 JSON만 출력하며, 허용되는 키는 "message"(한 덩어리 이야기)와 "nextQuestions"(배열) 두 개뿐입니다. summary, points, tips, disclaimer 등 다른 키는 사용하지 마세요. "AI", "인공지능" 표현 금지.';
       const fullPrompt = `${systemInstruction}\n\n${prompt}\n\n중요: JSON만 반환. 키는 message와 nextQuestions만 사용.`;
 
-      const result = await model.generateContent(fullPrompt);
+      const result = params.image
+        ? await model.generateContent([
+            { text: fullPrompt },
+            {
+              inlineData: {
+                mimeType: params.image.mimeType,
+                data: params.image.base64Data,
+              },
+            },
+          ])
+        : await model.generateContent(fullPrompt);
 
       // 응답 확인 및 에러 처리
       if (!result || !result.response) {
@@ -102,7 +114,7 @@ export class GeminiService implements IAIService {
         if (!Array.isArray(parsed.nextQuestions)) {
           parsed.nextQuestions = [];
         }
-        return parsed as ChatResponse;
+        return normalizeChatResponseCopy(parsed as ChatResponse);
       }
 
       // V1 수신 시 V2로 변환 (프롬프트는 message+nextQuestions만 요구하나, 모델이 구 형식으로 올 경우 한 덩어리로 합침)
@@ -115,7 +127,7 @@ export class GeminiService implements IAIService {
           .join(' ');
         const oneBlock = extra ? `${parsed.summary}\n\n${extra}` : parsed.summary;
         const nextQuestions = Array.isArray(parsed.nextQuestions) ? parsed.nextQuestions : [];
-        return { message: oneBlock, nextQuestions } as ChatResponse;
+        return normalizeChatResponseCopy({ message: oneBlock, nextQuestions } as ChatResponse);
       }
 
       throw new Error('Gemini 응답 형식이 올바르지 않습니다. message 또는 summary 필드가 필요합니다.');
@@ -264,10 +276,23 @@ export class GeminiService implements IAIService {
         chatPrompt,
       };
 
-      return ensured;
+      return normalizeDocumentResponseCopy(ensured);
     } catch (error) {
       console.error('문서형 운세 리포트 생성 중 오류:', error);
-      throw new Error('운세 리포트 생성에 실패했습니다.');
+      const source = error as {
+        code?: string;
+        status?: number;
+        message?: string;
+      };
+      const wrapped = new Error('운세 리포트 생성에 실패했습니다.') as Error & {
+        code?: string;
+        status?: number;
+        cause?: unknown;
+      };
+      wrapped.code = source.code;
+      wrapped.status = source.status;
+      wrapped.cause = error;
+      throw wrapped;
     }
   }
 
@@ -275,4 +300,3 @@ export class GeminiService implements IAIService {
     return this.modelName;
   }
 }
-

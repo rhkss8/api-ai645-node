@@ -8,9 +8,12 @@ import {
   FortuneCategory,
   shouldCheckExistingDocument,
   ChatEntitlementDays,
+  FormType,
+  SessionMode,
 } from '../types/fortune';
 import { FortuneProductService } from '../services/FortuneProductService';
 import { PaymentService } from '../services/PaymentService';
+import { ResultTokenService } from '../services/ResultTokenService';
 
 export interface PreparePaymentResult {
   orderId: string;
@@ -22,6 +25,7 @@ export interface PreparePaymentResult {
   buyerPhone?: string | null; // 구매자 연락처
   hasExistingDocument?: boolean; // 기존 문서 존재 여부 (문서형 리포트만)
   existingDocumentId?: string | null; // 기존 문서 ID (있는 경우)
+  existingResultToken?: string | null; // 기존 문서 결과 토큰 (있는 경우)
 }
 
 export class PrepareFortunePaymentUseCase {
@@ -29,16 +33,22 @@ export class PrepareFortunePaymentUseCase {
     private readonly productService: FortuneProductService,
     private readonly paymentService: PaymentService,
     private readonly prisma: PrismaClient,
+    private readonly resultTokenService: ResultTokenService,
   ) {}
 
   async execute(
     userId: string,
     productType: FortuneProductType,
-    category: FortuneCategory,
+    category: FortuneCategory | undefined,
     payMethod?: string, // 결제 방법 (card, kakao, toss 등)
     easyPayProvider?: string, // 간편결제 제공자 (카카오페이, 토스페이 등)
     chatEntitlementDays?: ChatEntitlementDays,
   ): Promise<PreparePaymentResult> {
+    const effectiveCategory =
+      productType === FortuneProductType.CHAT_SESSION
+        ? category || FortuneCategory.SAJU
+        : category;
+
     let product;
     if (productType === FortuneProductType.CHAT_SESSION) {
       if (chatEntitlementDays == null || ![1, 7, 30].includes(Number(chatEntitlementDays))) {
@@ -46,7 +56,10 @@ export class PrepareFortunePaymentUseCase {
       }
       product = this.productService.getChatEntitlementProduct(chatEntitlementDays);
     } else {
-      product = this.productService.getProduct(productType, category);
+      if (!effectiveCategory) {
+        throw new Error('문서형은 카테고리가 필요합니다.');
+      }
+      product = this.productService.getProduct(productType, effectiveCategory);
     }
 
     // 결제 방법 결정 (우선순위: payMethod > easyPayProvider > 기본값 'card')
@@ -92,7 +105,7 @@ export class PrepareFortunePaymentUseCase {
       metadata: {
         productId: product.productId,
         productType,
-        category,
+        category: effectiveCategory,
         duration: product.duration,
         chatEntitlementDays: product.entitlementDays,
         originalAmount: product.amount,
@@ -138,14 +151,19 @@ export class PrepareFortunePaymentUseCase {
     // 기존 문서 체크 (문서형 리포트이고, 해당 카테고리가 체크 대상인 경우)
     let hasExistingDocument = false;
     let existingDocumentId: string | null = null;
+    let existingResultToken: string | null = null;
     
-    if (productType === FortuneProductType.DOCUMENT_REPORT && shouldCheckExistingDocument(category)) {
+    if (
+      productType === FortuneProductType.DOCUMENT_REPORT &&
+      effectiveCategory &&
+      shouldCheckExistingDocument(effectiveCategory)
+    ) {
       try {
         // 유효한 기존 문서 조회 (만료되지 않은 문서)
         const existingDocument = await this.prisma.documentResult.findFirst({
           where: {
             userId,
-            category,
+            category: effectiveCategory,
             expiresAt: {
               gt: new Date(), // 만료되지 않은 문서만
             },
@@ -155,6 +173,7 @@ export class PrepareFortunePaymentUseCase {
           },
           select: {
             id: true,
+            createdAt: true,
           },
         });
 
@@ -162,8 +181,69 @@ export class PrepareFortunePaymentUseCase {
           hasExistingDocument = true;
           existingDocumentId = existingDocument.id;
           console.log(`[결제 준비] 기존 문서 발견: category=${category}, documentId=${existingDocument.id}`);
+
+          // 1차 source of truth: PaymentDetail.documentId -> session
+          const paymentDetail = await this.prisma.paymentDetail.findFirst({
+            where: {
+              documentId: existingDocument.id,
+              session: {
+                is: {
+                  userId,
+                  category: effectiveCategory,
+                  mode: SessionMode.DOCUMENT,
+                },
+              },
+            },
+            include: {
+              session: {
+                select: {
+                  id: true,
+                  category: true,
+                  formType: true,
+                  mode: true,
+                  createdAt: true,
+                },
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          let sessionForToken = paymentDetail?.session ?? null;
+
+          // Legacy fallback: 문서 생성 시점 근처의 가장 최근 문서형 세션
+          if (!sessionForToken) {
+            sessionForToken = await this.prisma.fortuneSession.findFirst({
+              where: {
+                userId,
+                category: effectiveCategory,
+                mode: SessionMode.DOCUMENT,
+                createdAt: {
+                  gte: new Date(existingDocument.createdAt.getTime() - 60_000),
+                  lte: new Date(existingDocument.createdAt.getTime() + 60_000),
+                },
+              },
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true,
+                category: true,
+                formType: true,
+                mode: true,
+                createdAt: true,
+              },
+            });
+          }
+
+          if (sessionForToken) {
+            existingResultToken = this.resultTokenService.sign({
+              sessionId: sessionForToken.id,
+              userId,
+              category: sessionForToken.category as FortuneCategory,
+              formType: (sessionForToken.formType || FormType.TRADITIONAL) as FormType,
+              mode: sessionForToken.mode as SessionMode,
+            });
+          }
         } else {
-          console.log(`[결제 준비] 기존 문서 없음: category=${category}`);
+          console.log(`[결제 준비] 기존 문서 없음: category=${effectiveCategory}`);
         }
       } catch (error) {
         console.error('[결제 준비] 기존 문서 조회 실패:', error);
@@ -181,6 +261,7 @@ export class PrepareFortunePaymentUseCase {
       buyerPhone, // 구매자 연락처
       hasExistingDocument, // 기존 문서 존재 여부
       existingDocumentId, // 기존 문서 ID
+      existingResultToken, // 기존 문서 결과 토큰
     };
   }
 }

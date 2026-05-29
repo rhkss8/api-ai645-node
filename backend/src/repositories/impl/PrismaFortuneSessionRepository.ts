@@ -65,6 +65,30 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
     return this.toEntity(updated);
   }
 
+  async updateSessionData(
+    id: string,
+    patch: {
+      userInput?: string | null;
+      userData?: Record<string, any> | null;
+    },
+  ): Promise<FortuneSession> {
+    const updated = await this.prisma.fortuneSession.update({
+      where: { id },
+      data: {
+        ...(patch.userInput !== undefined ? { userInput: patch.userInput } : {}),
+        ...(patch.userData !== undefined
+          ? {
+              userData: patch.userData
+                ? JSON.parse(JSON.stringify(patch.userData))
+                : null,
+            }
+          : {}),
+      },
+    });
+
+    return this.toEntity(updated);
+  }
+
   async closeSession(id: string): Promise<void> {
     await this.prisma.fortuneSession.update({
       where: { id },
@@ -80,12 +104,14 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
   async findActiveByUserIdAndCategory(
     userId: string,
     category: FortuneCategory,
+    mode?: SessionMode,
   ): Promise<FortuneSession | null> {
     const now = new Date();
     const found = await this.prisma.fortuneSession.findFirst({
       where: {
         userId,
         category: category as PrismaFortuneCategory,
+        ...(mode ? { mode: mode as PrismaSessionMode } : {}),
         isActive: true,
         OR: [
           {

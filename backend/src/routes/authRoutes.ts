@@ -34,6 +34,20 @@ export const createAuthRoutes = (controller: AuthController): Router => {
    *                       type: string
    *                     nickname:
    *                       type: string
+   *                     email:
+   *                       type: string
+   *                       format: email
+   *                       nullable: true
+   *                       description: 사용자 이메일
+   *                     phone:
+   *                       type: string
+   *                       nullable: true
+   *                       description: 사용자 연락처
+   *                     chatUsableUntil:
+   *                       type: string
+   *                       format: date-time
+   *                       nullable: true
+   *                       description: 계정 기준 채팅 이용 가능 만료 시각
    *                     role:
    *                       type: string
    *                       enum: [USER, ADMIN]
@@ -50,6 +64,13 @@ export const createAuthRoutes = (controller: AuthController): Router => {
    *                     authType:
    *                       type: string
    *                       description: 주요 소셜 인증 타입
+   *                     socialRelinkRequired:
+   *                       type: boolean
+   *                       description: 소셜 계정 재연동 필요 여부
+   *                     socialRelinkMessage:
+   *                       type: string
+   *                       nullable: true
+   *                       description: 재연동 안내 메시지
    *                     socialAccounts:
    *                       type: array
    *                       items:
@@ -65,6 +86,10 @@ export const createAuthRoutes = (controller: AuthController): Router => {
    *                     createdAt:
    *                       type: string
    *                       format: date-time
+   *                     updatedAt:
+   *                       type: string
+   *                       format: date-time
+   *                       nullable: true
    *                 message:
    *                   type: string
    *                   example: "사용자 정보를 조회했습니다."
@@ -137,6 +162,10 @@ export const createAuthRoutes = (controller: AuthController): Router => {
    *                       nullable: true
    *                     phone:
    *                       type: string
+   *                       nullable: true
+   *                     chatUsableUntil:
+   *                       type: string
+   *                       format: date-time
    *                       nullable: true
    *                     role:
    *                       type: string
@@ -570,9 +599,10 @@ export const createAuthRoutes = (controller: AuthController): Router => {
 
   /**
    * @swagger
-   * /api/auth/{provider}/callback:
-   *   get:
-   *     summary: 소셜 로그인 콜백
+  * /api/auth/{provider}/callback:
+  *   get:
+   *     operationId: completeSocialLogin
+  *     summary: 소셜 로그인 콜백
    *     description: 소셜 로그인 완료 후 JWT 토큰을 발급합니다.
    *     tags: [Authentication]
    *     parameters:

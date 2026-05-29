@@ -2,7 +2,7 @@
  * Prisma 기반 문서 결과 리포지토리
  */
 import { PrismaClient, FortuneCategory as PrismaFortuneCategory } from '@prisma/client';
-import { FortuneCategory } from '../../types/fortune';
+import { DocumentChatBridgeContext, FortuneCategory } from '../../types/fortune';
 import { DocumentResult } from '../../entities/DocumentResult';
 import { IDocumentResultRepository } from '../IDocumentResultRepository';
 
@@ -17,6 +17,10 @@ export class PrismaDocumentResultRepository implements IDocumentResultRepository
         category: document.category as PrismaFortuneCategory,
         title: document.title,
         content: document.content,
+        chatContext: document.chatContext
+          ? (document.chatContext as unknown as object)
+          : undefined,
+        chatContextVersion: document.chatContextVersion,
         issuedAt: document.issuedAt,
         expiresAt: document.expiresAt,
         documentLink: document.documentLink,
@@ -66,6 +70,22 @@ export class PrismaDocumentResultRepository implements IDocumentResultRepository
     return documents.map(d => this.toEntity(d));
   }
 
+  async updateChatContext(
+    id: string,
+    chatContext: DocumentChatBridgeContext,
+    version: number,
+  ): Promise<DocumentResult> {
+    const updated = await this.prisma.documentResult.update({
+      where: { id },
+      data: {
+        chatContext: chatContext as unknown as object,
+        chatContextVersion: version,
+      },
+    });
+
+    return this.toEntity(updated);
+  }
+
   async delete(id: string): Promise<void> {
     await this.prisma.documentResult.delete({
       where: { id },
@@ -79,6 +99,8 @@ export class PrismaDocumentResultRepository implements IDocumentResultRepository
       prismaDoc.category as PrismaFortuneCategory as unknown as FortuneCategory,
       prismaDoc.title,
       prismaDoc.content,
+      (prismaDoc.chatContext as DocumentChatBridgeContext | null) ?? null,
+      prismaDoc.chatContextVersion ?? 1,
       prismaDoc.issuedAt,
       prismaDoc.expiresAt,
       prismaDoc.documentLink || undefined,

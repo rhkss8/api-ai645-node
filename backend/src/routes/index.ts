@@ -19,6 +19,8 @@ import { PrismaBoardPostRepository } from '../repositories/impl/PrismaBoardPostR
 import { CreateFortuneSessionUseCase } from '../usecases/CreateFortuneSessionUseCase';
 import { ChatFortuneUseCase } from '../usecases/ChatFortuneUseCase';
 import { DocumentFortuneUseCase } from '../usecases/DocumentFortuneUseCase';
+import { StartChatFromDocumentUseCase } from '../usecases/StartChatFromDocumentUseCase';
+import { DocumentChatBridgeBuilder } from '../services/DocumentChatBridgeBuilder';
 import { GetSessionUseCase } from '../usecases/GetSessionUseCase';
 import { GetDocumentUseCase } from '../usecases/GetDocumentUseCase';
 import { PurchaseHongsiUseCase } from '../usecases/PurchaseHongsiUseCase';
@@ -28,6 +30,7 @@ import { GetFortuneStatisticsUseCase } from '../usecases/GetFortuneStatisticsUse
 import { PrepareFortunePaymentUseCase } from '../usecases/PrepareFortunePaymentUseCase';
 import { GetFortunePaymentsUseCase } from '../usecases/GetFortunePaymentsUseCase';
 import { GetFortunePaymentDetailUseCase } from '../usecases/GetFortunePaymentDetailUseCase';
+import { GetChatSessionsUseCase } from '../usecases/GetChatSessionsUseCase';
 import { RegenerateDocumentUseCase } from '../usecases/RegenerateDocumentUseCase';
 import { FortuneProductService } from '../services/FortuneProductService';
 import { ResultTokenService } from '../services/ResultTokenService';
@@ -37,11 +40,13 @@ import { PaymentService } from '../services/PaymentService';
 import { AuthController } from '../controllers/AuthController';
 import { BoardController } from '../controllers/BoardController';
 import { FortuneController } from '../controllers/FortuneController';
+import { SupportController } from '../controllers/SupportController';
 
 // Routes
 import { createAuthRoutes } from './authRoutes';
 import { createBoardRoutes } from './boardRoutes';
 import { createFortuneRoutes } from './fortuneRoutes';
+import { createSupportRoutes } from './supportRoutes';
 import adminRoutes from './adminRoutes';
 
 // Middleware
@@ -54,18 +59,18 @@ class DIContainer {
   
   // Repositories
   private ipLimitRepository!: PrismaIPLimitRepository;
-  private recommendationParamsRepository!: any; // PrismaRecommendationParamsRepository
   
   // Services
   private ipLimitService!: IPLimitService;
   
   // Use Cases
-  private boardPostUseCase!: any; // BoardPostUseCase
+  private boardPostUseCase!: BoardPostUseCase;
   
   // Controllers
   private authController!: AuthController;
   private boardController!: BoardController;
   private fortuneController!: FortuneController;
+  private supportController!: SupportController;
 
   // Fortune Services
   private fortuneGPTService!: FortuneGPTService;
@@ -108,11 +113,13 @@ class DIContainer {
     const conversationLogRepository = new PrismaConversationLogRepository(this.prisma);
     const documentRepository = new PrismaDocumentResultRepository(this.prisma);
     const hongsiCreditRepository = new PrismaHongsiCreditRepository(this.prisma);
+    const documentChatBridgeBuilder = new DocumentChatBridgeBuilder();
 
     // Fortune Use Cases
     const documentUseCase = new DocumentFortuneUseCase(
       documentRepository,
       this.fortuneGPTService,
+      documentChatBridgeBuilder,
     );
     const createSessionUseCase = new CreateFortuneSessionUseCase(
       fortuneSessionRepository,
@@ -131,6 +138,13 @@ class DIContainer {
     // documentUseCase는 위에서 이미 생성됨
     const getSessionUseCase = new GetSessionUseCase(fortuneSessionRepository, this.prisma);
     const getDocumentUseCase = new GetDocumentUseCase(documentRepository);
+    const startChatFromDocumentUseCase = new StartChatFromDocumentUseCase(
+      documentRepository,
+      fortuneSessionRepository,
+      createSessionUseCase,
+      resultTokenService,
+      documentChatBridgeBuilder,
+    );
     const purchaseHongsiUseCase = new PurchaseHongsiUseCase(
       hongsiCreditRepository,
       fortuneSessionRepository,
@@ -143,6 +157,7 @@ class DIContainer {
       fortuneProductService,
       paymentService,
       this.prisma,
+      resultTokenService,
     );
 
     // Fortune Payment History UseCases
@@ -151,6 +166,10 @@ class DIContainer {
       resultTokenService,
     );
     const getPaymentDetailUseCase = new GetFortunePaymentDetailUseCase(
+      this.prisma,
+      resultTokenService,
+    );
+    const getChatSessionsUseCase = new GetChatSessionsUseCase(
       this.prisma,
       resultTokenService,
     );
@@ -163,6 +182,7 @@ class DIContainer {
     // Controllers
     this.authController = new AuthController();
     this.boardController = new BoardController(this.boardPostUseCase);
+    this.supportController = new SupportController();
     this.fortuneController = new FortuneController(
       createSessionUseCase,
       chatUseCase,
@@ -175,7 +195,9 @@ class DIContainer {
       preparePaymentUseCase,
       getPaymentsUseCase,
       getPaymentDetailUseCase,
+      getChatSessionsUseCase,
       regenerateDocumentUseCase,
+      startChatFromDocumentUseCase,
       paymentService,
       fortuneProductService,
       resultTokenService,
@@ -193,6 +215,10 @@ class DIContainer {
 
   public getFortuneController(): FortuneController {
     return this.fortuneController;
+  }
+
+  public getSupportController(): SupportController {
+    return this.supportController;
   }
 
   public getIPLimitService(): IPLimitService {
@@ -217,6 +243,7 @@ export const createApiRoutes = (): Router => {
   // 각 라우트 그룹 등록 (운세 서비스 전환을 위한 최소 라우트만 유지)
   router.use('/auth', createAuthRoutes(container.getAuthController()));
   router.use('/board', createBoardRoutes(container.getBoardController()));
+  router.use('/support', createSupportRoutes(container.getSupportController()));
   router.use('/admin', adminRoutes);
   
   // 운세 라우트 (v1 네임스페이스)

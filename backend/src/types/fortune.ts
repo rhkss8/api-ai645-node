@@ -189,6 +189,27 @@ export interface DocumentResponse {
   chatPrompt: string;
 }
 
+export interface DocumentChatTopicCard {
+  topic: string;
+  summary: string;
+  signals: string[];
+  watchouts: string[];
+  openLoops: string[];
+  recommendedQuestions: string[];
+}
+
+export interface DocumentChatFollowupRule {
+  topic: string;
+  keywords: string[];
+}
+
+export interface DocumentChatBridgeContext {
+  anchorSummary: string;
+  topicCards: DocumentChatTopicCard[];
+  followupMap: DocumentChatFollowupRule[];
+  riskNotes: string[];
+}
+
 // 운세 API 응답 (공통)
 export interface FortuneApiResponse extends ApiResponse {
   remainingTime?: number;      // 남은 시간 (초) - 채팅형만

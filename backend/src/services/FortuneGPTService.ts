@@ -119,8 +119,13 @@ export class FortuneGPTService {
     userInput: string,
     previousContext?: string,
     userData?: Record<string, any>,
+    image?: {
+      mimeType: string;
+      base64Data: string;
+      filename?: string;
+    },
   ): Promise<ChatResponse> {
-    const params = { category, userInput, previousContext, userData };
+    const params = { category, userInput, previousContext, userData, image };
 
     // 1) primary: 과부하(503 등)만 짧게 1회 재시도 — 실패 시 빠르게 폴백/에러
     try {

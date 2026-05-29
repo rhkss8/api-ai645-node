@@ -20,8 +20,8 @@ export const createBoardRoutes = (boardController: BoardController): Router => {
    *         required: true
    *         schema:
    *           type: string
-   *           enum: [NOTICE, SUGGESTION, PARTNERSHIP]
-   *         description: 게시판 카테고리
+   *           enum: [NOTICE]
+   *         description: 게시판 카테고리 (공지사항 전용)
    *       - in: query
    *         name: page
    *         schema:
@@ -83,7 +83,7 @@ export const createBoardRoutes = (boardController: BoardController): Router => {
    *                         hasPrev:
    *                           type: boolean
    *       400:
-   *         description: 유효하지 않은 카테고리
+   *         description: 지원하지 않는 카테고리
    *       401:
    *         description: 인증 필요 (선택사항 - 토큰이 있으면 개인화된 데이터 제공)
    */
@@ -104,8 +104,8 @@ export const createBoardRoutes = (boardController: BoardController): Router => {
    *         required: true
    *         schema:
    *           type: string
-   *           enum: [NOTICE, SUGGESTION, PARTNERSHIP]
-   *         description: 게시판 카테고리
+   *           enum: [NOTICE]
+   *         description: 게시판 카테고리 (공지사항 전용)
    *     requestBody:
    *       required: true
    *       content:
@@ -137,7 +137,7 @@ export const createBoardRoutes = (boardController: BoardController): Router => {
    *       201:
    *         description: 게시글 생성 성공
    *       400:
-   *         description: 유효하지 않은 입력
+   *         description: 유효하지 않은 입력 또는 지원하지 않는 카테고리
    *       401:
    *         description: 인증 필요
    */

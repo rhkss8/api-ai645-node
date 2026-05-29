@@ -2,6 +2,7 @@
  * 포포춘 운세 라우트
  */
 import { Router } from 'express';
+import multer from 'multer';
 import { FortuneController } from '../controllers/FortuneController';
 import { authenticateAccess } from '../middlewares/auth';
 
@@ -9,6 +10,19 @@ export const createFortuneRoutes = (
   controller: FortuneController,
 ): Router => {
   const router = Router();
+  const chatImageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+    },
+    fileFilter: (_req, file, cb) => {
+      if (!file.mimetype.startsWith('image/')) {
+        cb(new Error('이미지 파일만 업로드할 수 있습니다.'));
+        return;
+      }
+      cb(null, true);
+    },
+  });
 
   /**
    * @swagger
@@ -83,6 +97,22 @@ export const createFortuneRoutes = (
    *                 type: string
    *                 description: 결제 ID (문서형 필수, 채팅형 선택)
    *                 example: "clx1234567890"
+   *               portOnePaymentId:
+   *                 type: string
+   *                 description: PortOne 실제 결제 ID
+   *                 example: "payment_1234567890"
+   *               payMethod:
+   *                 type: string
+   *                 description: 실제 결제 수단
+   *                 example: "CARD"
+   *               easyPayProvider:
+   *                 type: string
+   *                 description: 간편결제 제공자
+   *                 example: "KAKAOPAY"
+   *               chatEntitlementDays:
+   *                 type: integer
+   *                 enum: [1, 7, 30]
+   *                 description: 채팅형 유료 세션 이용권 일수
    *               useFreeHongsi:
    *                 type: boolean
    *                 description: 무료 홍시 사용 여부 (채팅형만, 하루 1회, 5분 무료). paymentId와 동시 사용 불가
@@ -147,6 +177,71 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
+   * /api/v1/fortune/chat/from-document:
+   *   post:
+   *     operationId: startChatFromDocument
+   *     summary: 문서 결과 기반 채팅 시작
+   *     description: 문서형 결과를 기반으로 채팅 상담을 시작합니다. 같은 카테고리의 활성 채팅 세션이 있으면 재사용하고, 없으면 새 채팅 세션을 생성합니다.
+   *     tags: [Fortune]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - documentId
+   *             properties:
+   *               documentId:
+   *                 type: string
+   *                 description: 문서형 운세 결과 ID
+   *                 example: "doc_XHvxNVpV"
+   *               forceNewSession:
+   *                 type: boolean
+   *                 description: true면 기존 활성 채팅을 재사용하지 않고 새 채팅 세션을 생성합니다.
+   *                 example: false
+   *     responses:
+   *       200:
+   *         description: 문서 기반 채팅 진입 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     sessionId:
+   *                       type: string
+   *                     category:
+   *                       type: string
+   *                     formType:
+   *                       type: string
+   *                     mode:
+   *                       type: string
+   *                     resultToken:
+   *                       type: string
+   *                     reusedSession:
+   *                       type: boolean
+   *                     sourceDocumentId:
+   *                       type: string
+   *       401:
+   *         description: 인증 필요
+   *       404:
+   *         description: 문서를 찾을 수 없음
+   */
+  router.post(
+    '/chat/from-document',
+    authenticateAccess,
+    controller.startChatFromDocument,
+  );
+
+  /**
+   * @swagger
    * /api/v1/fortune/chat:
    *   post:
    *     operationId: sendChatMessage
@@ -173,6 +268,22 @@ export const createFortuneRoutes = (
    *                 type: string
    *                 description: 사용자 메시지
    *                 example: "연애운이 어떤가요?"
+   *         multipart/form-data:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               sessionId:
+   *                 type: string
+   *                 description: 세션 ID
+   *                 example: "session_clx1234567890"
+   *               message:
+   *                 type: string
+   *                 description: 사용자 메시지. 손금 이미지만 보내는 경우 생략 가능
+   *                 example: "손금 사진을 보고 연애운을 알려주세요."
+   *               image:
+   *                 type: string
+   *                 format: binary
+   *                 description: 손금 상담용 이미지 파일 (저장하지 않고 메모리에서만 처리)
    *     responses:
    *       200:
    *         description: 응답 생성 성공
@@ -325,6 +436,7 @@ export const createFortuneRoutes = (
   router.post(
     '/chat',
     authenticateAccess,
+    chatImageUpload.single('image'),
     controller.sendChatMessage,
   );
 
@@ -632,8 +744,9 @@ export const createFortuneRoutes = (
    *     description: |
    *       결과 토큰을 사용하여 운세 세션 메타데이터, 문서, 최근 채팅, CTA 정보를 조회합니다.
    *       
-   *       **중요**: 문서형 세션의 경우, 저장된 문서가 없으면 자동으로 GPT를 통해 운세 결과를 생성합니다 (약 3-5초 소요).
-   *       생성된 결과는 자동으로 저장되며, 이후 호출 시에는 저장된 결과를 반환합니다.
+   *       **중요**: 최근 문서형 세션은 백그라운드 문서 생성 중일 수 있으며, 이때는 `pending=true`, `documentStatus=PENDING`으로 응답할 수 있습니다.
+   *       백그라운드 생성이 실패하면 `429` 또는 `500` 에러로 조기 전환됩니다.
+   *       오래된 문서형 세션은 legacy 복구를 위해 조회 시점 fallback 생성이 동작할 수 있습니다.
    *     tags: [Fortune]
    *     security: []
    *     parameters:
@@ -664,6 +777,7 @@ export const createFortuneRoutes = (
    *                         formType: { type: string }
    *                         mode: { type: string }
    *                         remainingTime: { type: number }
+   *                         chatUsableUntil: { type: string, format: date-time, nullable: true }
    *                         isPaid: { type: boolean }
    *                         expiresAt: { type: string, format: date-time }
    *                     document:
@@ -678,6 +792,13 @@ export const createFortuneRoutes = (
    *                         issuedAt: { type: string, format: date-time }
    *                         expiresAt: { type: string, format: date-time }
    *                         documentLink: { type: string, nullable: true }
+   *                     pending:
+   *                       type: boolean
+   *                       description: 문서형 세션 결과가 아직 준비 중인지 여부
+   *                     documentStatus:
+   *                       type: string
+   *                       enum: [PENDING, COMPLETED, FAILED, UNAVAILABLE]
+   *                       description: 문서 생성 상태
    *                     lastChats:
    *                       type: array
    *                       items:
@@ -688,8 +809,8 @@ export const createFortuneRoutes = (
    *                       properties:
    *                         label: { type: string }
    *                         requiresPayment: { type: boolean }
-   *               message:
-   *                 type: string
+   *                 message:
+   *                   type: string
    *       401:
    *         description: 토큰 유효성 검증 실패 (TOKEN_INVALID)
    *       404:
@@ -822,6 +943,8 @@ export const createFortuneRoutes = (
    *                       type: object
    *                     popularCategories:
    *                       type: array
+   *                       items:
+   *                         type: string
    *       401:
    *         description: 인증 필요
    */
@@ -849,7 +972,6 @@ export const createFortuneRoutes = (
    *             type: object
    *             required:
    *               - productType
-   *               - category
    *             properties:
    *               productType:
    *                 type: string
@@ -859,7 +981,7 @@ export const createFortuneRoutes = (
    *               category:
    *                 type: string
    *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
-   *                 description: 운세 카테고리
+   *                 description: 운세 카테고리 (DOCUMENT_REPORT일 때 필수, CHAT_SESSION은 생략 가능)
    *                 example: SAJU
    *               payMethod:
    *                 type: string
@@ -869,6 +991,11 @@ export const createFortuneRoutes = (
    *                 type: string
    *                 description: 간편결제 제공자 (kakaopay, tosspay, naverpay 등, 선택)
    *                 example: "kakaopay"
+   *               chatEntitlementDays:
+   *                 type: integer
+   *                 enum: [1, 7, 30]
+   *                 description: 채팅 이용권 일수 (CHAT_SESSION일 때 필수)
+   *                 example: 7
    *     responses:
    *       200:
    *         description: 결제 준비 성공
@@ -894,7 +1021,26 @@ export const createFortuneRoutes = (
    *                     merchantUid:
    *                       type: string
    *                       description: PortOne 결제 창 오픈에 사용할 주문 고유 ID
- *                       example: "FORTUNE172345678900ABCDEF"
+   *                       example: "FORTUNE172345678900ABCDEF"
+   *                     buyerEmail:
+   *                       type: string
+   *                       nullable: true
+   *                       description: 결제창 고객 정보에 사용할 이메일
+   *                     buyerPhone:
+   *                       type: string
+   *                       nullable: true
+   *                       description: 결제창 고객 정보에 사용할 연락처
+   *                     hasExistingDocument:
+   *                       type: boolean
+   *                       description: 문서형 상품에서 유효한 기존 문서 존재 여부
+   *                     existingDocumentId:
+   *                       type: string
+   *                       nullable: true
+   *                       description: 기존 문서 ID
+   *                     existingResultToken:
+   *                       type: string
+   *                       nullable: true
+   *                       description: 기존 문서를 바로 열기 위한 결과 토큰
    *                 message:
    *                   type: string
    *       401:
@@ -910,11 +1056,76 @@ export const createFortuneRoutes = (
 
   /**
    * @swagger
+   * /api/v1/fortune/payment/{paymentId}/confirm:
+   *   post:
+   *     operationId: confirmFortunePayment
+   *     summary: 운세 결제 확인
+   *     description: PortOne 상태를 동기화하여 최신 결제 상태를 반환합니다. 독립 채팅 이용권 구매 완료 확인에 사용합니다.
+   *     tags: [Fortune]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: paymentId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: 결제 ID
+   *     requestBody:
+   *       required: false
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               portOnePaymentId:
+   *                 type: string
+   *                 description: PortOne 결제 ID (SDK 응답값)
+   *     responses:
+   *       200:
+   *         description: 결제 상태 조회 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     paymentId:
+   *                       type: string
+   *                     status:
+   *                       type: string
+   *                       enum: [PENDING, COMPLETED, FAILED, CANCELLED, USER_CANCELLED, REFUNDED]
+   *                     amount:
+   *                       type: number
+   *                     paidAt:
+   *                       type: string
+   *                       format: date-time
+   *                       nullable: true
+   *       401:
+   *         description: 인증 필요
+   *       403:
+   *         description: 본인 결제가 아님
+   *       404:
+   *         description: 결제 없음
+   */
+  router.post(
+    '/payment/:paymentId/confirm',
+    authenticateAccess,
+    controller.confirmPayment,
+  );
+
+  /**
+   * @swagger
    * /api/v1/fortune/products/{category}:
    *   get:
    *     operationId: getProductsByCategory
    *     summary: 카테고리별 상품 정보 조회
-   *     description: 특정 카테고리의 채팅 이용권(1/7/30일) + 문서형 상품 정보를 조회합니다. (인증 불필요)
+   *     description: |
+   *       특정 카테고리의 채팅 이용권(1/7/30일) + 문서형 상품 정보를 조회합니다. (인증 불필요)
    *       - path `category`: 운세 카테고리 (예: SAJU)
    *       - response item `type`: 상품 타입 (CHAT_SESSION | DOCUMENT_REPORT)
    *     tags: [Fortune]
@@ -1198,6 +1409,116 @@ export const createFortuneRoutes = (
    *     responses:
    *       200:
    *         description: 결제 내역 상세 조회 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                     merchantUid:
+   *                       type: string
+   *                     orderName:
+   *                       type: string
+   *                     amount:
+   *                       type: integer
+   *                     status:
+   *                       type: string
+   *                       enum: [PENDING, PAID, FAILED, CANCELLED, USER_CANCELLED, REFUNDED]
+   *                     payment:
+   *                       type: object
+   *                       nullable: true
+   *                       properties:
+   *                         status:
+   *                           type: string
+   *                           enum: [PENDING, COMPLETED, FAILED, CANCELLED, USER_CANCELLED, REFUNDED]
+   *                         payMethod:
+   *                           type: string
+   *                           nullable: true
+   *                         payMethodDisplay:
+   *                           type: string
+   *                           nullable: true
+   *                         easyPayProvider:
+   *                           type: string
+   *                           nullable: true
+   *                         paidAt:
+   *                           type: string
+   *                           format: date-time
+   *                           nullable: true
+   *                     metadata:
+   *                       type: object
+   *                       nullable: true
+   *                       properties:
+   *                         sessionId:
+   *                           type: string
+   *                           nullable: true
+   *                         category:
+   *                           type: string
+   *                           nullable: true
+   *                         formType:
+   *                           type: string
+   *                           nullable: true
+   *                         mode:
+   *                           type: string
+   *                           enum: [CHAT, DOCUMENT]
+   *                           nullable: true
+   *                         productId:
+   *                           type: string
+   *                           nullable: true
+   *                         productType:
+   *                           type: string
+   *                           nullable: true
+   *                         duration:
+   *                           type: integer
+   *                           nullable: true
+   *                     session:
+   *                       type: object
+   *                       nullable: true
+   *                       properties:
+   *                         id:
+   *                           type: string
+   *                         category:
+   *                           type: string
+   *                         formType:
+   *                           type: string
+   *                           nullable: true
+   *                         mode:
+   *                           type: string
+   *                           enum: [CHAT, DOCUMENT]
+   *                         remainingTime:
+   *                           type: integer
+   *                         isActive:
+   *                           type: boolean
+   *                         expiresAt:
+   *                           type: string
+   *                           format: date-time
+   *                         userInput:
+   *                           type: string
+   *                           nullable: true
+   *                     result:
+   *                       type: object
+   *                       nullable: true
+   *                       properties:
+   *                         hasDocument:
+   *                           type: boolean
+   *                         documentId:
+   *                           type: string
+   *                           nullable: true
+   *                         resultToken:
+   *                           type: string
+   *                           nullable: true
+   *                         canRegenerate:
+   *                           type: boolean
+   *                     createdAt:
+   *                       type: string
+   *                       format: date-time
+   *                 message:
+   *                   type: string
    *       401:
    *         description: 인증 필요
    *       404:
@@ -1207,6 +1528,97 @@ export const createFortuneRoutes = (
     '/payments/:orderId',
     authenticateAccess,
     controller.getPaymentDetail,
+  );
+
+  /**
+   * @swagger
+   * /api/v1/fortune/chat-sessions:
+   *   get:
+   *     operationId: getChatSessions
+   *     summary: 채팅 세션 내역 조회
+   *     description: 사용자의 채팅형 운세 세션 내역을 조회합니다.
+   *     tags: [Fortune]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *         description: 페이지 번호
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 20
+   *           maximum: 100
+   *         description: 페이지당 항목 수 (최대 100)
+   *     responses:
+   *       200:
+   *         description: 채팅 세션 내역 조회 성공
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     items:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                         properties:
+   *                           sessionId:
+   *                             type: string
+   *                           category:
+   *                             type: string
+   *                           formType:
+   *                             type: string
+   *                             nullable: true
+   *                           title:
+   *                             type: string
+   *                           resultToken:
+   *                             type: string
+   *                           isActive:
+   *                             type: boolean
+   *                           remainingTime:
+   *                             type: integer
+   *                           createdAt:
+   *                             type: string
+   *                             format: date-time
+   *                           updatedAt:
+   *                             type: string
+   *                             format: date-time
+   *                           lastMessagePreview:
+   *                             type: string
+   *                             nullable: true
+   *                           lastMessageAt:
+   *                             type: string
+   *                             format: date-time
+   *                             nullable: true
+   *                           chatCount:
+   *                             type: integer
+   *                     total:
+   *                       type: integer
+   *                     page:
+   *                       type: integer
+   *                     limit:
+   *                       type: integer
+   *                     totalPages:
+   *                       type: integer
+   *                 message:
+   *                   type: string
+   *       401:
+   *         description: 인증 필요
+   */
+  router.get(
+    '/chat-sessions',
+    authenticateAccess,
+    controller.getChatSessions,
   );
 
   /**

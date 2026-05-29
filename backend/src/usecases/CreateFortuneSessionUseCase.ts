@@ -1,7 +1,7 @@
 /**
  * 운세 세션 생성 UseCase
  */
-import { PrismaClient, PaymentStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { IdGenerator } from '../utils/idGenerator';
 import { FortuneSession } from '../entities/FortuneSession';
 import { IFortuneSessionRepository } from '../repositories/IFortuneSessionRepository';
@@ -34,6 +34,271 @@ export class CreateFortuneSessionUseCase {
     private readonly paymentService: PaymentService,
     private readonly documentUseCase: DocumentFortuneUseCase, // 문서 생성 UseCase 추가
   ) {}
+
+  private async ensureCompletedPayment(params: {
+    paymentId: string;
+    userId: string;
+    portOnePaymentId?: string;
+  }): Promise<void> {
+    const { paymentId, userId, portOnePaymentId } = params;
+
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { order: true },
+    });
+
+    if (!payment) {
+      throw new Error('유효한 결제 정보가 없습니다.');
+    }
+
+    if (payment.order.userId !== userId) {
+      throw new Error('결제 정보가 일치하지 않습니다.');
+    }
+
+    if (payment.status === 'PENDING') {
+      if (!portOnePaymentId) {
+        throw new Error('PortOne 결제 ID가 필요합니다. 결제를 완료해주세요.');
+      }
+
+      console.log(`[세션 생성] 결제 상태 단건 확인 시작: paymentId=${paymentId}, portOnePaymentId=${portOnePaymentId}`);
+      const verifyResult = await this.paymentService.verifyAndUpdatePaymentStatus(paymentId, portOnePaymentId);
+
+      if (!verifyResult.success || verifyResult.status !== 'COMPLETED') {
+        console.warn(`[세션 생성] 결제 완료 미확정: paymentId=${paymentId}, status=${verifyResult.status}`);
+        throw new Error(
+          '결제가 아직 완료되지 않았습니다. 잠시 후 다시 시도해주세요. (프론트엔드에서 폴링 권장)',
+        );
+      }
+    } else if (payment.status !== 'COMPLETED') {
+      throw new Error('결제가 완료되지 않았거나 취소되었습니다.');
+    }
+
+    const updatedPayment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { order: true },
+    });
+
+    if (!updatedPayment || updatedPayment.status !== 'COMPLETED') {
+      throw new Error('결제 상태 확인에 실패했습니다.');
+    }
+
+    console.log(`[세션 생성] 결제 상태 확인 완료: ${paymentId} -> COMPLETED`);
+  }
+
+  private async persistSessionLinks(paymentId: string, sessionId: string): Promise<void> {
+    try {
+      const payment = await this.prisma.payment.findUnique({
+        where: { id: paymentId },
+        include: { order: true },
+      });
+
+      if (!payment?.order) return;
+
+      const orderMetadata = (payment.order.metadata as any) || {};
+      orderMetadata.sessionId = sessionId;
+
+      await this.prisma.order.update({
+        where: { id: payment.order.id },
+        data: {
+          metadata: orderMetadata,
+        },
+      });
+      console.log(`[세션 생성] Order metadata에 sessionId 저장: orderId=${payment.order.id}, sessionId=${sessionId}`);
+    } catch (orderError: any) {
+      console.error(`[세션 생성] Order metadata 업데이트 실패: sessionId=${sessionId}`, orderError);
+    }
+  }
+
+  private async ensurePendingPaymentDetail(params: {
+    paymentId: string;
+    sessionId: string;
+    category: FortuneCategory;
+  }): Promise<void> {
+    const { paymentId, sessionId, category } = params;
+
+    const existingPaymentDetail = await this.prisma.paymentDetail.findFirst({
+      where: {
+        paymentId,
+        sessionId,
+      },
+      select: { id: true },
+    });
+
+    if (existingPaymentDetail) {
+      await this.prisma.paymentDetail.update({
+        where: { id: existingPaymentDetail.id },
+        data: {
+          sessionType: 'DOCUMENT',
+          category,
+          result: {
+            generationStatus: 'PENDING',
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+      return;
+    }
+
+    await this.prisma.paymentDetail.create({
+      data: {
+        paymentId,
+        sessionId,
+        sessionType: 'DOCUMENT',
+        category,
+        result: {
+          generationStatus: 'PENDING',
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+  }
+
+  private async markDocumentGenerationFailure(params: {
+    paymentId: string;
+    sessionId: string;
+    error: unknown;
+  }): Promise<void> {
+    const { paymentId, sessionId, error } = params;
+    const errorLike = error as {
+      code?: string;
+      status?: number;
+      message?: string;
+      cause?: {
+        code?: string;
+        status?: number;
+        message?: string;
+      };
+    };
+
+    const rawErrorCode =
+      errorLike.code || errorLike.cause?.code;
+    const errorCode =
+      rawErrorCode === 'insufficient_quota'
+        ? 'AI_QUOTA_EXCEEDED'
+        : rawErrorCode ||
+          (errorLike.status === 429 || errorLike.cause?.status === 429
+            ? 'AI_QUOTA_EXCEEDED'
+            : 'AI_GENERATION_FAILED');
+    const errorMessage =
+      errorLike.message ||
+      errorLike.cause?.message ||
+      '운세 리포트 생성에 실패했습니다.';
+
+    const paymentDetail = await this.prisma.paymentDetail.findFirst({
+      where: {
+        paymentId,
+        sessionId,
+      },
+      select: { id: true },
+    });
+
+    if (!paymentDetail) {
+      return;
+    }
+
+    await this.prisma.paymentDetail.update({
+      where: { id: paymentDetail.id },
+      data: {
+        result: {
+          generationStatus: 'FAILED',
+          errorCode,
+          errorMessage,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+  }
+
+  private async generateDocumentInBackground(params: {
+    paymentId: string;
+    sessionId: string;
+    userId: string;
+    category: FortuneCategory;
+    userInput: string;
+    userData?: Record<string, any>;
+  }): Promise<void> {
+    const { paymentId, sessionId, userId, category, userInput, userData } = params;
+
+    try {
+      console.log(`[세션 생성] 백그라운드 문서 생성 시작: sessionId=${sessionId}, category=${category}`);
+      const { documentId } = await this.documentUseCase.execute(
+        userId,
+        category,
+        userInput,
+        userData,
+      );
+
+      console.log(`[세션 생성] 백그라운드 문서 생성 완료: sessionId=${sessionId}, documentId=${documentId}`);
+
+      if (!documentId) return;
+
+      const payment = await this.prisma.payment.findUnique({
+        where: { id: paymentId },
+        include: { order: true },
+      });
+
+      if (payment?.order) {
+        const orderMetadata = (payment.order.metadata as any) || {};
+        orderMetadata.documentId = documentId;
+        orderMetadata.sessionId = sessionId;
+
+        await this.prisma.order.update({
+          where: { id: payment.order.id },
+          data: {
+            metadata: orderMetadata,
+          },
+        });
+        console.log(`[세션 생성] Order metadata에 documentId 저장: orderId=${payment.order.id}, documentId=${documentId}`);
+      }
+
+      const existingPaymentDetail = await this.prisma.paymentDetail.findFirst({
+        where: {
+          paymentId,
+          sessionId,
+        },
+      });
+
+      if (existingPaymentDetail) {
+        await this.prisma.paymentDetail.update({
+          where: { id: existingPaymentDetail.id },
+          data: {
+            documentId,
+            result: {
+              generationStatus: 'COMPLETED',
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        });
+        console.log(`[세션 생성] PaymentDetail 업데이트: paymentDetailId=${existingPaymentDetail.id}, documentId=${documentId}`);
+        return;
+      }
+
+      const documentForExpiry = await this.prisma.documentResult.findUnique({
+        where: { id: documentId },
+        select: { expiresAt: true },
+      });
+
+      await this.prisma.paymentDetail.create({
+        data: {
+          paymentId,
+          sessionId,
+          documentId,
+          sessionType: 'DOCUMENT',
+          category,
+          expiredAt: documentForExpiry?.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          result: {
+            generationStatus: 'COMPLETED',
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+      console.log(`[세션 생성] PaymentDetail 생성: paymentId=${paymentId}, documentId=${documentId}`);
+    } catch (error: any) {
+      console.error(`[세션 생성] 백그라운드 문서 생성 실패: sessionId=${sessionId}`, error);
+      await this.markDocumentGenerationFailure({ paymentId, sessionId, error });
+      // 결과 조회 fallback이 남아 있으므로 여기서는 로그만 남긴다.
+    }
+  }
 
   private async getUserChatUsableUntil(userId: string): Promise<Date | null> {
     const u = await this.prisma.user.findUnique({
@@ -103,72 +368,7 @@ export class CreateFortuneSessionUseCase {
         );
       }
 
-      // 결제 확인
-      const payment = await this.prisma.payment.findUnique({
-        where: { id: paymentId },
-        include: { order: true },
-      });
-
-      if (!payment) {
-        throw new Error('유효한 결제 정보가 없습니다.');
-      }
-
-      if (payment.order.userId !== userId) {
-        throw new Error('결제 정보가 일치하지 않습니다.');
-      }
-
-      // 결제 상태가 PENDING이면 PortOne API로 결제 완료 여부 확인 (로컬: 폴링, 실운영: 웹훅)
-      if (payment.status === 'PENDING') {
-        // portOnePaymentId가 없으면 에러
-        if (!portOnePaymentId) {
-          throw new Error('PortOne 결제 ID가 필요합니다. 결제를 완료해주세요.');
-        }
-
-        // 로컬: 짧은 폴링으로 결제 완료 확인 (최대 5초, 5회 시도)
-        const maxRetries = 5;
-        const retryDelay = 1000; // 1초
-        let verifyResult: { success: boolean; status?: PaymentStatus } = { success: false };
-
-        console.log(`[세션 생성] 결제 상태 폴링 시작: paymentId=${paymentId}, portOnePaymentId=${portOnePaymentId}`);
-
-        for (let i = 0; i < maxRetries; i++) {
-          console.log(`[세션 생성] 폴링 시도 ${i + 1}/${maxRetries}`);
-          verifyResult = await this.paymentService.verifyAndUpdatePaymentStatus(paymentId, portOnePaymentId);
-
-          if (verifyResult.success && verifyResult.status === 'COMPLETED') {
-            console.log(`[세션 생성] 결제 완료 확인됨 (시도 ${i + 1})`);
-            break;
-          }
-
-          // 마지막 시도가 아니면 대기
-          if (i < maxRetries - 1) {
-            console.log(`[세션 생성] 결제 대기 중... ${retryDelay}ms 후 재시도`);
-            await new Promise((resolve) => setTimeout(resolve, retryDelay));
-          }
-        }
-
-        if (!verifyResult.success || verifyResult.status !== 'COMPLETED') {
-          // 로컬: PENDING 상태면 프론트엔드에서 폴링하도록 안내
-          console.warn(`[세션 생성] 폴링 실패: paymentId=${paymentId}, status=${verifyResult.status}`);
-          throw new Error(
-            '결제가 아직 완료되지 않았습니다. 잠시 후 다시 시도해주세요. (프론트엔드에서 폴링 권장)',
-          );
-        }
-
-        // Payment 상태가 업데이트되었으므로 다시 조회
-        const updatedPayment = await this.prisma.payment.findUnique({
-          where: { id: paymentId },
-          include: { order: true },
-        });
-
-        if (!updatedPayment || updatedPayment.status !== 'COMPLETED') {
-          throw new Error('결제 상태 확인에 실패했습니다.');
-        }
-
-        console.log(`[세션 생성] 결제 상태 확인 완료: ${paymentId} -> COMPLETED`);
-      } else if (payment.status !== 'COMPLETED') {
-        throw new Error('결제가 완료되지 않았거나 취소되었습니다.');
-      }
+      await this.ensureCompletedPayment({ paymentId, userId, portOnePaymentId });
 
       // 결제된 문서형 세션 생성 (시간 제한 없음, 문서 생성 후 종료)
       const sessionId = IdGenerator.generateFortuneSessionId();
@@ -188,110 +388,24 @@ export class CreateFortuneSessionUseCase {
 
       // Order의 metadata에 sessionId 저장 (세션과 주문 연결)
       if (paymentId) {
-        try {
-          const payment = await this.prisma.payment.findUnique({
-            where: { id: paymentId },
-            include: { order: true },
-          });
-          
-          if (payment?.order) {
-            const orderMetadata = (payment.order.metadata as any) || {};
-            orderMetadata.sessionId = createdSession.id; // 세션 ID 저장
-            
-            await this.prisma.order.update({
-              where: { id: payment.order.id },
-              data: {
-                metadata: orderMetadata,
-              },
-            });
-            console.log(`[세션 생성] Order metadata에 sessionId 저장: orderId=${payment.order.id}, sessionId=${createdSession.id}`);
-          }
-        } catch (orderError: any) {
-          console.error(`[세션 생성] Order metadata 업데이트 실패: sessionId=${sessionId}`, orderError);
-        }
+        await this.persistSessionLinks(paymentId, createdSession.id);
+        await this.ensurePendingPaymentDetail({
+          paymentId,
+          sessionId: createdSession.id,
+          category,
+        });
       }
 
-      // 문서 생성 및 저장 (결제 완료 후 즉시 생성)
-      // 결제할 때마다 새로운 문서가 생성되어야 함
-      try {
-        console.log(`[세션 생성] 문서 생성 시작: sessionId=${sessionId}, category=${category}`);
-        const { documentResponse, documentId } = await this.documentUseCase.execute(
+      // 체감 속도를 위해 문서 생성은 백그라운드에서 수행한다.
+      if (paymentId) {
+        void this.generateDocumentInBackground({
+          paymentId,
+          sessionId: createdSession.id,
           userId,
           category,
           userInput,
           userData,
-        );
-        
-        console.log(`[세션 생성] 문서 생성 완료: sessionId=${sessionId}, documentId=${documentId}`);
-        
-        if (documentId) {
-          
-          // Order의 metadata에 documentId 저장 (세션과 문서 연결)
-          if (paymentId) {
-            try {
-              const payment = await this.prisma.payment.findUnique({
-                where: { id: paymentId },
-                include: { order: true },
-              });
-              
-              if (payment?.order) {
-                const orderMetadata = (payment.order.metadata as any) || {};
-                orderMetadata.documentId = documentId; // 문서 ID 저장
-                orderMetadata.sessionId = createdSession.id; // 세션 ID도 함께 저장 (이미 저장했지만 확실히)
-                
-                await this.prisma.order.update({
-                  where: { id: payment.order.id },
-                  data: {
-                    metadata: orderMetadata,
-                  },
-                });
-                console.log(`[세션 생성] Order metadata에 documentId 저장: orderId=${payment.order.id}, documentId=${documentId}`);
-              }
-              
-              // PaymentDetail에 documentId 연결 (이미 PaymentDetail이 있으면 업데이트, 없으면 생성)
-              const existingPaymentDetail = await this.prisma.paymentDetail.findFirst({
-                where: { 
-                  paymentId,
-                  sessionId: createdSession.id,
-                },
-              });
-              
-              if (existingPaymentDetail) {
-                // 기존 PaymentDetail 업데이트
-                await this.prisma.paymentDetail.update({
-                  where: { id: existingPaymentDetail.id },
-                  data: { documentId },
-                });
-                console.log(`[세션 생성] PaymentDetail 업데이트: paymentDetailId=${existingPaymentDetail.id}, documentId=${documentId}`);
-              } else {
-                // PaymentDetail이 아직 없으면 생성 (문서형 세션은 PaymentDetail이 있어야 함)
-                // 문서의 유효기간을 가져오기 위해 문서 조회
-                const documentForExpiry = await this.prisma.documentResult.findUnique({
-                  where: { id: documentId },
-                  select: { expiresAt: true },
-                });
-                
-                await this.prisma.paymentDetail.create({
-                  data: {
-                    paymentId,
-                    sessionId: createdSession.id,
-                    documentId,
-                    sessionType: 'DOCUMENT',
-                    category,
-                    expiredAt: documentForExpiry?.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 문서 유효기간 또는 기본 1년
-                  },
-                });
-                console.log(`[세션 생성] PaymentDetail 생성: paymentId=${paymentId}, documentId=${documentId}`);
-              }
-            } catch (pdError: any) {
-              console.error(`[세션 생성] PaymentDetail 연결 실패: sessionId=${sessionId}`, pdError);
-              // PaymentDetail 연결 실패해도 계속 진행
-            }
-          }
-        }
-      } catch (error: any) {
-        console.error(`[세션 생성] 문서 생성 실패: sessionId=${sessionId}`, error);
-        // 문서 생성 실패해도 세션은 생성됨 (결과 조회 시 재시도 가능)
+        });
       }
 
       return createdSession;
@@ -302,6 +416,7 @@ export class CreateFortuneSessionUseCase {
       const existingSession = await this.sessionRepository.findActiveByUserIdAndCategory(
         userId,
         category,
+        SessionMode.CHAT,
       );
 
       if (existingSession && existingSession.isActive) {
@@ -311,65 +426,7 @@ export class CreateFortuneSessionUseCase {
       let sessionToCreate: FortuneSession | null = null;
 
       if (paymentId) {
-        const payment = await this.prisma.payment.findUnique({
-          where: { id: paymentId },
-          include: { order: true },
-        });
-
-        if (!payment) {
-          throw new Error('유효한 결제 정보가 없습니다.');
-        }
-
-        if (payment.order.userId !== userId) {
-          throw new Error('결제 정보가 일치하지 않습니다.');
-        }
-
-        if (payment.status === 'PENDING') {
-          if (!portOnePaymentId) {
-            throw new Error('PortOne 결제 ID가 필요합니다. 결제를 완료해주세요.');
-          }
-
-          const maxRetries = 5;
-          const retryDelay = 1000;
-          let verifyResult: { success: boolean; status?: PaymentStatus } = { success: false };
-
-          console.log(`[세션 생성] 결제 상태 폴링 시작: paymentId=${paymentId}, portOnePaymentId=${portOnePaymentId}`);
-
-          for (let i = 0; i < maxRetries; i++) {
-            console.log(`[세션 생성] 폴링 시도 ${i + 1}/${maxRetries}`);
-            verifyResult = await this.paymentService.verifyAndUpdatePaymentStatus(paymentId, portOnePaymentId);
-
-            if (verifyResult.success && verifyResult.status === 'COMPLETED') {
-              console.log(`[세션 생성] 결제 완료 확인됨 (시도 ${i + 1})`);
-              break;
-            }
-
-            if (i < maxRetries - 1) {
-              console.log(`[세션 생성] 결제 대기 중... ${retryDelay}ms 후 재시도`);
-              await new Promise((resolve) => setTimeout(resolve, retryDelay));
-            }
-          }
-
-          if (!verifyResult.success || verifyResult.status !== 'COMPLETED') {
-            console.warn(`[세션 생성] 폴링 실패: paymentId=${paymentId}, status=${verifyResult.status}`);
-            throw new Error(
-              '결제가 아직 완료되지 않았습니다. 잠시 후 다시 시도해주세요. (프론트엔드에서 폴링 권장)',
-            );
-          }
-
-          const updatedPayment = await this.prisma.payment.findUnique({
-            where: { id: paymentId },
-            include: { order: true },
-          });
-
-          if (!updatedPayment || updatedPayment.status !== 'COMPLETED') {
-            throw new Error('결제 상태 확인에 실패했습니다.');
-          }
-
-          console.log(`[세션 생성] 결제 상태 확인 완료: ${paymentId} -> COMPLETED`);
-        } else if (payment.status !== 'COMPLETED') {
-          throw new Error('결제가 완료되지 않았거나 취소되었습니다.');
-        }
+        await this.ensureCompletedPayment({ paymentId, userId, portOnePaymentId });
 
         const latestPayment = await this.prisma.payment.findUnique({
           where: { id: paymentId },

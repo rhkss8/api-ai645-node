@@ -16,7 +16,9 @@ import { GetFortuneStatisticsUseCase } from '../usecases/GetFortuneStatisticsUse
 import { PrepareFortunePaymentUseCase } from '../usecases/PrepareFortunePaymentUseCase';
 import { GetFortunePaymentsUseCase } from '../usecases/GetFortunePaymentsUseCase';
 import { GetFortunePaymentDetailUseCase } from '../usecases/GetFortunePaymentDetailUseCase';
+import { GetChatSessionsUseCase } from '../usecases/GetChatSessionsUseCase';
 import { RegenerateDocumentUseCase } from '../usecases/RegenerateDocumentUseCase';
+import { StartChatFromDocumentUseCase } from '../usecases/StartChatFromDocumentUseCase';
 import { FortuneProductService } from '../services/FortuneProductService';
 import { ResultTokenService } from '../services/ResultTokenService';
 import { PaymentService } from '../services/PaymentService';
@@ -221,7 +223,9 @@ export class FortuneController {
     private readonly preparePaymentUseCase: PrepareFortunePaymentUseCase,
     private readonly getPaymentsUseCase: GetFortunePaymentsUseCase,
     private readonly getPaymentDetailUseCase: GetFortunePaymentDetailUseCase,
+    private readonly getChatSessionsUseCase: GetChatSessionsUseCase,
     private readonly regenerateDocumentUseCase: RegenerateDocumentUseCase,
+    private readonly startChatFromDocumentUseCase: StartChatFromDocumentUseCase,
     private readonly paymentService: PaymentService,
     private readonly productService: FortuneProductService,
     private readonly resultTokenService: ResultTokenService,
@@ -316,6 +320,37 @@ export class FortuneController {
     },
   );
 
+  startChatFromDocument = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      if (!user) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      const { documentId, forceNewSession } = req.body;
+      if (!documentId) {
+        throw new Error('documentId는 필수입니다.');
+      }
+
+      const result = await this.startChatFromDocumentUseCase.execute({
+        userId: user.sub,
+        documentId,
+        forceNewSession: !!forceNewSession,
+      });
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+        message: result.reusedSession
+          ? '기존 채팅 세션에 문서 컨텍스트를 연결했습니다.'
+          : '문서 기반 새 채팅 세션을 생성했습니다.',
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    },
+  );
+
   /**
    * 결제 준비
    * POST /api/fortune/payment/prepare
@@ -344,15 +379,17 @@ export class FortuneController {
           easyPayProvider,
         } = req.body;
 
-        if (!productType || !category) {
+        if (!productType) {
           console.error('[결제 준비] 필수 파라미터 누락:', { productType, category });
-          throw new Error('상품 타입과 카테고리는 필수입니다.');
+          throw new Error('상품 타입은 필수입니다.');
         }
 
         if (productType === FortuneProductType.CHAT_SESSION) {
           if (chatEntitlementDays == null || ![1, 7, 30].includes(Number(chatEntitlementDays))) {
             throw new Error('채팅형은 chatEntitlementDays(1, 7, 30)가 필요합니다.');
           }
+        } else if (!category) {
+          throw new Error('문서형은 카테고리가 필요합니다.');
         }
 
 
@@ -460,14 +497,23 @@ export class FortuneController {
       }
 
       const { sessionId, message } = req.body;
+      const upload = (req as Request & { file?: Express.Multer.File }).file;
 
-      if (!sessionId || !message) {
-        throw new CustomError('세션 ID와 메시지는 필수입니다.', 400, 'INVALID_REQUEST', {
-          required: ['sessionId', 'message'],
+      if (!sessionId || (!message && !upload)) {
+        throw new CustomError('세션 ID와 메시지 또는 이미지는 필수입니다.', 400, 'INVALID_REQUEST', {
+          required: ['sessionId', 'message|image'],
         });
       }
 
-      const result = await this.chatUseCase.execute(sessionId, message, user.sub);
+      const image = upload
+        ? {
+            mimeType: upload.mimetype,
+            base64Data: upload.buffer.toString('base64'),
+            filename: upload.originalname,
+          }
+        : undefined;
+
+      const result = await this.chatUseCase.execute(sessionId, message || '', user.sub, image);
 
       const response: FortuneApiResponse = {
         success: true,
@@ -827,6 +873,69 @@ export class FortuneController {
   );
 
   /**
+   * 결제 상태 확인 + PortOne 검증 동기화 (채팅 이용권 독립 구매용)
+   * POST /api/v1/fortune/payment/:paymentId/confirm
+   */
+  confirmPayment = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      if (!user) {
+        res.status(401).json({
+          success: false,
+          error: '로그인이 필요합니다.',
+          errorCode: 'UNAUTHORIZED',
+        });
+        return;
+      }
+
+      const { paymentId } = req.params;
+      const { portOnePaymentId } = req.body ?? {};
+
+      if (!paymentId) {
+        res.status(400).json({ success: false, error: 'PAYMENT_ID_REQUIRED' });
+        return;
+      }
+
+      const payment = await this.paymentService.getPaymentById(paymentId);
+      if (!payment) {
+        res.status(404).json({ success: false, error: 'PAYMENT_NOT_FOUND' });
+        return;
+      }
+
+      if (payment.order.userId !== user.sub) {
+        res.status(403).json({ success: false, error: 'PAYMENT_ACCESS_DENIED' });
+        return;
+      }
+
+      if (payment.status === 'PENDING') {
+        await this.paymentService.verifyAndUpdatePaymentStatus(paymentId, portOnePaymentId);
+      }
+
+      const latest = await this.paymentService.getPaymentById(paymentId);
+      if (!latest) {
+        res.status(404).json({ success: false, error: 'PAYMENT_NOT_FOUND' });
+        return;
+      }
+
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          paymentId: latest.id,
+          status: latest.status,
+          amount: latest.amount,
+          paidAt: latest.paidAt,
+        },
+      });
+    },
+  );
+
+  /**
    * 결제 취소
    * POST /api/v1/fortune/payment/:paymentId/cancel
    */
@@ -936,6 +1045,25 @@ export class FortuneController {
           take: 5,
         });
         console.log('[결과 조회] DB 조회 완료:', { ms: Date.now() - tDbStart, sessionId: payload.sessionId, chatsCount: chats.length });
+
+        const sessionUserData = sessionRecord.userData as Record<string, any> | undefined;
+        const sessionDocumentBridge = sessionUserData?.documentBridge as
+          | {
+              sourceDocumentId?: string;
+              title?: string;
+              anchorSummary?: string | null;
+              topicCards?: Array<{
+                topic?: string;
+                summary?: string;
+                recommendedQuestions?: string[];
+              }>;
+              followupMap?: Array<{
+                topic?: string;
+                keywords?: string[];
+              }>;
+              riskNotes?: string[];
+            }
+          | undefined;
 
         // ASK+CHAT: 초기 가이드는 DB에서 먼저 조회, 없으면 생성 후 저장
         let initialChatGuide: any = null;
@@ -1086,15 +1214,39 @@ export class FortuneController {
           }
         }
 
+        const documentPendingWindowMs = 45 * 1000;
+        const isRecentDocumentSession =
+          sessionRecord.mode === 'DOCUMENT' &&
+          Date.now() - sessionRecord.createdAt.getTime() < documentPendingWindowMs;
+
         // 문서형 세션인 경우: 문서 결과 조회 또는 생성
         let document: any = null;
+        let documentPending = false;
+        let documentGenerationState:
+          | 'PENDING'
+          | 'COMPLETED'
+          | 'FAILED'
+          | 'UNAVAILABLE' = 'UNAVAILABLE';
         if (sessionRecord.mode === 'DOCUMENT') {
           try {
             // 1. PaymentDetail을 통해 documentId 찾기 (우선순위)
             const paymentDetail = await prisma.paymentDetail.findFirst({
               where: { sessionId: payload.sessionId },
-              select: { documentId: true },
+              select: { documentId: true, result: true, paymentId: true },
             });
+
+            const paymentDetailResult =
+              paymentDetail?.result && typeof paymentDetail.result === 'object'
+                ? (paymentDetail.result as {
+                    generationStatus?: 'PENDING' | 'COMPLETED' | 'FAILED';
+                    errorCode?: string;
+                    errorMessage?: string;
+                  })
+                : null;
+
+            if (paymentDetailResult?.generationStatus) {
+              documentGenerationState = paymentDetailResult.generationStatus;
+            }
 
             if (paymentDetail?.documentId) {
               // PaymentDetail에 documentId가 있으면 해당 문서 조회
@@ -1180,8 +1332,9 @@ export class FortuneController {
               }
             }
             
-            // 3. PaymentDetail에 documentId가 없고 Order metadata에도 없으면 세션 생성 시점에 생성된 문서 찾기
-            if (!document) {
+            // 3. 최근 문서 세션은 백그라운드 생성 중일 수 있으므로, 추정 매칭보다 pending 상태를 우선한다.
+            if (!document && !isRecentDocumentSession) {
+              // PaymentDetail에 documentId가 없고 Order metadata에도 없으면 세션 생성 시점에 생성된 문서 찾기
               // 세션 생성 시점에 생성된 문서는 같은 userId, category, createdAt이 비슷한 것으로 찾기
               document = await prisma.documentResult.findFirst({
                 where: { 
@@ -1196,8 +1349,44 @@ export class FortuneController {
               });
             }
 
-            // 3. 문서가 없으면 GPT로 생성 (세션 생성 시 문서 생성 실패한 경우)
-            if (!document && sessionRecord.userInput) {
+            if (!document && sessionRecord.mode === 'CHAT' && sessionDocumentBridge?.sourceDocumentId) {
+              document = await prisma.documentResult.findUnique({
+                where: { id: sessionDocumentBridge.sourceDocumentId },
+              });
+            }
+
+            if (!document && isRecentDocumentSession) {
+              if (paymentDetailResult?.generationStatus === 'FAILED') {
+                const statusCode =
+                  paymentDetailResult.errorCode === 'AI_QUOTA_EXCEEDED' ||
+                  paymentDetailResult.errorCode === 'insufficient_quota'
+                    ? 429
+                    : 500;
+
+                res.status(statusCode).json({
+                  success: false,
+                  error:
+                    paymentDetailResult.errorCode === 'insufficient_quota'
+                      ? 'AI_QUOTA_EXCEEDED'
+                      : paymentDetailResult.errorCode || 'AI_GENERATION_FAILED',
+                  message:
+                    paymentDetailResult.errorMessage ||
+                    '운세 리포트 생성에 실패했습니다.',
+                  timestamp: new Date().toISOString(),
+                });
+                return;
+              }
+
+              documentPending = true;
+              documentGenerationState = 'PENDING';
+              console.log('[결과 조회] 최근 문서 세션은 pending으로 유지:', {
+                sessionId: payload.sessionId,
+                sessionAgeMs: Date.now() - sessionRecord.createdAt.getTime(),
+              });
+            }
+
+            // 4. 문서가 없으면 GPT로 생성 (오래된 세션의 legacy 복구 전용 fallback)
+            if (!document && !isRecentDocumentSession && sessionRecord.userInput) {
               console.log('[결과 조회] 문서가 없어 GPT로 생성 시작:', { sessionId: payload.sessionId });
               try {
                 const { documentResponse, documentId } = await this.documentUseCase.execute(
@@ -1212,6 +1401,61 @@ export class FortuneController {
                   document = await prisma.documentResult.findUnique({
                     where: { id: documentId },
                   });
+                  documentGenerationState = 'COMPLETED';
+
+                  // fallback 생성이더라도 이후에는 PaymentDetail.documentId를 우선 source of truth로 삼는다.
+                  const paymentDetailForLink = await prisma.paymentDetail.findFirst({
+                    where: { sessionId: payload.sessionId },
+                    select: {
+                      id: true,
+                      documentId: true,
+                      paymentId: true,
+                    },
+                  });
+
+                  if (paymentDetailForLink && paymentDetailForLink.documentId !== documentId) {
+                    await prisma.paymentDetail.update({
+                      where: { id: paymentDetailForLink.id },
+                      data: {
+                        documentId,
+                        result: {
+                          generationStatus: 'COMPLETED',
+                          updatedAt: new Date().toISOString(),
+                        },
+                      },
+                    });
+                  }
+
+                  if (paymentDetailForLink?.paymentId) {
+                    const payment = await prisma.payment.findUnique({
+                      where: { id: paymentDetailForLink.paymentId },
+                      select: { orderId: true },
+                    });
+
+                    if (payment?.orderId) {
+                      const order = await prisma.order.findUnique({
+                        where: { id: payment.orderId },
+                        select: { metadata: true },
+                      });
+
+                      const orderMetadata = (order?.metadata as any) || {};
+                      if (
+                        orderMetadata.documentId !== documentId ||
+                        orderMetadata.sessionId !== payload.sessionId
+                      ) {
+                        await prisma.order.update({
+                          where: { id: payment.orderId },
+                          data: {
+                            metadata: {
+                              ...orderMetadata,
+                              documentId,
+                              sessionId: payload.sessionId,
+                            },
+                          },
+                        });
+                      }
+                    }
+                  }
                 }
               } catch (error: any) {
                 console.error('[결과 조회] GPT 문서 생성 실패:', error);
@@ -1257,6 +1501,24 @@ export class FortuneController {
               category: sessionRecord.category,
               formType: payload.formType,
               mode: sessionRecord.mode,
+              ...(sessionDocumentBridge
+                ? {
+                    documentBridge: {
+                      sourceDocumentId: sessionDocumentBridge.sourceDocumentId,
+                      title: sessionDocumentBridge.title,
+                      anchorSummary: sessionDocumentBridge.anchorSummary ?? null,
+                      topicCards: Array.isArray(sessionDocumentBridge.topicCards)
+                        ? sessionDocumentBridge.topicCards
+                        : [],
+                      followupMap: Array.isArray(sessionDocumentBridge.followupMap)
+                        ? sessionDocumentBridge.followupMap
+                        : [],
+                      riskNotes: Array.isArray(sessionDocumentBridge.riskNotes)
+                        ? sessionDocumentBridge.riskNotes
+                        : [],
+                    },
+                  }
+                : {}),
               remainingTime: (() => {
                 const ent = sessionRecord.chatEntitlementExpiresAt as Date | null | undefined;
                 if (ent) {
@@ -1276,6 +1538,8 @@ export class FortuneController {
                 sessionRecord.mode === 'DOCUMENT',
             },
             document,
+            pending: documentPending,
+            documentStatus: documentGenerationState,
             lastChats: (() => {
               // 기존 채팅 매핑
               const mappedChats = chats.map((chat: any) => {
@@ -1461,6 +1725,37 @@ export class FortuneController {
         success: true,
         data: result,
         message: '결제 내역 상세 정보를 조회했습니다.',
+        timestamp: new Date().toISOString(),
+      };
+
+      res.status(200).json(response);
+    },
+  );
+
+  /**
+   * 채팅 세션 내역 조회
+   * GET /api/v1/fortune/chat-sessions
+   */
+  getChatSessions = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const user = (req as any).user;
+      if (!user) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const result = await this.getChatSessionsUseCase.execute({
+        userId: user.sub,
+        page,
+        limit: Math.min(limit, 100),
+      });
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+        message: '채팅 세션 내역을 조회했습니다.',
         timestamp: new Date().toISOString(),
       };
 

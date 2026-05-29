@@ -6,6 +6,7 @@ import { IAIService, AIGenerateChatParams, AIGenerateDocumentParams } from '../.
 import { ChatResponse, DocumentResponse } from '../../types/fortune';
 import { generateChatFortunePrompt } from '../../prompts/chatFortunePrompt';
 import { generateDocumentFortunePrompt } from '../../prompts/documentFortunePrompt';
+import { normalizeChatResponseCopy, normalizeDocumentResponseCopy } from '../../utils/normalizeFortuneCopy';
 
 export class OpenAIService implements IAIService {
   private openai: OpenAI;
@@ -28,6 +29,7 @@ export class OpenAIService implements IAIService {
         userInput: params.userInput,
         previousContext: params.previousContext,
         userData: params.userData,
+        hasImageInput: Boolean(params.image),
       });
 
       const completion = await this.openai.chat.completions.create({
@@ -39,7 +41,17 @@ export class OpenAIService implements IAIService {
           },
           {
             role: 'user',
-            content: prompt,
+            content: params.image
+              ? [
+                  { type: 'text', text: prompt },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${params.image.mimeType};base64,${params.image.base64Data}`,
+                    },
+                  },
+                ]
+              : prompt,
           },
         ],
         temperature: 0.7,
@@ -62,7 +74,7 @@ export class OpenAIService implements IAIService {
         if (!Array.isArray(anyParsed.nextQuestions)) {
           anyParsed.nextQuestions = [];
         }
-        return anyParsed as ChatResponse;
+        return normalizeChatResponseCopy(anyParsed as ChatResponse);
       }
 
       // V1 수신 시 V2로 변환 (프롬프트는 message+nextQuestions만 요구하나, 모델이 구 형식으로 올 경우 한 덩어리로 합침)
@@ -78,7 +90,7 @@ export class OpenAIService implements IAIService {
           .join(' ');
         const oneBlock = extra ? `${anyParsed.summary}\n\n${extra}` : anyParsed.summary;
         const nextQuestions = Array.isArray(anyParsed.nextQuestions) ? anyParsed.nextQuestions : [];
-        return { message: oneBlock, nextQuestions } as ChatResponse;
+        return normalizeChatResponseCopy({ message: oneBlock, nextQuestions } as ChatResponse);
       }
 
       throw new Error('GPT 응답 형식이 올바르지 않습니다. message 또는 summary 필드가 필요합니다.');
@@ -148,10 +160,23 @@ export class OpenAIService implements IAIService {
         chatPrompt,
       };
 
-      return ensured;
+      return normalizeDocumentResponseCopy(ensured);
     } catch (error) {
       console.error('문서형 운세 리포트 생성 중 오류:', error);
-      throw new Error('운세 리포트 생성에 실패했습니다.');
+      const source = error as {
+        code?: string;
+        status?: number;
+        message?: string;
+      };
+      const wrapped = new Error('운세 리포트 생성에 실패했습니다.') as Error & {
+        code?: string;
+        status?: number;
+        cause?: unknown;
+      };
+      wrapped.code = source.code;
+      wrapped.status = source.status;
+      wrapped.cause = error;
+      throw wrapped;
     }
   }
 
@@ -159,4 +184,3 @@ export class OpenAIService implements IAIService {
     return this.modelName;
   }
 }
-

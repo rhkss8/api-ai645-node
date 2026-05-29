@@ -407,6 +407,7 @@ export class AuthController {
           nickname: userData.nickname,
           email: userData.email || null, // 이메일 정보 추가
           phone: userData.phone || null, // 연락처 정보 추가
+          chatUsableUntil: userData.chatUsableUntil?.toISOString() || null,
           role: userData.role,
           termsAgreed: userData.termsAgreed,
           privacyAgreed: userData.privacyAgreed,
@@ -557,6 +558,7 @@ export class AuthController {
           nickname: updatedUser.nickname,
           email: updatedUser.email || null,
           phone: updatedUser.phone || null,
+          chatUsableUntil: updatedUser.chatUsableUntil?.toISOString() || null,
           role: updatedUser.role,
           termsAgreed: updatedUser.termsAgreed,
           privacyAgreed: updatedUser.privacyAgreed,
