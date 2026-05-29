@@ -164,7 +164,7 @@ export function sanitizeAndValidateInput(input: any): {
   
   // 카테고리 검증
   if (input.category !== undefined) {
-    const validCategories = ['NOTICE', 'SUGGESTION', 'PARTNERSHIP'];
+    const validCategories = ['NOTICE'];
     if (!validCategories.includes(input.category)) {
       errors.push('유효하지 않은 카테고리입니다.');
     } else {

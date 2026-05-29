@@ -3,7 +3,8 @@ import KakaoStrategy from 'passport-kakao';
 import GoogleStrategy from 'passport-google-oauth20';
 import NaverStrategy from 'passport-naver';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import { CHAT_SIGNUP_GRANT_MS } from '../utils/userChatEntitlement';
+import { encryptOAuthToken } from '../utils/oauthTokenCrypto';
 
 enum AuthProvider {
   KAKAO = 'KAKAO',
@@ -50,8 +51,8 @@ async function upsertSocialAccount(
     await prisma.socialAccount.update({
       where: { id: socialAccount.id },
       data: {
-        accessToken: await encryptToken(accessToken),
-        refreshToken: refreshToken ? await encryptToken(refreshToken) : null,
+        accessToken: encryptOAuthToken(accessToken),
+        refreshToken: refreshToken ? encryptOAuthToken(refreshToken) : null,
         expiresAt,
         updatedAt: new Date(),
       },
@@ -64,12 +65,13 @@ async function upsertSocialAccount(
   const user = await prisma.user.create({
     data: {
       nickname: profile.nickname || `User_${Date.now()}`,
+      chatUsableUntil: new Date(Date.now() + CHAT_SIGNUP_GRANT_MS),
       socialAccounts: {
         create: {
           provider,
           providerUid,
-          accessToken: await encryptToken(accessToken),
-          refreshToken: refreshToken ? await encryptToken(refreshToken) : null,
+          accessToken: encryptOAuthToken(accessToken),
+          refreshToken: refreshToken ? encryptOAuthToken(refreshToken) : null,
           expiresAt,
         },
       },
@@ -77,20 +79,6 @@ async function upsertSocialAccount(
   });
 
   return { user, isNewUser: true };
-}
-
-/**
- * 토큰 암호화
- */
-async function encryptToken(token: string): Promise<string> {
-  return bcrypt.hash(token, 10);
-}
-
-/**
- * 토큰 복호화 (실제로는 해시 비교)
- */
-async function verifyToken(hashedToken: string, plainToken: string): Promise<boolean> {
-  return bcrypt.compare(plainToken, hashedToken);
 }
 
 /**
@@ -106,6 +94,10 @@ export function initPassportStrategies() {
   console.log('  NAVER_CLIENT_ID:', process.env.NAVER_CLIENT_ID || '❌ 미설정');
   console.log('  NAVER_CLIENT_SECRET:', process.env.NAVER_CLIENT_SECRET ? '✅ 설정됨' : '❌ 미설정');
   console.log('  OAUTH_REDIRECT_URI:', process.env.OAUTH_REDIRECT_URI || '❌ 미설정');
+  console.log(
+    '  OAUTH_TOKEN_ENCRYPTION_KEY:',
+    process.env.OAUTH_TOKEN_ENCRYPTION_KEY ? '✅ 설정됨' : '❌ 미설정 (소셜 토큰 저장 불가)',
+  );
   console.log('  카카오 콜백 URL:', `${process.env.OAUTH_REDIRECT_URI}/kakao/callback`);
   console.log('  구글 콜백 URL:', `${process.env.OAUTH_REDIRECT_URI}/google/callback`);
   console.log('  네이버 콜백 URL:', `${process.env.OAUTH_REDIRECT_URI}/naver/callback`);
@@ -235,4 +227,4 @@ export function initPassportStrategies() {
   });
 }
 
-export { encryptToken, verifyToken }; 
+export { encryptOAuthToken }; 

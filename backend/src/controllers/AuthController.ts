@@ -2,8 +2,14 @@ import { Request, Response } from 'express';
 import passport from 'passport';
 import * as crypto from 'crypto';
 import { prisma } from '../config/database';
+import { CHAT_SIGNUP_GRANT_MS } from '../utils/userChatEntitlement';
 import { signAccessToken, signRefreshToken, extractJTI } from '../lib/jwt';
 import { asyncHandler } from '../middlewares/errorHandler';
+import {
+  OauthEncryptionConfigError,
+  SOCIAL_OAUTH_RELINK_USER_MESSAGE,
+  socialOAuthTokensNeedRelink,
+} from '../utils/oauthTokenCrypto';
 
 // 임시 해싱 함수 (결제 심사용)
 function hashPassword(password: string): string {
@@ -59,6 +65,7 @@ export class AuthController {
             privacyAgreed: true,
             marketingAgreed: false,
             role: 'USER',
+            chatUsableUntil: new Date(Date.now() + CHAT_SIGNUP_GRANT_MS),
           },
         });
 
@@ -190,6 +197,14 @@ export class AuthController {
       passport.authenticate(provider, { session: false }, async (err: any, user: any) => {
         if (err) {
           console.error('소셜 로그인 오류:', err);
+          if (err instanceof OauthEncryptionConfigError) {
+            res.status(503).json({
+              success: false,
+              error: err.code,
+              message: err.message,
+            });
+            return;
+          }
           res.status(500).json({
             success: false,
             error: '소셜 로그인에 실패했습니다.',
@@ -348,6 +363,8 @@ export class AuthController {
               provider: true,
               providerUid: true,
               createdAt: true,
+              accessToken: true,
+              refreshToken: true,
             },
           },
         },
@@ -366,28 +383,50 @@ export class AuthController {
       const primarySocialAccount = userData.socialAccounts[0];
       const authType = primarySocialAccount ? primarySocialAccount.provider : null;
 
-              res.json({
-          success: true,
-          data: {
-            id: userData.id,
-            nickname: userData.nickname,
-            email: userData.email || null, // 이메일 정보 추가
-            phone: userData.phone || null, // 연락처 정보 추가
-            role: userData.role,
-            termsAgreed: userData.termsAgreed,
-            privacyAgreed: userData.privacyAgreed,
-            marketingAgreed: userData.marketingAgreed,
-            authType, // 주요 소셜 인증 타입 (KAKAO, GOOGLE, NAVER)
-            socialAccounts: userData.socialAccounts.map((account: any) => ({
-              provider: account.provider,
-              providerUid: account.providerUid,
-              connectedAt: account.createdAt,
-            })),
-            createdAt: userData.createdAt,
-            updatedAt: userData.updatedAt || null,
-          },
-          message: '사용자 정보를 조회했습니다.',
-        });
+      let socialRelinkRequired = false;
+      try {
+        socialRelinkRequired = userData.socialAccounts.some((account: any) =>
+          socialOAuthTokensNeedRelink(account.refreshToken, account.accessToken),
+        );
+      } catch (e) {
+        if (e instanceof OauthEncryptionConfigError) {
+          res.status(503).json({
+            success: false,
+            error: e.code,
+            message: e.message,
+          });
+          return;
+        }
+        throw e;
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: userData.id,
+          nickname: userData.nickname,
+          email: userData.email || null, // 이메일 정보 추가
+          phone: userData.phone || null, // 연락처 정보 추가
+          chatUsableUntil: userData.chatUsableUntil?.toISOString() || null,
+          role: userData.role,
+          termsAgreed: userData.termsAgreed,
+          privacyAgreed: userData.privacyAgreed,
+          marketingAgreed: userData.marketingAgreed,
+          authType, // 주요 소셜 인증 타입 (KAKAO, GOOGLE, NAVER)
+          socialRelinkRequired,
+          ...(socialRelinkRequired ? { socialRelinkMessage: SOCIAL_OAUTH_RELINK_USER_MESSAGE } : {}),
+          socialAccounts: userData.socialAccounts.map((account: any) => ({
+            provider: account.provider,
+            providerUid: account.providerUid,
+            connectedAt: account.createdAt,
+          })),
+          createdAt: userData.createdAt,
+          updatedAt: userData.updatedAt || null,
+        },
+        message: socialRelinkRequired
+          ? SOCIAL_OAUTH_RELINK_USER_MESSAGE
+          : '사용자 정보를 조회했습니다.',
+      });
     }
   );
 
@@ -475,6 +514,8 @@ export class AuthController {
               provider: true,
               providerUid: true,
               createdAt: true,
+              accessToken: true,
+              refreshToken: true,
             },
           },
         },
@@ -493,6 +534,23 @@ export class AuthController {
       const primarySocialAccount = updatedUser.socialAccounts[0];
       const authType = primarySocialAccount ? primarySocialAccount.provider : null;
 
+      let socialRelinkRequired = false;
+      try {
+        socialRelinkRequired = updatedUser.socialAccounts.some((account: any) =>
+          socialOAuthTokensNeedRelink(account.refreshToken, account.accessToken),
+        );
+      } catch (e) {
+        if (e instanceof OauthEncryptionConfigError) {
+          res.status(503).json({
+            success: false,
+            error: e.code,
+            message: e.message,
+          });
+          return;
+        }
+        throw e;
+      }
+
       res.json({
         success: true,
         data: {
@@ -500,11 +558,14 @@ export class AuthController {
           nickname: updatedUser.nickname,
           email: updatedUser.email || null,
           phone: updatedUser.phone || null,
+          chatUsableUntil: updatedUser.chatUsableUntil?.toISOString() || null,
           role: updatedUser.role,
           termsAgreed: updatedUser.termsAgreed,
           privacyAgreed: updatedUser.privacyAgreed,
           marketingAgreed: updatedUser.marketingAgreed,
           authType,
+          socialRelinkRequired,
+          ...(socialRelinkRequired ? { socialRelinkMessage: SOCIAL_OAUTH_RELINK_USER_MESSAGE } : {}),
           socialAccounts: updatedUser.socialAccounts.map((account: any) => ({
             provider: account.provider,
             providerUid: account.providerUid,
@@ -513,7 +574,9 @@ export class AuthController {
           createdAt: updatedUser.createdAt,
           updatedAt: updatedUser.updatedAt || null,
         },
-        message: '사용자 정보가 업데이트되었습니다.',
+        message: socialRelinkRequired
+          ? SOCIAL_OAUTH_RELINK_USER_MESSAGE
+          : '사용자 정보가 업데이트되었습니다.',
       });
     }
   );

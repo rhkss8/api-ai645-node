@@ -11,34 +11,6 @@ export class IdGenerator {
   }
 
   /**
-   * 추천 ID 생성
-   */
-  static generateRecommendationId(): string {
-    return `rec_${this.generateShortId()}`;
-  }
-
-  /**
-   * 추천 파라미터 ID 생성
-   */
-  static generateRecommendationParamId(): string {
-    return `param_${this.generateShortId()}`;
-  }
-
-  /**
-   * 회고 ID 생성
-   */
-  static generateReviewId(): string {
-    return `review_${this.generateShortId()}`;
-  }
-
-  /**
-   * 당첨번호 ID 생성
-   */
-  static generateWinningNumbersId(): string {
-    return `win_${this.generateShortId()}`;
-  }
-
-  /**
    * API 사용량 ID 생성
    */
   static generateApiUsageId(): string {

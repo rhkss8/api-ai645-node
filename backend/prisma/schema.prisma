@@ -8,53 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model RecommendationHistory {
-  id         String                 @id @default(cuid())
-  round      Int?
-  numbers    Json
-  type       RecommendationType
-  conditions Json?
-  imageData  Json?
-  gptModel   String
-  createdAt  DateTime               @default(now())
-  updatedAt  DateTime               @updatedAt
-  analysis   String?
-  userId     String?
-  orderId    String?                @unique // 유료 추천의 경우 주문 ID 연결 (1:1 관계)
-  user       User?                  @relation(fields: [userId], references: [id])
-  order      Order?                 @relation(fields: [orderId], references: [id])
-  reviews    RecommendationReview[]
-
-  @@map("recommendation_history")
-}
-
-model RecommendationReview {
-  id               String                @id @default(cuid())
-  recommendationId String
-  winningNumbers   Json
-  matchedCounts    Json
-  reviewText       String
-  analysisPrompt   String
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  recommendation   RecommendationHistory @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
-
-  @@map("recommendation_review")
-}
-
-model WinningNumbers {
-  id                 String   @id @default(cuid())
-  round              Int      @unique
-  numbers            Json
-  drawDate           DateTime
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  bonusNumber        Int
-  firstWinningAmount BigInt
-
-  @@map("winning_numbers")
-}
-
 model ApiUsage {
   id           String   @id @default(cuid())
   endpoint     String
@@ -95,13 +48,13 @@ model User {
   termsAgreed     Boolean                 @default(false)
   privacyAgreed   Boolean                 @default(false)
   marketingAgreed Boolean                 @default(false)
+  /// Account chat access until (signup 1h default; extend via 1/7/30-day chat payments)
+  chatUsableUntil DateTime?
   posts           BoardPost[]
   orders          Order[]
-  recommendations RecommendationHistory[]
   refreshTokens   RefreshToken[]
   socialAccounts  SocialAccount[]
   subscriptions   Subscription[]
-  params          RecommendationParams[]
   fortuneSessions FortuneSession[]
   documentResults DocumentResult[]
   hongsiCredits   HongsiCredit[]
@@ -147,25 +100,21 @@ model Order {
   id             String                 @id @default(cuid())
   userId         String
   merchantUid    String                 @unique
-  orderName      String                 @default("로또 추천 서비스")
+  orderName      String                 @default("포포춘 주문")
   amount         Int
   currency       String                 @default("KRW")
   status         OrderStatus            @default(PENDING)
   description    String?
   metadata       Json?
-  paramId        String? // 추천 파라미터 ID 연결
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   payment        Payment?
-  params         RecommendationParams?  @relation(fields: [paramId], references: [id])
-  recommendation RecommendationHistory?
 
   @@index([userId])
   @@index([merchantUid])
   @@index([status])
   @@index([createdAt])
-  @@index([paramId])
   @@map("orders")
 }
 
@@ -227,32 +176,6 @@ model BoardPost {
   @@map("board_posts")
 }
 
-model RecommendationParams {
-  id         String                    @id @default(cuid())
-  userId     String
-  type       RecommendationType
-  gameCount  Int                       @default(5)
-  conditions Json? // 사용자 조건 (includeNumbers에 이미지 추출 번호 포함)
-  round      Int? // 대상 회차
-  status     RecommendationParamStatus @default(PENDING)
-  orderId    String? // 연결된 주문 ID
-  expiresAt  DateTime // 24시간 후 만료
-  createdAt  DateTime                  @default(now())
-  updatedAt  DateTime                  @updatedAt
-  user       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders     Order[]
-
-  @@index([userId])
-  @@index([status])
-  @@index([expiresAt])
-  @@map("recommendation_params")
-}
-
-enum RecommendationType {
-  FREE
-  PREMIUM
-}
-
 enum AuthProvider {
   EMAIL
   KAKAO
@@ -295,38 +218,31 @@ enum SubscriptionType {
   LIFETIME
 }
 
-enum RecommendationParamStatus {
-  PENDING // 파라미터 저장됨
-  PAYMENT_PENDING // 결제 대기
-  PAYMENT_COMPLETED // 결제 완료
-  GENERATING // GPT 처리 중
-  COMPLETED // 완료
-  FAILED // 실패
-  EXPIRED // 만료
-}
-
 // 포포춘 운세 서비스 모델
 model FortuneSession {
-  id               String            @id @default(cuid())
-  userId           String
-  category         FortuneCategory
-  formType         FormType? // ASK, DAILY, TRADITIONAL
-  mode             SessionMode
-  userInput        String? // 세션 생성 시 사용자 입력 (이름, 생년월일, 성별 등)
-  userData         Json? // 구조화된 운세 데이터 (이름, 생년월일시, 성별, 기타 메타데이터)
-  remainingTime    Int // 남은 시간 (초)
-  isActive         Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  expiresAt        DateTime
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  conversationLogs ConversationLog[]
-  paymentDetails   PaymentDetail[]
+  id                        String            @id @default(cuid())
+  userId                    String
+  category                  FortuneCategory
+  formType                  FormType? // ASK, DAILY, TRADITIONAL
+  mode                      SessionMode
+  userInput                 String? // 세션 생성 시 사용자 입력 (이름, 생년월일, 성별 등)
+  userData                  Json? // 구조화된 운세 데이터 (이름, 생년월일시, 성별, 기타 메타데이터)
+  remainingTime             Int // 남은 시간 (초) — 분 단위 상품용. 일 단위 이용권은 표시용으로 동기화 가능
+  isActive                  Boolean           @default(true)
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @updatedAt
+  expiresAt                 DateTime
+  /// 채팅 일 단위 이용권 만료 시각(결제 1일/7일/30일 등). 설정 시 만료 판단·활성 조회의 기준으로 우선 사용
+  chatEntitlementExpiresAt  DateTime?
+  user                      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationLogs          ConversationLog[]
+  paymentDetails            PaymentDetail[]
 
   @@index([userId])
   @@index([category])
   @@index([isActive])
   @@index([expiresAt])
+  @@index([chatEntitlementExpiresAt])
   @@map("fortune_sessions")
 }
 
@@ -351,6 +267,8 @@ model DocumentResult {
   category     FortuneCategory
   title        String          @db.VarChar(200)
   content      String
+  chatContext  Json?
+  chatContextVersion Int       @default(1)
   issuedAt     DateTime        @default(now())
   expiresAt    DateTime
   documentLink String?

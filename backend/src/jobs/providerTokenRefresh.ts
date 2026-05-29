@@ -1,6 +1,11 @@
 import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
+import {
+  decryptOAuthToken,
+  encryptOAuthToken,
+  OauthEncryptionConfigError,
+} from '../utils/oauthTokenCrypto';
 
 const prisma = new PrismaClient();
 
@@ -10,82 +15,134 @@ interface TokenRefreshResponse {
   expires_in: number;
 }
 
+function oauthFormBody(params: Record<string, string | undefined>): string {
+  const u = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') {
+      u.set(k, v);
+    }
+  }
+  return u.toString();
+}
+
+async function postOAuthToken(url: string, body: string): Promise<TokenRefreshResponse> {
+  const response = await axios.post<TokenRefreshResponse>(url, body, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+    transformRequest: [(data) => data],
+  });
+  return response.data;
+}
+
 /**
  * 카카오 토큰 갱신
  */
 async function refreshKakaoToken(refreshToken: string): Promise<TokenRefreshResponse> {
-  const response = await axios.post('https://kauth.kakao.com/oauth/token', {
+  const body = oauthFormBody({
     grant_type: 'refresh_token',
     client_id: process.env.KAKAO_CLIENT_ID,
     client_secret: process.env.KAKAO_CLIENT_SECRET,
     refresh_token: refreshToken,
   });
-
-  return response.data;
+  return postOAuthToken('https://kauth.kakao.com/oauth/token', body);
 }
 
 /**
  * 구글 토큰 갱신
  */
 async function refreshGoogleToken(refreshToken: string): Promise<TokenRefreshResponse> {
-  const response = await axios.post('https://oauth2.googleapis.com/token', {
+  const body = oauthFormBody({
     grant_type: 'refresh_token',
     client_id: process.env.GOOGLE_CLIENT_ID,
     client_secret: process.env.GOOGLE_CLIENT_SECRET,
     refresh_token: refreshToken,
   });
-
-  return response.data;
+  return postOAuthToken('https://oauth2.googleapis.com/token', body);
 }
 
 /**
  * 네이버 토큰 갱신
  */
 async function refreshNaverToken(refreshToken: string): Promise<TokenRefreshResponse> {
-  const response = await axios.post('https://nid.naver.com/oauth2.0/token', {
+  const body = oauthFormBody({
     grant_type: 'refresh_token',
     client_id: process.env.NAVER_CLIENT_ID,
     client_secret: process.env.NAVER_CLIENT_SECRET,
     refresh_token: refreshToken,
   });
+  return postOAuthToken('https://nid.naver.com/oauth2.0/token', body);
+}
 
-  return response.data;
+function logTokenRefreshFailure(provider: string, providerUid: string, err: unknown): void {
+  if (isAxiosError(err)) {
+    console.error(`❌ 토큰 갱신 실패: ${provider} - ${providerUid}`, {
+      status: err.response?.status,
+      data: err.response?.data,
+    });
+    return;
+  }
+  console.error(
+    `❌ 토큰 갱신 실패: ${provider} - ${providerUid}`,
+    err instanceof Error ? err.message : String(err),
+  );
 }
 
 /**
  * 소셜 계정 토큰 갱신
  */
-async function refreshProviderToken(account: any): Promise<void> {
+async function refreshProviderToken(account: {
+  id: string;
+  provider: string;
+  providerUid: string;
+  refreshToken: string | null;
+}): Promise<void> {
   try {
     console.log(`🔄 토큰 갱신 시작: ${account.provider} - ${account.providerUid}`);
+
+    if (!account.refreshToken) {
+      console.warn(`⏭️ 리프레시 토큰 없음, 건너뜀: ${account.provider} - ${account.providerUid}`);
+      return;
+    }
+
+    let plainRefresh: string | null;
+    try {
+      plainRefresh = decryptOAuthToken(account.refreshToken);
+    } catch (e) {
+      if (e instanceof OauthEncryptionConfigError) {
+        console.error('❌ OAUTH_TOKEN_ENCRYPTION_KEY 미설정 또는 형식 오류 — 갱신 중단');
+        return;
+      }
+      throw e;
+    }
+    if (!plainRefresh) {
+      console.warn(
+        `⏭️ 저장된 리프레시 토큰을 복호화할 수 없습니다(구버전 해시 등). 재로그인 필요: ${account.provider} - ${account.providerUid}`,
+      );
+      return;
+    }
 
     let tokenResponse: TokenRefreshResponse;
 
     switch (account.provider) {
       case 'KAKAO':
-        tokenResponse = await refreshKakaoToken(account.refreshToken);
+        tokenResponse = await refreshKakaoToken(plainRefresh);
         break;
       case 'GOOGLE':
-        tokenResponse = await refreshGoogleToken(account.refreshToken);
+        tokenResponse = await refreshGoogleToken(plainRefresh);
         break;
       case 'NAVER':
-        tokenResponse = await refreshNaverToken(account.refreshToken);
+        tokenResponse = await refreshNaverToken(plainRefresh);
         break;
       default:
         throw new Error(`지원하지 않는 제공자: ${account.provider}`);
     }
 
-    // 새 토큰 암호화
-    const bcrypt = await import('bcryptjs');
-    const newAccessToken = await bcrypt.hash(tokenResponse.access_token, 10);
+    const newAccessToken = encryptOAuthToken(tokenResponse.access_token);
     const newRefreshToken = tokenResponse.refresh_token
-      ? await bcrypt.hash(tokenResponse.refresh_token, 10)
-      : account.refreshToken;
+      ? encryptOAuthToken(tokenResponse.refresh_token)
+      : encryptOAuthToken(plainRefresh);
 
-    // 만료 시간 계산
-    const expiresAt = new Date(Date.now() + (tokenResponse.expires_in * 1000));
+    const expiresAt = new Date(Date.now() + tokenResponse.expires_in * 1000);
 
-    // DB 업데이트
     await prisma.socialAccount.update({
       where: { id: account.id },
       data: {
@@ -98,10 +155,7 @@ async function refreshProviderToken(account: any): Promise<void> {
 
     console.log(`✅ 토큰 갱신 완료: ${account.provider} - ${account.providerUid}`);
   } catch (error) {
-    console.error(`❌ 토큰 갱신 실패: ${account.provider} - ${account.providerUid}`, error);
-
-    // 갱신 실패 시 계정 비활성화 또는 알림 처리
-    // 여기서는 로그만 남기고 계속 진행
+    logTokenRefreshFailure(account.provider, account.providerUid, error);
   }
 }
 
@@ -137,7 +191,7 @@ export function startTokenRefreshWorker(): void {
 
       console.log('✅ 소셜 토큰 갱신 작업 완료');
     } catch (error) {
-      console.error('❌ 소셜 토큰 갱신 작업 오류:', error);
+      console.error('❌ 소셜 토큰 갱신 작업 오류:', error instanceof Error ? error.message : error);
     }
   });
 
@@ -166,7 +220,7 @@ export function startTokenRefreshWorker(): void {
 
       console.log(`🧹 정리 완료: 블랙리스트 ${deletedBlacklist.count}개, 리프레시 토큰 ${deletedRefreshTokens.count}개`);
     } catch (error) {
-      console.error('❌ 토큰 정리 오류:', error);
+      console.error('❌ 토큰 정리 오류:', error instanceof Error ? error.message : error);
     }
   });
 }

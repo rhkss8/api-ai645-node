@@ -13,6 +13,7 @@ router.use(requireAdmin);
  * @swagger
  * /api/admin/users:
  *   get:
+ *     operationId: getAdminUsers
  *     summary: 전체 사용자 목록 조회 (관리자 전용)
  *     tags: [Admin]
  *     security:
@@ -66,8 +67,6 @@ router.use(requireAdmin);
  *                           subscriptionEndDate:
  *                             type: string
  *                             format: date-time
- *                           recommendationCount:
- *                             type: integer
  *                           paymentCount:
  *                             type: integer
  *                     pagination:
@@ -96,6 +95,7 @@ router.get('/users', adminController.getAllUsers);
  * @swagger
  * /api/admin/users/{userId}/role:
  *   put:
+ *     operationId: updateAdminUserRole
  *     summary: 사용자 역할 변경 (관리자 전용)
  *     tags: [Admin]
  *     security:
@@ -138,6 +138,7 @@ router.put('/users/:userId/role', adminController.updateUserRole);
  * @swagger
  * /api/admin/stats/api:
  *   get:
+ *     operationId: getAdminApiStats
  *     summary: API 사용 통계 조회 (관리자 전용)
  *     tags: [Admin]
  *     security:
@@ -227,6 +228,7 @@ router.get('/stats/api', adminController.getApiStats);
  * @swagger
  * /api/admin/status:
  *   get:
+ *     operationId: getAdminSystemStatus
  *     summary: 시스템 상태 조회 (관리자 전용)
  *     tags: [Admin]
  *     security:
@@ -250,13 +252,6 @@ router.get('/stats/api', adminController.getApiStats);
  *                         total:
  *                           type: integer
  *                         activeSubscriptions:
- *                           type: integer
- *                     recommendations:
- *                       type: object
- *                       properties:
- *                         total:
- *                           type: integer
- *                         today:
  *                           type: integer
  *                     payments:
  *                       type: object

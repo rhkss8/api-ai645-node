@@ -112,6 +112,7 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 NAVER_CLIENT_ID=your_naver_client_id
 NAVER_CLIENT_SECRET=your_naver_client_secret
 OAUTH_REDIRECT_URI=https://your-api.com/auth/callback
+OAUTH_TOKEN_ENCRYPTION_KEY=replace_with_32_byte_base64_key
 ```
 
 ### 2. JWT 키 생성

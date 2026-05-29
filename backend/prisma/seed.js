@@ -46,96 +46,6 @@ async function main() {
       console.log('⚠️ 계속 진행합니다...');
     }
 
-    // 2. 초기 당첨번호 데이터 생성
-    console.log('🎯 초기 당첨번호 데이터 생성 중...');
-
-    // 최근 10회차의 샘플 당첨번호 생성
-    const sampleWinningNumbers = [
-      {
-        round: 1182,
-        numbers: [1, 13, 21, 25, 28, 31],
-        bonusNumber: 22,
-        drawDate: new Date('2025-07-26'),
-        firstWinningAmount: BigInt(2124785424)
-      },
-      {
-        round: 1181,
-        numbers: [8, 10, 14, 20, 33, 41],
-        bonusNumber: 28,
-        drawDate: new Date('2025-07-19'),
-        firstWinningAmount: BigInt(1593643500)
-      },
-      {
-        round: 1180,
-        numbers: [3, 7, 11, 15, 29, 35],
-        bonusNumber: 42,
-        drawDate: new Date('2025-07-12'),
-        firstWinningAmount: BigInt(1850000000)
-      },
-      {
-        round: 1179,
-        numbers: [2, 9, 16, 24, 30, 38],
-        bonusNumber: 45,
-        drawDate: new Date('2025-07-05'),
-        firstWinningAmount: BigInt(1950000000)
-      },
-      {
-        round: 1178,
-        numbers: [4, 12, 18, 26, 32, 40],
-        bonusNumber: 44,
-        drawDate: new Date('2025-06-28'),
-        firstWinningAmount: BigInt(2100000000)
-      }
-    ];
-
-    for (const winningData of sampleWinningNumbers) {
-      const existingWinning = await prisma.winningNumbers.findUnique({
-        where: { round: winningData.round }
-      });
-
-      if (!existingWinning) {
-        await prisma.winningNumbers.create({
-          data: {
-            round: winningData.round,
-            numbers: winningData.numbers,
-            bonusNumber: winningData.bonusNumber,
-            drawDate: winningData.drawDate,
-            firstWinningAmount: winningData.firstWinningAmount
-          }
-        });
-        console.log(`✅ 회차 ${winningData.round} 당첨번호 생성 완료`);
-      } else {
-        console.log(`⚠️ 회차 ${winningData.round} 당첨번호가 이미 존재합니다`);
-      }
-    }
-
-    // 3. 샘플 추천 파라미터 생성 (관리자 계정이 있는 경우에만)
-    if (existingUser) {
-      console.log('📊 샘플 추천 파라미터 생성 중...');
-      
-      try {
-        const sampleParams = await prisma.recommendationParams.create({
-          data: {
-            userId: existingUser.id,
-            type: 'FREE',
-            conditions: {
-              includeNumbers: [1, 7, 15, 23, 35, 42],
-              excludeNumbers: [4, 8, 12, 16, 20, 24],
-              gameCount: 5
-            },
-            status: 'PENDING',
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24시간 후
-          }
-        });
-        console.log('✅ 샘플 추천 파라미터 생성 완료');
-      } catch (error) {
-        console.error('⚠️ 샘플 추천 파라미터 생성 실패:', error.message);
-        console.log('   계속 진행합니다...');
-      }
-    } else {
-      console.log('⚠️ 관리자 계정이 없어 샘플 추천 파라미터를 생성하지 않습니다.');
-    }
-
     // 최종 확인
     const finalCheck = await prisma.user.findUnique({
       where: { email: '44tune@44tune.co.kr' }
@@ -148,10 +58,6 @@ async function main() {
       console.log('✅ 기본 이메일 계정: 44tune@44tune.co.kr (생성됨)');
     } else {
       console.log('⚠️ 기본 이메일 계정: 44tune@44tune.co.kr (생성 실패)');
-    }
-    console.log('- 샘플 당첨번호: 5회차');
-    if (existingUser) {
-      console.log('- 샘플 추천 파라미터: 1개');
     }
     console.log('');
     if (finalCheck) {

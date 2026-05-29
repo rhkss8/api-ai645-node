@@ -10,6 +10,7 @@ interface ChatFortunePromptParams {
   userInput: string;
   previousContext?: string;  // 이전 대화 맥락
   userData?: Record<string, any>; // 구조화된 사용자 데이터
+  hasImageInput?: boolean;
 }
 
 export function generateChatFortunePrompt(params: ChatFortunePromptParams): string {
@@ -17,5 +18,6 @@ export function generateChatFortunePrompt(params: ChatFortunePromptParams): stri
     userInput: params.userInput,
     userData: params.userData,
     previousContext: params.previousContext,
+    hasImageInput: params.hasImageInput,
   });
 }

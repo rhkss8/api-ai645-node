@@ -3,6 +3,8 @@ import { BoardPostUseCase } from '../usecases/BoardPostUseCase';
 import { asyncHandler } from '../middlewares/errorHandler';
 import { BoardCategory } from '@prisma/client';
 
+const SUPPORTED_BOARD_CATEGORIES: BoardCategory[] = [BoardCategory.NOTICE];
+
 export class BoardController {
   constructor(private boardPostUseCase: BoardPostUseCase) {}
 
@@ -16,11 +18,11 @@ export class BoardController {
       const { title, content, authorName, isImportant } = req.body;
 
       // 카테고리 검증
-      if (!Object.values(BoardCategory).includes(category as BoardCategory)) {
+      if (!SUPPORTED_BOARD_CATEGORIES.includes(category as BoardCategory)) {
         res.status(400).json({
           success: false,
           error: '유효하지 않은 카테고리입니다.',
-          message: '카테고리는 NOTICE, SUGGESTION, PARTNERSHIP 중 하나여야 합니다.',
+          message: '현재 게시판은 NOTICE 카테고리만 지원합니다. 건의사항과 제휴문의는 카카오톡 채널을 이용해주세요.',
         });
         return;
       }
@@ -108,11 +110,11 @@ export class BoardController {
       const userId = (req as any).user?.sub;
 
       // 카테고리 검증
-      if (!Object.values(BoardCategory).includes(category as BoardCategory)) {
+      if (!SUPPORTED_BOARD_CATEGORIES.includes(category as BoardCategory)) {
         res.status(400).json({
           success: false,
           error: '유효하지 않은 카테고리입니다.',
-          message: '카테고리는 NOTICE, SUGGESTION, PARTNERSHIP 중 하나여야 합니다.',
+          message: '현재 게시판은 NOTICE 카테고리만 지원합니다. 건의사항과 제휴문의는 카카오톡 채널을 이용해주세요.',
         });
         return;
       }

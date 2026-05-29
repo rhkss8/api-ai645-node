@@ -22,6 +22,7 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
         remainingTime: session.remainingTime,
         isActive: session.isActive,
         expiresAt: session.expiresAt,
+        chatEntitlementExpiresAt: session.chatEntitlementExpiresAt ?? null,
       },
     });
 
@@ -57,6 +58,31 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
         remainingTime: session.remainingTime,
         isActive: session.isActive,
         expiresAt: session.expiresAt,
+        chatEntitlementExpiresAt: session.chatEntitlementExpiresAt ?? null,
+      },
+    });
+
+    return this.toEntity(updated);
+  }
+
+  async updateSessionData(
+    id: string,
+    patch: {
+      userInput?: string | null;
+      userData?: Record<string, any> | null;
+    },
+  ): Promise<FortuneSession> {
+    const updated = await this.prisma.fortuneSession.update({
+      where: { id },
+      data: {
+        ...(patch.userInput !== undefined ? { userInput: patch.userInput } : {}),
+        ...(patch.userData !== undefined
+          ? {
+              userData: patch.userData
+                ? JSON.parse(JSON.stringify(patch.userData))
+                : null,
+            }
+          : {}),
       },
     });
 
@@ -70,6 +96,7 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
         isActive: false,
         remainingTime: 0,
         expiresAt: new Date(),
+        chatEntitlementExpiresAt: null,
       },
     });
   }
@@ -77,15 +104,24 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
   async findActiveByUserIdAndCategory(
     userId: string,
     category: FortuneCategory,
+    mode?: SessionMode,
   ): Promise<FortuneSession | null> {
+    const now = new Date();
     const found = await this.prisma.fortuneSession.findFirst({
       where: {
         userId,
         category: category as PrismaFortuneCategory,
+        ...(mode ? { mode: mode as PrismaSessionMode } : {}),
         isActive: true,
-        expiresAt: {
-          gt: new Date(),
-        },
+        OR: [
+          {
+            chatEntitlementExpiresAt: { not: null, gt: now },
+          },
+          {
+            chatEntitlementExpiresAt: null,
+            expiresAt: { gt: now },
+          },
+        ],
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -98,9 +134,20 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
     const sessions = await this.prisma.fortuneSession.findMany({
       where: {
         isActive: true,
-        expiresAt: {
-          lte: now,
-        },
+        OR: [
+          {
+            AND: [
+              { chatEntitlementExpiresAt: { not: null } },
+              { chatEntitlementExpiresAt: { lte: now } },
+            ],
+          },
+          {
+            AND: [
+              { chatEntitlementExpiresAt: null },
+              { expiresAt: { lte: now } },
+            ],
+          },
+        ],
       },
     });
 
@@ -120,6 +167,7 @@ export class PrismaFortuneSessionRepository implements IFortuneSessionRepository
       prismaSession.formType as any,
       prismaSession.userInput,
       prismaSession.userData as Record<string, any> | undefined,
+      prismaSession.chatEntitlementExpiresAt ?? null,
     );
   }
 }

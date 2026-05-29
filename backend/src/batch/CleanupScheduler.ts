@@ -20,17 +20,18 @@ export class CleanupScheduler {
   }
 
   /**
-   * 만료된 RecommendationParams 정리 (간단 버전)
+   * 레거시 도메인 잔재 정리 placeholder
+   * 실제 정리 로직은 recommendation schema migration 시점에 확정한다.
    */
-  async cleanupExpiredParams(): Promise<void> {
+  async cleanupLegacyRecommendationArtifacts(): Promise<void> {
     try {
-      console.log('🧹 만료된 추천 파라미터 정리 시작...');
+      console.log('🧹 레거시 도메인 잔재 정리 시작...');
       
       // 일단 간단하게 로그만 출력
-      console.log('✅ 만료된 파라미터 정리 완료 (개발 중)');
+      console.log('✅ 레거시 도메인 잔재 정리 완료 (개발 중)');
       
     } catch (error) {
-      console.error('❌ 만료된 파라미터 정리 실패:', error);
+      console.error('❌ 레거시 도메인 잔재 정리 실패:', error);
     }
   }
 
@@ -97,10 +98,10 @@ export class CleanupScheduler {
     if (isProduction) {
       // 프로덕션 환경: 실제 운영 스케줄
       
-      // 매시간 정각 - 만료된 파라미터 정리
+      // 매시간 정각 - 레거시 도메인 잔재 정리
       cron.schedule('0 * * * *', async () => {
-        console.log('⏰ 만료된 파라미터 정리 실행');
-        await this.cleanupExpiredParams();
+        console.log('⏰ 레거시 도메인 잔재 정리 실행');
+        await this.cleanupLegacyRecommendationArtifacts();
       });
 
       // 매일 새벽 2시 - 결제 실패한 주문 정리
@@ -122,7 +123,7 @@ export class CleanupScheduler {
       });
 
       console.log('✅ 정리 스케줄러 등록 완료 (프로덕션):');
-      console.log('  - 매시간: 만료된 파라미터 정리');
+      console.log('  - 매시간: 레거시 도메인 잔재 정리');
       console.log('  - 매시간 30분: 만료된 운세 세션 정리');
       console.log('  - 매일 02:00: 결제 실패한 주문 정리');
       console.log('  - 매일 03:00: 사용자 활동 통계 수집');
@@ -131,7 +132,7 @@ export class CleanupScheduler {
       // 개발 환경: 테스트용 빈번한 실행
       cron.schedule('*/5 * * * *', async () => {
         console.log('⏰ 정리 작업 실행 (개발용 - 5분마다)');
-        await this.cleanupExpiredParams();
+        await this.cleanupLegacyRecommendationArtifacts();
         await this.cleanupFailedOrders();
         await this.cleanupExpiredSessions();
         await this.collectUserActivityStats();
@@ -146,7 +147,7 @@ export class CleanupScheduler {
    */
   async manualCleanup(): Promise<void> {
     console.log('🧹 수동 정리 작업 실행');
-    await this.cleanupExpiredParams();
+    await this.cleanupLegacyRecommendationArtifacts();
     await this.cleanupFailedOrders();
     await this.cleanupExpiredSessions();
     await this.collectUserActivityStats();

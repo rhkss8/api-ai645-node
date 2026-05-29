@@ -1,21 +1,26 @@
-# 🔮 운세 서비스 백엔드 (TypeScript + Clean Architecture)
+# 🔮 포포춘 백엔드 (TypeScript + Clean Architecture)
 
-Node.js(TypeScript) + Express + PostgreSQL + OpenAI GPT 기반의 운세(포춘) 서비스 백엔드입니다.
+Node.js(TypeScript) + Express + PostgreSQL 기반의 포포춘 운세 상담/문서 리포트 서비스 백엔드입니다.
 
 ## ✨ 주요 기능
 
-향후 운세 도메인 기능(API 설계/문서)은 별도 섹션으로 제공될 예정입니다.
+현재 핵심은 운세 결제, 세션 생성, 결과 조회, 채팅형 상담, 게시판/설정 흐름입니다.
+
+### 🔮 포포춘 운세 API (`/api/v1/fortune/*`)
+- **문서형 리포트**: 결제 준비, 세션 생성, 결과 조회, 재생성
+- **채팅형 상담**: 무료/유료 진입, 계정 귀속 세션, 메시지 전송
+- **결제/구매내역**: 결제 상태 조회, 구매내역/상세 조회, 취소 처리
+- **결과 연결**: `resultToken`, `PaymentDetail.documentId`, `Order.metadata` 기반 결과 접근
 
 ### 👑 관리자 API (`/api/admin/*`)
 - **사용자 관리**: 전체 사용자 목록 조회, 역할 변경
 - **통계 조회**: API 사용량, 시스템 상태, 비용 분석
 - **권한 제어**: 관리자 전용 기능 접근 제한
 
-### 📋 게시판 API (`/api/board/*`)
-- **공지사항**: 누구나 읽기 가능, 관리자만 작성/수정/삭제
-- **건의게시판**: 로그인한 사용자만 읽기/작성, 작성자만 수정/삭제
-- **제휴문의**: 관리자만 읽기/수정/삭제, 익명 작성 가능
-- **보안**: XSS, SQL Injection 방어, 입력값 검증 및 정제
+### 📋 지원/공지 API
+- **공지사항 (`/api/board/*`)**: 공지사항 목록/상세 조회, 관리자 작성/수정/삭제
+- **FAQ (`/api/v1/support/faqs`)**: 결제/문서/채팅/계정/서비스 FAQ 제공
+- **문의 정책**: 건의사항/제휴문의는 프론트에서 카카오 채널로 연결
 
 ### 🏗️ Clean Architecture 구조
 - **Entities**: 비즈니스 로직 핵심 객체
@@ -36,9 +41,8 @@ Node.js(TypeScript) + Express + PostgreSQL + OpenAI GPT 기반의 운세(포춘)
 git clone <repository-url>
 cd api-ai645-node
 
-# 환경변수 설정 (OpenAI API 키 필요)
-cp backend/.env
-# backend/.env 파일에서 OPENAI_API_KEY 설정
+# 환경변수 파일 생성
+# backend/.env 파일을 직접 만들고 OPENAI_API_KEY / GEMINI_API_KEY / JWT_SECRET 등을 설정
 ```
 
 ### 2. 🐳 Docker로 실행 (권장)
@@ -125,53 +129,32 @@ docker compose up -d
 
 ## 📁 프로젝트 구조
 
-```
+```text
 api-ai645-node/
-├── docker-compose.yml              # 개발환경 Docker 설정
-├── docker-compose.prod.yml         # 프로덕션 Docker 설정
-├── .dockerignore                   # Docker 제외 파일
-├── scripts/dev.sh                  # 개발 편의 스크립트
-├── examples/api-examples.md        # API 사용 예제
-└── backend/                        # TypeScript 백엔드
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── scripts/dev.sh
+└── backend/
     ├── src/
-    │   ├── entities/               # 도메인 엔티티
-    │   │   ├── RecommendationHistory.ts
-    │   │   ├── RecommendationReview.ts
-    │   │   └── WinningNumbers.ts
-    │   ├── repositories/           # 데이터 액세스 인터페이스
-    │   │   ├── IRecommendationHistoryRepository.ts
-    │   │   ├── IRecommendationReviewRepository.ts
-    │   │   ├── IWinningNumbersRepository.ts
-    │   │   └── IGPTService.ts
-    │   ├── usecases/              # 비즈니스 로직 (구현 예정)
-    │   ├── controllers/           # API 컨트롤러 (구현 예정)
-    │   ├── routes/               # API 라우트 (구현 예정)
-    │   ├── prompts/              # GPT 프롬프트 템플릿
-    │   │   ├── freeRecommendationPrompt.ts
-    │   │   ├── premiumRecommendationPrompt.ts
-    │   │   ├── imageExtractionPrompt.ts
-    │   │   └── reviewPrompt.ts
-    │   ├── config/               # 설정 파일
-    │   │   ├── env.ts
-    │   │   ├── database.ts
-    │   │   └── test-setup.ts
-    │   ├── types/                # TypeScript 타입 정의
-    │   │   └── common.ts
-    │   └── index.ts              # 애플리케이션 진입점
+    │   ├── entities/
+    │   ├── usecases/
+    │   ├── controllers/
+    │   ├── routes/
+    │   ├── services/
+    │   ├── prompts/
+    │   ├── repositories/
+    │   ├── config/
+    │   ├── utils/
+    │   └── index.ts
     ├── prisma/
-    │   └── schema.prisma         # 데이터베이스 스키마
-    ├── Dockerfile                # 개발용 Dockerfile
-    ├── Dockerfile.prod           # 프로덕션용 Dockerfile
-    ├── package.json
-    ├── tsconfig.json
-    ├── jest.config.js
-    ├── .eslintrc.js
-    └── .prettierrc
+    ├── Dockerfile
+    ├── Dockerfile.prod
+    └── package.json
 ```
 
 ## 🎯 API 사용 예제
 
-운세 도메인 API 예시는 전환 작업 후 제공됩니다.
+상세 운세 API 예시는 `/api-docs` Swagger 문서를 기준으로 확인합니다.
 
 ### 관리자 API (관리자 권한 필요)
 ```bash
@@ -194,56 +177,29 @@ curl -X GET http://localhost:3350/api/admin/status \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 
-### 게시판 API
+### 공지/지원 API
 ```bash
-# 공지사항 목록 조회 (인증 없이)
+# 공지사항 목록 조회
 curl -X GET http://localhost:3350/api/board/NOTICE
 
-# 건의게시판 목록 조회 (인증 필요)
-curl -X GET http://localhost:3350/api/board/SUGGESTION \
-  -H "Authorization: Bearer YOUR_TOKEN"
-
-# 게시글 생성
-curl -X POST http://localhost:3350/api/board/SUGGESTION \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "게시글 제목",
-    "content": "게시글 내용",
-    "authorName": "작성자",
-    "isImportant": false
-  }'
-
-# 제휴문의 생성
-curl -X POST http://localhost:3350/api/board/PARTNERSHIP \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "제휴 문의",
-    "content": "제휴하고 싶습니다.",
-    "authorName": "제휴업체명",
-    "isImportant": false
-  }'
+# FAQ 목록 조회
+curl -X GET http://localhost:3350/api/v1/support/faqs
 
 # 게시글 조회 (단일)
 curl -X GET http://localhost:3350/api/board/post/POST_ID
 
-# 게시글 수정
+# 공지사항 수정 (관리자)
 curl -X PUT http://localhost:3350/api/board/post/POST_ID \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "수정된 제목",
     "content": "수정된 내용"
   }'
 
-# 게시글 삭제
+# 공지사항 삭제 (관리자)
 curl -X DELETE http://localhost:3350/api/board/post/POST_ID \
-  -H "Authorization: Bearer YOUR_TOKEN"
-
-# 내가 작성한 게시글 목록
-curl -X GET http://localhost:3350/api/board/my \
-  -H "Authorization: Bearer YOUR_TOKEN"
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 
 ## 🗄️ 데이터베이스 구조
@@ -272,14 +228,11 @@ curl -X GET http://localhost:3350/api/board/my \
 | 카테고리     | 설명                         | 읽기 권한 | 작성 권한 | 수정/삭제 권한 |
 |--------------|------------------------------|-----------|-----------|----------------|
 | NOTICE       | 공지사항                     | 누구나    | 관리자    | 관리자         |
-| SUGGESTION   | 건의게시판                   | 작성자/관리자 | 로그인    | 작성자/관리자  |
-| PARTNERSHIP  | 제휴문의                     | 작성자/관리자 | 로그인    | 작성자/관리자  |
 
 ### 🔒 보안 특징
-- **건의게시판**: 로그인하지 않은 사용자는 목록/상세 조회 불가, 본인 게시글만 조회
-- **제휴문의**: 로그인하지 않은 사용자는 목록/상세 조회 불가, 본인 게시글만 조회
-- **공지사항**: 모든 사용자가 자유롭게 조회 가능
-- 모든 권한 검증은 Repository 레벨에서 처리
+- 공지사항은 모든 사용자가 자유롭게 조회 가능
+- 공지 작성/수정/삭제는 관리자만 가능
+- 문의/제휴는 프론트에서 카카오 채널로 유도
 
 ### 5. BoardPost (게시글)
 | 필드명        | 타입          | 설명                         |
@@ -507,9 +460,9 @@ docker system prune -a --volumes
 
 ### 역할 기반 접근 제어 (RBAC)
 - **USER**: 일반 사용자 (기본값)
-  - 무료/프리미엄 추천 API 사용
-  - 개인 추천 내역 조회
-  - 결제 및 구독 관리
+  - 운세 결과 조회 및 채팅 이용
+  - 개인 구매내역 및 계정 설정 관리
+  - 결제 및 상담 이용권 관리
 - **ADMIN**: 관리자
   - 모든 USER 권한
   - 전체 사용자 목록 조회

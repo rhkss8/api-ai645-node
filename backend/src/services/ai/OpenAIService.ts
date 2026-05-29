@@ -6,6 +6,7 @@ import { IAIService, AIGenerateChatParams, AIGenerateDocumentParams } from '../.
 import { ChatResponse, DocumentResponse } from '../../types/fortune';
 import { generateChatFortunePrompt } from '../../prompts/chatFortunePrompt';
 import { generateDocumentFortunePrompt } from '../../prompts/documentFortunePrompt';
+import { normalizeChatResponseCopy, normalizeDocumentResponseCopy } from '../../utils/normalizeFortuneCopy';
 
 export class OpenAIService implements IAIService {
   private openai: OpenAI;
@@ -28,6 +29,7 @@ export class OpenAIService implements IAIService {
         userInput: params.userInput,
         previousContext: params.previousContext,
         userData: params.userData,
+        hasImageInput: Boolean(params.image),
       });
 
       const completion = await this.openai.chat.completions.create({
@@ -35,11 +37,21 @@ export class OpenAIService implements IAIService {
         messages: [
           {
             role: 'system',
-            content: `당신은 전문 운세 상담사입니다. 사용자의 질문에 대해 친근하고 상세하게 답변하며, 반드시 JSON 형식으로만 응답해주세요.`,
+            content: `당신은 전문 운세 상담사입니다. 응답은 반드시 JSON만 출력하며, 허용되는 키는 "message"(한 덩어리 이야기)와 "nextQuestions"(배열) 두 개뿐입니다. summary, points, tips, disclaimer 등 다른 키는 사용하지 마세요.`,
           },
           {
             role: 'user',
-            content: prompt,
+            content: params.image
+              ? [
+                  { type: 'text', text: prompt },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${params.image.mimeType};base64,${params.image.base64Data}`,
+                    },
+                  },
+                ]
+              : prompt,
           },
         ],
         temperature: 0.7,
@@ -54,15 +66,42 @@ export class OpenAIService implements IAIService {
 
       const parsed = JSON.parse(response) as ChatResponse;
 
-      // 유효성 검증
-      if (!parsed.summary || !parsed.points || !parsed.tips || !parsed.disclaimer) {
-        throw new Error('GPT 응답 형식이 올바르지 않습니다.');
+      // 유효성 검증 (프롬프트 버전에 따라 스키마가 다를 수 있음)
+      const anyParsed = parsed as any;
+
+      // V2: { message, nextQuestions? }
+      if (anyParsed && typeof anyParsed.message === 'string') {
+        if (!Array.isArray(anyParsed.nextQuestions)) {
+          anyParsed.nextQuestions = [];
+        }
+        return normalizeChatResponseCopy(anyParsed as ChatResponse);
       }
 
-      return parsed;
+      // V1 수신 시 V2로 변환 (프롬프트는 message+nextQuestions만 요구하나, 모델이 구 형식으로 올 경우 한 덩어리로 합침)
+      if (
+        anyParsed &&
+        typeof anyParsed.summary === 'string'
+      ) {
+        const points = Array.isArray(anyParsed.points) ? anyParsed.points : [];
+        const tips = Array.isArray(anyParsed.tips) ? anyParsed.tips : [];
+        const extra = [...points, ...tips]
+          .map((p: string) => (typeof p === 'string' ? p.replace(/^[-*•]\s*/, '') : ''))
+          .filter(Boolean)
+          .join(' ');
+        const oneBlock = extra ? `${anyParsed.summary}\n\n${extra}` : anyParsed.summary;
+        const nextQuestions = Array.isArray(anyParsed.nextQuestions) ? anyParsed.nextQuestions : [];
+        return normalizeChatResponseCopy({ message: oneBlock, nextQuestions } as ChatResponse);
+      }
+
+      throw new Error('GPT 응답 형식이 올바르지 않습니다. message 또는 summary 필드가 필요합니다.');
     } catch (error) {
       console.error('채팅형 운세 응답 생성 중 오류:', error);
-      throw new Error('운세 응답 생성에 실패했습니다.');
+      // 상위 레이어에서 재시도/폴백 판단할 수 있도록 status/cause 보존
+      const wrapped: any = new Error('운세 응답 생성에 실패했습니다.');
+      wrapped.status = (error as any)?.status;
+      wrapped.statusText = (error as any)?.statusText;
+      wrapped.cause = error;
+      throw wrapped;
     }
   }
 
@@ -121,10 +160,23 @@ export class OpenAIService implements IAIService {
         chatPrompt,
       };
 
-      return ensured;
+      return normalizeDocumentResponseCopy(ensured);
     } catch (error) {
       console.error('문서형 운세 리포트 생성 중 오류:', error);
-      throw new Error('운세 리포트 생성에 실패했습니다.');
+      const source = error as {
+        code?: string;
+        status?: number;
+        message?: string;
+      };
+      const wrapped = new Error('운세 리포트 생성에 실패했습니다.') as Error & {
+        code?: string;
+        status?: number;
+        cause?: unknown;
+      };
+      wrapped.code = source.code;
+      wrapped.status = source.status;
+      wrapped.cause = error;
+      throw wrapped;
     }
   }
 
@@ -132,4 +184,3 @@ export class OpenAIService implements IAIService {
     return this.modelName;
   }
 }
-

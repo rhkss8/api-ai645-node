@@ -9,10 +9,18 @@ export interface IFortuneSessionRepository {
   findById(id: string): Promise<FortuneSession | null>;
   findByUserId(userId: string, isActive?: boolean): Promise<FortuneSession[]>;
   update(session: FortuneSession): Promise<FortuneSession>;
+  updateSessionData(
+    id: string,
+    patch: {
+      userInput?: string | null;
+      userData?: Record<string, any> | null;
+    },
+  ): Promise<FortuneSession>;
   closeSession(id: string): Promise<void>;
   findActiveByUserIdAndCategory(
     userId: string,
     category: FortuneCategory,
+    mode?: SessionMode,
   ): Promise<FortuneSession | null>;
   findExpiredActiveSessions(): Promise<FortuneSession[]>;
 }

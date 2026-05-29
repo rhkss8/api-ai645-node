@@ -97,6 +97,23 @@ export class RegenerateDocumentUseCase {
       throw new Error('문서 생성에 실패했습니다.');
     }
 
+    await this.prisma.paymentDetail.update({
+      where: { id: paymentDetail.id },
+      data: { documentId: document.id },
+    });
+
+    const orderMetadata = (payment.order.metadata as any) || {};
+    await this.prisma.order.update({
+      where: { id: payment.order.id },
+      data: {
+        metadata: {
+          ...orderMetadata,
+          documentId: document.id,
+          sessionId: session.id,
+        },
+      },
+    });
+
     // resultToken 생성
     const resultToken = this.resultTokenService.sign({
       sessionId: session.id,
@@ -114,4 +131,3 @@ export class RegenerateDocumentUseCase {
     };
   }
 }
-

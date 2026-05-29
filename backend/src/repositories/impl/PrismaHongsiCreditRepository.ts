@@ -82,7 +82,7 @@ export class PrismaHongsiCreditRepository implements IHongsiCreditRepository {
 
   /**
    * 오늘 사용 가능한 총 시간(초) 반환
-   * 무료 홍시 사용 가능하면 120초(2분), 아니면 0초 + 유료 구매 시간
+   * 무료 홍시 사용 가능하면 300초(5분), 아니면 0초 + 유료 구매 시간
    */
   async getAvailableTimeToday(userId: string): Promise<number> {
     const uid = userId as unknown as string;
@@ -99,9 +99,9 @@ export class PrismaHongsiCreditRepository implements IHongsiCreditRepository {
 
     let availableTime = 0;
 
-    // 무료 홍시 사용 안 했으면 2분(120초) 추가
+    // 무료 홍시 사용 안 했으면 5분(300초) 추가
     if (!credit || !credit.freeUsed) {
-      availableTime += 120;
+      availableTime += 300;
     }
 
     // 유료 구매 시간 추가 (분 -> 초 변환)

@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/rhkss/Desktop/projects/api-ai645-node/.codex/hooks/session-start.sh",
+            "timeout": 5,
+            "statusMessage": "Loading AI645 workspace status"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/rhkss/Desktop/projects/api-ai645-node/.codex/hooks/stop-summary.sh",
+            "timeout": 5,
+            "statusMessage": "Summarizing AI645 workspace changes"
+          }
+        ]
+      }
+    ]
+  }
+}

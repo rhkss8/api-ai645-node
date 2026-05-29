@@ -1,6 +1,6 @@
 {
   "name": "api-ai645-backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "TypeScript Express backend for fortune service (운세 서비스)",
   "main": "dist/index.js",
   "prisma": {
@@ -12,6 +12,7 @@
     "build:with-migration": "prisma generate && prisma db push && tsc",
     "start": "node dist/index.js",
     "start:prod": "NODE_ENV=production node dist/index.js",
+    "predev": "prisma generate",
     "dev": "ts-node-dev -r tsconfig-paths/register --respawn --transpile-only src/index.ts",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -19,6 +20,7 @@
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
+    "openapi:export": "node scripts/export-openapi.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts"

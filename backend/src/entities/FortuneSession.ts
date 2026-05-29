@@ -9,15 +9,18 @@ export class FortuneSession {
     public readonly userId: string,
     public readonly category: FortuneCategory,
     public readonly mode: SessionMode,
-    public readonly remainingTime: number,  // 남은 시간 (초)
+    public readonly remainingTime: number, // 남은 시간 (초) — 분 단위 상품. 일 단위 이용권은 만료까지 초로 둘 수 있음
     public readonly isActive: boolean,
     public readonly createdAt: Date,
     public readonly expiresAt: Date,
-    public readonly formType?: FormType,     // ASK, DAILY, TRADITIONAL
-    public readonly userInput?: string,      // 세션 생성 시 사용자 입력
-    public readonly userData?: Record<string, any>, // 구조화된 운세 데이터
+    public readonly formType?: FormType,
+    public readonly userInput?: string,
+    public readonly userData?: Record<string, any>,
+    /** 설정 시: 달력 기준 채팅 이용권 만료. 이 모드에서는 턴당 consumeTime으로 세션을 끊지 않음 */
+    public readonly chatEntitlementExpiresAt?: Date | null,
   ) {}
 
+  /** 분 단위 채팅 상품 (기존) */
   static create(
     id: string,
     userId: string,
@@ -43,13 +46,73 @@ export class FortuneSession {
       formType,
       userInput,
       userData,
+      null,
     );
+  }
+
+  /**
+   * 일 단위 채팅 이용권 (1일/7일/30일 등). 만료는 chatEntitlementExpiresAt 기준.
+   */
+  static createWithChatEntitlement(
+    id: string,
+    userId: string,
+    category: FortuneCategory,
+    mode: SessionMode,
+    entitlementUntil: Date,
+    formType?: FormType,
+    userInput?: string,
+    userData?: Record<string, any>,
+  ): FortuneSession {
+    const now = new Date();
+    const remainingSeconds = Math.max(
+      0,
+      Math.floor((entitlementUntil.getTime() - now.getTime()) / 1000),
+    );
+    return new FortuneSession(
+      id,
+      userId,
+      category,
+      mode,
+      remainingSeconds,
+      true,
+      now,
+      entitlementUntil,
+      formType,
+      userInput,
+      userData,
+      entitlementUntil,
+    );
+  }
+
+  isChatEntitlementSession(): boolean {
+    return this.chatEntitlementExpiresAt != null;
   }
 
   /**
    * 시간 추가 (결제 후 누적)
    */
   addTime(seconds: number): FortuneSession {
+    if (this.isChatEntitlementSession()) {
+      const end = new Date(this.chatEntitlementExpiresAt!.getTime() + seconds * 1000);
+      const remainingSeconds = Math.max(
+        0,
+        Math.floor((end.getTime() - Date.now()) / 1000),
+      );
+      return new FortuneSession(
+        this.id,
+        this.userId,
+        this.category,
+        this.mode,
+        remainingSeconds,
+        this.isActive,
+        this.createdAt,
+        end,
+        this.formType,
+        this.userInput,
+        this.userData,
+        end,
+      );
+    }
     const newRemainingTime = this.remainingTime + seconds;
     const newExpiresAt = new Date(Date.now() + newRemainingTime * 1000);
 
@@ -65,16 +128,20 @@ export class FortuneSession {
       this.formType,
       this.userInput,
       this.userData,
+      null,
     );
   }
 
   /**
-   * 시간 소비
+   * 시간 소비 (분 단위 상품만 — 이용권 세션에서는 호출하지 말 것)
    */
   consumeTime(seconds: number): FortuneSession {
+    if (this.isChatEntitlementSession()) {
+      return this;
+    }
     const newRemainingTime = Math.max(0, this.remainingTime - seconds);
     const isActive = newRemainingTime > 0;
-    const newExpiresAt = isActive 
+    const newExpiresAt = isActive
       ? new Date(Date.now() + newRemainingTime * 1000)
       : new Date();
 
@@ -90,6 +157,7 @@ export class FortuneSession {
       this.formType,
       this.userInput,
       this.userData,
+      null,
     );
   }
 
@@ -109,6 +177,7 @@ export class FortuneSession {
       this.formType,
       this.userInput,
       this.userData,
+      this.chatEntitlementExpiresAt ?? null,
     );
   }
 
@@ -116,6 +185,12 @@ export class FortuneSession {
    * 결제 연장 필요 여부 (30초 이하)
    */
   needsPaymentPrompt(): boolean {
+    if (this.chatEntitlementExpiresAt) {
+      const sec = Math.floor(
+        (this.chatEntitlementExpiresAt.getTime() - Date.now()) / 1000,
+      );
+      return sec > 0 && sec <= 30 && this.isActive;
+    }
     return this.remainingTime <= 30 && this.isActive;
   }
 

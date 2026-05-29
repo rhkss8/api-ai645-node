@@ -10,6 +10,11 @@ export interface AIGenerateChatParams {
   userInput: string;
   previousContext?: string;
   userData?: Record<string, any>; // 구조화된 사용자 데이터 (이름, 생년월일, 성별 등)
+  image?: {
+    mimeType: string;
+    base64Data: string;
+    filename?: string;
+  };
 }
 
 export interface AIGenerateDocumentParams {
@@ -38,4 +43,3 @@ export interface IAIService {
    */
   getModelName(): string;
 }
-

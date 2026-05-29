@@ -4,6 +4,7 @@
 import { DocumentResult } from '../entities/DocumentResult';
 import { IDocumentResultRepository } from '../repositories/IDocumentResultRepository';
 import { FortuneGPTService } from '../services/FortuneGPTService';
+import { DocumentChatBridgeBuilder } from '../services/DocumentChatBridgeBuilder';
 import { IdGenerator } from '../utils/idGenerator';
 import { DocumentResponse, FortuneCategory, getDocumentExpirationDays } from '../types/fortune';
 import { AIServiceFactory, AIServiceType } from '../services/ai/AIServiceFactory';
@@ -12,7 +13,37 @@ export class DocumentFortuneUseCase {
   constructor(
     private readonly documentRepository: IDocumentResultRepository,
     private readonly gptService: FortuneGPTService,
+    private readonly chatBridgeBuilder: DocumentChatBridgeBuilder,
   ) {}
+
+  private wrapGenerationError(error: unknown): Error {
+    const source = error as {
+      code?: string;
+      status?: number;
+      message?: string;
+      cause?: {
+        code?: string;
+        status?: number;
+        message?: string;
+      };
+    };
+
+    const wrapped = new Error(
+      `운세 리포트 생성에 실패했습니다. ${
+        source?.message || source?.cause?.message || '알 수 없는 오류가 발생했습니다.'
+      }`,
+    ) as Error & {
+      code?: string;
+      status?: number;
+      cause?: unknown;
+    };
+
+    wrapped.code = source?.code || source?.cause?.code;
+    wrapped.status = source?.status || source?.cause?.status;
+    wrapped.cause = error;
+
+    return wrapped;
+  }
 
   async execute(
     userId: string,
@@ -59,21 +90,23 @@ export class DocumentFortuneUseCase {
           console.error('[문서 생성] OpenAI도 실패:', openaiError);
           lastError = openaiError;
           // 두 서비스 모두 실패한 경우 에러를 다시 throw
-          throw new Error(
-            `운세 리포트 생성에 실패했습니다. ${lastError?.message || '알 수 없는 오류가 발생했습니다.'}`
-          );
+          throw this.wrapGenerationError(lastError);
         }
       } else {
         // OpenAI API 키가 없으면 원래 에러를 그대로 throw
-        throw new Error(
-          `운세 리포트 생성에 실패했습니다. ${lastError?.message || '알 수 없는 오류가 발생했습니다.'}`
-        );
+        throw this.wrapGenerationError(lastError);
       }
     }
 
     // 문서 저장
     const documentId = IdGenerator.generateDocumentResultId();
     const expirationDays = getDocumentExpirationDays(category); // 카테고리별 유효기간
+    const chatContext = this.chatBridgeBuilder.build({
+      category,
+      userInput,
+      userData,
+      document: documentResponse,
+    });
     const document = DocumentResult.create(
       documentId,
       userId,
@@ -81,6 +114,8 @@ export class DocumentFortuneUseCase {
       documentResponse.title,
       JSON.stringify(documentResponse),
       expirationDays,
+      chatContext,
+      1,
     );
 
     document.validate();
