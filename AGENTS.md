@@ -55,6 +55,34 @@ Avoid long narration unless the user asks for explanation.
 
 ## Harness Policy
 
+Default work standard: **TARS Maintenance**.
+
+For every task, assume `tars maintain` unless the user explicitly asks for new-service planning, deep thinking, or a different mode.
+
+- Start by restating the user's goal and expected behavior briefly.
+- Read relevant code, docs, and git diff/status before editing.
+- Identify the root cause or product reason before changing behavior.
+- Keep the change to the smallest useful vertical slice.
+- Do not expand into unrelated redesigns, broad refactors, or new features.
+- Use `docs/decision-gates.md` and ask the user before external accounts, cost, privacy-sensitive data, destructive commands, deploys, schema/data loss, broad rewrites, commits, pushes, or production-like changes.
+- Run the smallest useful verification before saying work is complete.
+- If verification cannot be run or fails due existing debt, report exactly what was and was not verified.
+- Update `docs/mvp-todo.md`, `docs/decision-log.md`, or `docs/lessons-and-rules.md` only when the work changes the product operating state or captures a repeated lesson.
+
+TARS commands:
+
+```bash
+./tars maintain
+./tars maintain --hard
+./tars think
+./tars status
+./tars doctor
+./tars verify
+./tars done
+```
+
+Use `./tars maintain --hard` for admin, payment, auth, OpenAPI, deployment, data privacy, schema, automation, or production-risk work.
+
 Use sub-agents only when they materially help.
 
 - Small task: Codex handles directly.
