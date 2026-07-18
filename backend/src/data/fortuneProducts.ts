@@ -17,6 +17,7 @@ export const DOCUMENT_PRICES: Record<FortuneCategory, number> = {
   [FortuneCategory.NEW_YEAR]: 3800,
   [FortuneCategory.MONEY]: 3800,
   [FortuneCategory.HAND]: 3800,
+  [FortuneCategory.FACE]: 3800,
   [FortuneCategory.TOJEONG]: 3800,
 
   // ASK (대부분 문서형 없음)
@@ -53,6 +54,7 @@ export const DISCOUNT_RATES: Record<
   [FortuneCategory.NEW_YEAR]: { documentDiscountRate: 50 },
   [FortuneCategory.MONEY]: { documentDiscountRate: 50 },
   [FortuneCategory.HAND]: { documentDiscountRate: 50 },
+  [FortuneCategory.FACE]: { documentDiscountRate: 50 },
   [FortuneCategory.TOJEONG]: { documentDiscountRate: 50 },
   [FortuneCategory.BREAK_UP]: { documentDiscountRate: 0, defaultDiscountRate: 100 },
   [FortuneCategory.CAR_PURCHASE]: { documentDiscountRate: 0, defaultDiscountRate: 100 },
@@ -122,6 +124,7 @@ export const CATEGORY_NAMES: Record<FortuneCategory, string> = {
   [FortuneCategory.NEW_YEAR]: '신년운세',
   [FortuneCategory.MONEY]: '횡재수 & 금전운',
   [FortuneCategory.HAND]: '손금',
+  [FortuneCategory.FACE]: '관상',
   [FortuneCategory.TOJEONG]: '토정비결',
 
   // ASK
@@ -153,6 +156,7 @@ export const DOCUMENT_PRODUCT_NAMES: Record<FortuneCategory, string> = {
   [FortuneCategory.NEW_YEAR]: '신년운세',
   [FortuneCategory.MONEY]: '횡재수 & 금전운',
   [FortuneCategory.HAND]: '손금',
+  [FortuneCategory.FACE]: '관상',
   [FortuneCategory.TOJEONG]: '토정비결',
 
   // ASK (대부분 문서형 없음, 기본값 사용)
@@ -218,6 +222,11 @@ export const INITIAL_CHAT_GUIDES: Record<FortuneCategory, InitialChatGuide | nul
     type: 'STATIC',
     content:
       '손금 운세는 손바닥 사진이 필요해요. 손바닥(양손 가능)을 밝은 곳에서 선명하게 찍어서 이미지를 업로드해 주세요.',
+  },
+  [FortuneCategory.FACE]: {
+    type: 'STATIC',
+    content:
+      '관상 운세는 얼굴 사진이 필요해요. 정면 얼굴이 잘 보이도록 밝은 곳에서 선명하게 찍어서 이미지를 업로드해 주세요.',
   },
   [FortuneCategory.TOJEONG]: null,
 

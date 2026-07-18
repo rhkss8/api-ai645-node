@@ -66,6 +66,20 @@ export const categoryGuidelines: Record<FortuneCategory, {
 - 실천 가이드`,
     requiredInfo: '손금 사진 또는 설명',
   },
+  [FortuneCategory.FACE]: {
+    name: '관상',
+    chatGuidelines: `
+- 얼굴 사진에서 실제로 보이는 인상 요소 중심으로 분석
+- 이마, 눈썹, 눈매, 코, 입, 턱, 얼굴형의 흐름 해석
+- 성향, 대인관계, 일과 재물 흐름을 생활 조언으로 연결
+- 건강 진단, 신원 식별, 민감한 속성 추정 금지`,
+    documentGuidelines: `
+- 얼굴 전체 인상과 두드러진 요소 정리
+- 성향, 관계, 일, 재물 흐름 분석
+- 가까운 선택 흐름과 보완 포인트 제시
+- 외모 평가가 아닌 관상적 인상 중심으로 설명`,
+    requiredInfo: '얼굴 사진 또는 설명',
+  },
   [FortuneCategory.TOJEONG]: {
     name: '토정비결',
     chatGuidelines: `

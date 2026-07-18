@@ -9,6 +9,7 @@ const categoryKeywords: Record<FortuneCategory, string[]> = {
   [FortuneCategory.NEW_YEAR]: ['신년', '신년운세', '새해', '올해운세'],
   [FortuneCategory.MONEY]: ['횡재', '금전', '재물', '돈', '수익'],
   [FortuneCategory.HAND]: ['손금', '손금보기', '손선'],
+  [FortuneCategory.FACE]: ['관상', '얼굴상', '인상', '얼굴운', '얼굴'],
   [FortuneCategory.TOJEONG]: ['토정비결', '토정'],
   
   // ASK

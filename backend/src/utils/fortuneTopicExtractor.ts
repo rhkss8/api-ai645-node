@@ -19,6 +19,7 @@ const categoryToTopicMap: Record<FortuneCategory, string> = {
   [FortuneCategory.NEW_YEAR]: '신년운세',
   [FortuneCategory.MONEY]: '재물운',
   [FortuneCategory.HAND]: '손금',
+  [FortuneCategory.FACE]: '관상',
   [FortuneCategory.TOJEONG]: '토정비결',
   [FortuneCategory.BREAK_UP]: '연애운',
   [FortuneCategory.CAR_PURCHASE]: '차구매',
@@ -168,6 +169,7 @@ export function generateAnalysisTarget(topics: string[], category?: FortuneCateg
       [FortuneCategory.BREAK_UP]: '연애운, 재회 가능성, 이성운',
       [FortuneCategory.NEW_YEAR]: '신년운세, 올해의 운, 월별 운세',
       [FortuneCategory.HAND]: '손금, 인생선, 운세',
+      [FortuneCategory.FACE]: '관상, 얼굴 인상, 운세',
       [FortuneCategory.TOJEONG]: '토정비결, 운세 해석',
       [FortuneCategory.DAILY]: '오늘의 운세, 일일 운세',
       [FortuneCategory.SAJU]: '성격, 올해의 운, 재물운, 건강운, 연애운, 직장운', // 기본값
@@ -207,4 +209,3 @@ export function generateAnalysisTarget(topics: string[], category?: FortuneCateg
 
   return analysisTargets.join(', ');
 }
-

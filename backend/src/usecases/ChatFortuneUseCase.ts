@@ -8,7 +8,7 @@ import { IFortuneSessionRepository } from '../repositories/IFortuneSessionReposi
 import { IConversationLogRepository } from '../repositories/IConversationLogRepository';
 import { FortuneGPTService } from '../services/FortuneGPTService';
 import { IdGenerator } from '../utils/idGenerator';
-import { ChatResponse, FortuneErrorCode, isChatResponseV2, SessionMode } from '../types/fortune';
+import { ChatResponse, FortuneCategory, FortuneErrorCode, isChatResponseV2, SessionMode } from '../types/fortune';
 import { isCategoryMismatch, getSuggestedCategories } from '../utils/categoryDetection';
 import { buildPreviousContextForAI } from '../utils/buildPreviousContextForAI';
 import { CATEGORY_NAMES } from '../data/fortuneProducts';
@@ -50,9 +50,13 @@ export class ChatFortuneUseCase {
       throw new CustomError('채팅 세션이 아닙니다.', 400, 'INVALID_REQUEST' as FortuneErrorCode);
     }
 
-    if (image && session.category !== 'HAND') {
+    const imageEnabledCategories = new Set<FortuneCategory>([
+      FortuneCategory.HAND,
+      FortuneCategory.FACE,
+    ]);
+    if (image && !imageEnabledCategories.has(session.category)) {
       throw new CustomError(
-        '이미지 업로드는 현재 손금 상담에서만 지원됩니다.',
+        '이미지 업로드는 현재 손금/관상 상담에서만 지원됩니다.',
         400,
         'INVALID_REQUEST' as FortuneErrorCode,
       );

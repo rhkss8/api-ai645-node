@@ -58,6 +58,17 @@ export const CHAT_CATEGORY_OVERRIDES: Record<
 - 텍스트만 보고 아는 척하지 말고, 이미지에서 확인한 특징을 근거로 성향과 흐름을 읽어라.`,
   },
 
+  [FortuneCategory.FACE]: {
+    instruction: `
+- 관상은 업로드된 얼굴 사진을 직접 본 뒤 해석해야 한다.
+- 실제로 보이는 이마, 눈썹, 눈매, 코, 입, 턱, 얼굴형의 인상을 먼저 짚어라.
+- 사진이 흐리거나 얼굴 일부가 가려졌으면 보이는 범위 안에서만 조심스럽게 해석하고, 제한점을 분명히 말하라.
+- 텍스트만 보고 아는 척하지 말고, 이미지에서 확인한 특징을 근거로 성향과 흐름을 읽어라.
+- 건강 진단, 신원 식별, 민감한 속성 추정, 외모 점수화는 절대 하지 마라.`,
+    nextStepRules: `
+- 정면/측면 사진 보완, 연애/재물/직장 중 추가로 보고 싶은 축을 nextQuestions로 이어라.`,
+  },
+
   [FortuneCategory.TOJEONG]: {
     instruction: `
 - 반드시 현재 연도인 {currentYear}년 기준으로만 해석하라.
@@ -191,6 +202,13 @@ export const DOCUMENT_CATEGORY_OVERRIDES: Record<
   [FortuneCategory.HAND]: {
     instruction: `
 - 가장 강한 손금 특징을 중심으로 해석하라.`,
+  },
+
+  [FortuneCategory.FACE]: {
+    instruction: `
+- 가장 강한 얼굴 인상 요소를 중심으로 해석하라.
+- 외모 평가가 아니라 관상적 인상과 생활 흐름을 연결해 정리하라.
+- 건강 진단, 신원 식별, 민감한 속성 추정, 외모 점수화는 절대 하지 마라.`,
   },
 
   [FortuneCategory.TOJEONG]: {

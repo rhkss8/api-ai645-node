@@ -46,6 +46,16 @@ function generateNextQuestionsByText(params: {
     ];
   }
 
+  if (category === FortuneCategory.FACE) {
+    return [
+      '정면 얼굴 사진 업로드했어요. 이제 봐주세요.',
+      '관상에서 가장 먼저 봐야 하는 부분은 어디인가요?',
+      '제 인상에서 일/재물 흐름은 어떻게 보이나요?',
+      '연애나 인간관계 흐름도 같이 봐주세요.',
+      '사진을 어떻게 찍어야 관상이 잘 보이나요?',
+    ];
+  }
+
   if (category === FortuneCategory.LUCKY_NUMBER) {
     return [
       '이미지 업로드했어요. 로또 번호 추천해 주세요.',
