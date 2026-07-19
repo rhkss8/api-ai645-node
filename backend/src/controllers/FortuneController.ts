@@ -27,6 +27,11 @@ import { INITIAL_CHAT_GUIDES, CATEGORY_NAMES } from '../data/fortuneProducts';
 import { HongsiUnit, FortuneProductType } from '../types/fortune';
 import { CustomError } from '../middlewares/errorHandler';
 import { IdGenerator } from '../utils/idGenerator';
+import {
+  ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS,
+  getAdminPaymentBypassUntil,
+  isAdminRole,
+} from '../utils/adminPaymentBypass';
 
 function generateNextQuestionsByText(params: {
   category: FortuneCategory;
@@ -1045,6 +1050,29 @@ export class FortuneController {
           return;
         }
 
+        const sessionOwner = await prisma.user.findUnique({
+          where: { id: payload.userId },
+          select: { role: true },
+        });
+        const hasAdminPaymentBypass = isAdminRole(sessionOwner?.role);
+        const adminChatEntitlementUntil =
+          hasAdminPaymentBypass && sessionRecord.mode === 'CHAT'
+            ? getAdminPaymentBypassUntil()
+            : undefined;
+        const sessionRemainingTime = (() => {
+          if (adminChatEntitlementUntil) {
+            return ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS;
+          }
+          const ent = sessionRecord.chatEntitlementExpiresAt as Date | null | undefined;
+          if (ent) {
+            return Math.max(
+              0,
+              Math.floor((ent.getTime() - Date.now()) / 1000),
+            );
+          }
+          return sessionRecord.remainingTime;
+        })();
+
         // 최근 채팅 N개 조회 (초기 가이드 행 제외: userInput !== '' 만)
         const chats = await prisma.conversationLog.findMany({
           where: {
@@ -1530,19 +1558,15 @@ export class FortuneController {
                   }
                 : {}),
               remainingTime: (() => {
-                const ent = sessionRecord.chatEntitlementExpiresAt as Date | null | undefined;
-                if (ent) {
-                  return Math.max(
-                    0,
-                    Math.floor((ent.getTime() - Date.now()) / 1000),
-                  );
-                }
-                return sessionRecord.remainingTime;
+                return sessionRemainingTime;
               })(),
-              chatEntitlementExpiresAt: sessionRecord.chatEntitlementExpiresAt
-                ? (sessionRecord.chatEntitlementExpiresAt as Date).toISOString()
-                : undefined,
+              chatEntitlementExpiresAt:
+                adminChatEntitlementUntil?.toISOString() ||
+                (sessionRecord.chatEntitlementExpiresAt
+                  ? (sessionRecord.chatEntitlementExpiresAt as Date).toISOString()
+                  : undefined),
               isPaid:
+                hasAdminPaymentBypass ||
                 !!sessionRecord.chatEntitlementExpiresAt ||
                 !!sessionRecord.remainingTime ||
                 sessionRecord.mode === 'DOCUMENT',
@@ -1634,6 +1658,9 @@ export class FortuneController {
             cta: {
               label: '채팅으로 이어보기(홍시 사용)',
               requiresPayment: (() => {
+                if (hasAdminPaymentBypass) {
+                  return false;
+                }
                 if (sessionRecord.mode !== 'CHAT') {
                   return sessionRecord.remainingTime <= 0;
                 }

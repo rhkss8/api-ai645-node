@@ -12,6 +12,10 @@ import { PaymentService } from '../services/PaymentService';
 import { DocumentFortuneUseCase } from './DocumentFortuneUseCase';
 import { CustomError } from '../middlewares/errorHandler';
 import type { FortuneErrorCode } from '../types/fortune';
+import {
+  getAdminPaymentBypassUntil,
+  isAdminRole,
+} from '../utils/adminPaymentBypass';
 
 export interface CreateSessionParams {
   userId: string;
@@ -300,12 +304,18 @@ export class CreateFortuneSessionUseCase {
     }
   }
 
-  private async getUserChatUsableUntil(userId: string): Promise<Date | null> {
+  private async getUserEntitlement(userId: string): Promise<{
+    chatUsableUntil: Date | null;
+    isAdmin: boolean;
+  }> {
     const u = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { chatUsableUntil: true },
+      select: { chatUsableUntil: true, role: true },
     });
-    return u?.chatUsableUntil ?? null;
+    return {
+      chatUsableUntil: u?.chatUsableUntil ?? null,
+      isAdmin: isAdminRole(u?.role),
+    };
   }
 
   private assertChatAccessOrThrow(chatUsableUntil: Date | null): Date {
@@ -355,10 +365,11 @@ export class CreateFortuneSessionUseCase {
 
   async execute(params: CreateSessionParams): Promise<FortuneSession> {
     const { userId, category, formType, mode, userInput, userData, paymentId, portOnePaymentId, useFreeHongsi } = params;
+    const userEntitlement = await this.getUserEntitlement(userId);
 
     // 문서형은 무조건 결제 필수
     if (mode === SessionMode.DOCUMENT) {
-      if (!paymentId) {
+      if (!paymentId && !userEntitlement.isAdmin) {
         const product = this.productService.getProduct(
           FortuneProductType.DOCUMENT_REPORT,
           category,
@@ -368,7 +379,9 @@ export class CreateFortuneSessionUseCase {
         );
       }
 
-      await this.ensureCompletedPayment({ paymentId, userId, portOnePaymentId });
+      if (paymentId) {
+        await this.ensureCompletedPayment({ paymentId, userId, portOnePaymentId });
+      }
 
       // 결제된 문서형 세션 생성 (시간 제한 없음, 문서 생성 후 종료)
       const sessionId = IdGenerator.generateFortuneSessionId();
@@ -406,6 +419,14 @@ export class CreateFortuneSessionUseCase {
           userInput,
           userData,
         });
+      } else if (userEntitlement.isAdmin) {
+        console.log(`[세션 생성] 관리자 문서 결제 우회: sessionId=${createdSession.id}, userId=${userId}`);
+        await this.documentUseCase.execute(
+          userId,
+          category,
+          userInput,
+          userData,
+        );
       }
 
       return createdSession;
@@ -442,7 +463,9 @@ export class CreateFortuneSessionUseCase {
           throw new Error('채팅 결제 주문에 chatEntitlementDays(1·7·30)가 없습니다.');
         }
 
-        const until = this.assertChatAccessOrThrow(await this.getUserChatUsableUntil(userId));
+        const until = userEntitlement.isAdmin
+          ? getAdminPaymentBypassUntil()
+          : this.assertChatAccessOrThrow(userEntitlement.chatUsableUntil);
         sessionToCreate = this.buildChatSession(
           userId,
           category,
@@ -463,7 +486,9 @@ export class CreateFortuneSessionUseCase {
           await this.hongsiCreditRepository.useFreeHongsi(userId);
         }
 
-        const until = this.assertChatAccessOrThrow(await this.getUserChatUsableUntil(userId));
+        const until = userEntitlement.isAdmin
+          ? getAdminPaymentBypassUntil()
+          : this.assertChatAccessOrThrow(userEntitlement.chatUsableUntil);
         sessionToCreate = this.buildChatSession(
           userId,
           category,
@@ -474,7 +499,9 @@ export class CreateFortuneSessionUseCase {
           userData,
         );
       } else {
-        const until = this.assertChatAccessOrThrow(await this.getUserChatUsableUntil(userId));
+        const until = userEntitlement.isAdmin
+          ? getAdminPaymentBypassUntil()
+          : this.assertChatAccessOrThrow(userEntitlement.chatUsableUntil);
         sessionToCreate = this.buildChatSession(
           userId,
           category,

@@ -5,6 +5,11 @@ import { PrismaClient } from '@prisma/client';
 import { IFortuneSessionRepository } from '../repositories/IFortuneSessionRepository';
 import { FortuneSession } from '../entities/FortuneSession';
 import { SessionMode } from '../types/fortune';
+import {
+  ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS,
+  getAdminPaymentBypassUntil,
+  isAdminRole,
+} from '../utils/adminPaymentBypass';
 
 export class GetSessionUseCase {
   constructor(
@@ -30,13 +35,16 @@ export class GetSessionUseCase {
     if (session.mode === SessionMode.CHAT) {
       const u = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { chatUsableUntil: true },
+        select: { chatUsableUntil: true, role: true },
       });
-      const until = u?.chatUsableUntil;
+      const isAdmin = isAdminRole(u?.role);
+      const until = isAdmin ? getAdminPaymentBypassUntil(now) : u?.chatUsableUntil;
       chatUsableUntilIso = until?.toISOString();
       remainingTime =
-        until && until.getTime() > now.getTime()
-          ? Math.max(0, Math.floor((until.getTime() - now.getTime()) / 1000))
+        isAdmin
+          ? ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS
+          : until && until.getTime() > now.getTime()
+            ? Math.max(0, Math.floor((until.getTime() - now.getTime()) / 1000))
           : 0;
 
       if (!session.isActive && remainingTime > 0) {
