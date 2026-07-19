@@ -1,10 +1,372 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { OrderStatus, PaymentStatus, PrismaClient } from '@prisma/client';
 import { asyncHandler } from '../middlewares/errorHandler';
 
 const prisma = new PrismaClient();
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+type AdminDateRange = {
+  startDate: Date;
+  endDate: Date;
+  previousStartDate: Date;
+  previousEndDate: Date;
+  days: number;
+};
+
+type DailyMetricRow = {
+  date: Date;
+  signup_count: bigint | number;
+  payment_attempt_count: bigint | number;
+  completed_payment_count: bigint | number;
+  revenue: bigint | number | null;
+};
+
+type CategoryMetricRow = {
+  category: string | null;
+  attempt_count: bigint | number;
+  completed_count: bigint | number;
+  revenue: bigint | number | null;
+};
+
+const toNumber = (value: bigint | number | null | undefined): number => Number(value ?? 0);
+
+const maskEmail = (email?: string | null): string | null => {
+  if (!email) return null;
+
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return null;
+
+  const visible = localPart.slice(0, Math.min(2, localPart.length));
+  return `${visible}${'*'.repeat(Math.max(localPart.length - visible.length, 2))}@${domain}`;
+};
+
+const parseDateRange = (req: Request): AdminDateRange => {
+  const daysParam = parseInt(req.query.days as string, 10);
+  const requestedDays = Number.isFinite(daysParam) ? daysParam : 7;
+  const days = Math.min(Math.max(requestedDays, 1), 90);
+
+  const now = new Date();
+  const endDate = req.query.endDate ? new Date(req.query.endDate as string) : now;
+  if (Number.isNaN(endDate.getTime())) {
+    throw new Error('유효하지 않은 endDate입니다.');
+  }
+
+  const startDate = req.query.startDate
+    ? new Date(req.query.startDate as string)
+    : new Date(endDate.getTime() - (days - 1) * MS_PER_DAY);
+  if (Number.isNaN(startDate.getTime())) {
+    throw new Error('유효하지 않은 startDate입니다.');
+  }
+
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(23, 59, 59, 999);
+
+  const periodMs = endDate.getTime() - startDate.getTime() + 1;
+  const previousEndDate = new Date(startDate.getTime() - 1);
+  const previousStartDate = new Date(previousEndDate.getTime() - periodMs + 1);
+
+  return {
+    startDate,
+    endDate,
+    previousStartDate,
+    previousEndDate,
+    days,
+  };
+};
+
+const calculateRate = (numerator: number, denominator: number): number =>
+  denominator > 0 ? Number(((numerator / denominator) * 100).toFixed(2)) : 0;
+
 export class AdminController {
+  /**
+   * 운영 대시보드 요약 조회 (관리자 전용, 읽기 전용)
+   */
+  public getDashboardSummary = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const { startDate, endDate, previousStartDate, previousEndDate, days } = parseDateRange(req);
+
+      const [
+        totalUsers,
+        periodSignups,
+        previousPeriodSignups,
+        ordersCreated,
+        paymentsCreated,
+        completedPayments,
+        failedPayments,
+        cancelledPayments,
+        pendingPayments,
+        paidOrderCount,
+        documentResults,
+        fortuneSessions,
+        completedAmount,
+        dailyRows,
+        categoryRows,
+      ] = await Promise.all([
+        prisma.user.count({ where: { deletedAt: null } }),
+        prisma.user.count({
+          where: {
+            deletedAt: null,
+            createdAt: { gte: startDate, lte: endDate },
+          },
+        }),
+        prisma.user.count({
+          where: {
+            deletedAt: null,
+            createdAt: { gte: previousStartDate, lte: previousEndDate },
+          },
+        }),
+        prisma.order.count({
+          where: { createdAt: { gte: startDate, lte: endDate } },
+        }),
+        prisma.payment.count({
+          where: { createdAt: { gte: startDate, lte: endDate } },
+        }),
+        prisma.payment.count({
+          where: {
+            status: PaymentStatus.COMPLETED,
+            createdAt: { gte: startDate, lte: endDate },
+          },
+        }),
+        prisma.payment.count({
+          where: {
+            status: PaymentStatus.FAILED,
+            createdAt: { gte: startDate, lte: endDate },
+          },
+        }),
+        prisma.payment.count({
+          where: {
+            status: { in: [PaymentStatus.CANCELLED, PaymentStatus.USER_CANCELLED, PaymentStatus.REFUNDED] },
+            createdAt: { gte: startDate, lte: endDate },
+          },
+        }),
+        prisma.payment.count({
+          where: {
+            status: PaymentStatus.PENDING,
+            createdAt: { gte: startDate, lte: endDate },
+          },
+        }),
+        prisma.order.count({
+          where: {
+            status: OrderStatus.PAID,
+            createdAt: { gte: startDate, lte: endDate },
+          },
+        }),
+        prisma.documentResult.count({
+          where: { createdAt: { gte: startDate, lte: endDate } },
+        }),
+        prisma.fortuneSession.count({
+          where: { createdAt: { gte: startDate, lte: endDate } },
+        }),
+        prisma.payment.aggregate({
+          where: {
+            status: PaymentStatus.COMPLETED,
+            createdAt: { gte: startDate, lte: endDate },
+          },
+          _sum: { amount: true },
+        }),
+        prisma.$queryRaw<DailyMetricRow[]>`
+          SELECT
+            day::date AS date,
+            COALESCE(signups.count, 0) AS signup_count,
+            COALESCE(attempts.count, 0) AS payment_attempt_count,
+            COALESCE(completed.count, 0) AS completed_payment_count,
+            COALESCE(completed.revenue, 0) AS revenue
+          FROM generate_series(${startDate}::date, ${endDate}::date, '1 day') AS days(day)
+          LEFT JOIN (
+            SELECT date_trunc('day', "createdAt")::date AS date, COUNT(*) AS count
+            FROM users
+            WHERE "deletedAt" IS NULL AND "createdAt" BETWEEN ${startDate} AND ${endDate}
+            GROUP BY 1
+          ) signups ON signups.date = day::date
+          LEFT JOIN (
+            SELECT date_trunc('day', "createdAt")::date AS date, COUNT(*) AS count
+            FROM payments
+            WHERE "createdAt" BETWEEN ${startDate} AND ${endDate}
+            GROUP BY 1
+          ) attempts ON attempts.date = day::date
+          LEFT JOIN (
+            SELECT date_trunc('day', "createdAt")::date AS date, COUNT(*) AS count, SUM(amount) AS revenue
+            FROM payments
+            WHERE status = 'COMPLETED' AND "createdAt" BETWEEN ${startDate} AND ${endDate}
+            GROUP BY 1
+          ) completed ON completed.date = day::date
+          ORDER BY day ASC
+        `,
+        prisma.$queryRaw<CategoryMetricRow[]>`
+          SELECT
+            COALESCE(o.metadata->>'category', 'UNKNOWN') AS category,
+            COUNT(p.id) AS attempt_count,
+            COUNT(p.id) FILTER (WHERE p.status = 'COMPLETED') AS completed_count,
+            COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'COMPLETED'), 0) AS revenue
+          FROM payments p
+          INNER JOIN orders o ON o.id = p."orderId"
+          WHERE p."createdAt" BETWEEN ${startDate} AND ${endDate}
+          GROUP BY 1
+          ORDER BY revenue DESC, attempt_count DESC
+          LIMIT 10
+        `,
+      ]);
+
+      const revenue = completedAmount._sum.amount || 0;
+
+      res.json({
+        success: true,
+        data: {
+          period: {
+            days,
+            startDate,
+            endDate,
+            previousStartDate,
+            previousEndDate,
+          },
+          users: {
+            total: totalUsers,
+            signups: periodSignups,
+            previousSignups: previousPeriodSignups,
+            signupChange: periodSignups - previousPeriodSignups,
+          },
+          payments: {
+            attempts: paymentsCreated,
+            completed: completedPayments,
+            failed: failedPayments,
+            cancelled: cancelledPayments,
+            pending: pendingPayments,
+            revenue,
+            completionRate: calculateRate(completedPayments, paymentsCreated),
+            averageRevenuePerCompletedPayment:
+              completedPayments > 0 ? Math.round(revenue / completedPayments) : 0,
+          },
+          funnel: {
+            ordersCreated,
+            paymentsCreated,
+            paidOrderCount,
+            completedPayments,
+            fortuneSessions,
+            documentResults,
+            signupToPaymentAttemptRate: calculateRate(paymentsCreated, periodSignups),
+            paymentCompletionRate: calculateRate(completedPayments, paymentsCreated),
+          },
+          daily: dailyRows.map(row => ({
+            date: row.date,
+            signups: toNumber(row.signup_count),
+            paymentAttempts: toNumber(row.payment_attempt_count),
+            completedPayments: toNumber(row.completed_payment_count),
+            revenue: toNumber(row.revenue),
+          })),
+          categoryStats: categoryRows.map(row => ({
+            category: row.category || 'UNKNOWN',
+            attempts: toNumber(row.attempt_count),
+            completed: toNumber(row.completed_count),
+            revenue: toNumber(row.revenue),
+            completionRate: calculateRate(toNumber(row.completed_count), toNumber(row.attempt_count)),
+          })),
+        },
+        message: '관리자 대시보드 요약을 성공적으로 조회했습니다.',
+      });
+    }
+  );
+
+  /**
+   * 결제 시도 목록 조회 (관리자 전용, 읽기 전용)
+   */
+  public getDashboardPayments = asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const { startDate, endDate } = parseDateRange(req);
+      const page = Math.max(parseInt(req.query.page as string, 10) || 1, 1);
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 100);
+      const offset = (page - 1) * limit;
+      const status = req.query.status as PaymentStatus | undefined;
+
+      const statusWhere = status && Object.values(PaymentStatus).includes(status)
+        ? { status }
+        : {};
+
+      const where = {
+        ...statusWhere,
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      };
+
+      const [payments, total] = await Promise.all([
+        prisma.payment.findMany({
+          where,
+          include: {
+            order: {
+              select: {
+                id: true,
+                merchantUid: true,
+                orderName: true,
+                status: true,
+                metadata: true,
+                createdAt: true,
+                user: {
+                  select: {
+                    id: true,
+                    nickname: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offset,
+          take: limit,
+        }),
+        prisma.payment.count({ where }),
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          payments: payments.map(payment => {
+            const metadata = payment.order.metadata as Record<string, unknown> | null;
+
+            return {
+              id: payment.id,
+              orderId: payment.orderId,
+              merchantUid: payment.order.merchantUid,
+              orderName: payment.order.orderName,
+              amount: payment.amount,
+              currency: payment.currency,
+              status: payment.status,
+              orderStatus: payment.order.status,
+              payMethod: payment.payMethod,
+              easyPayProvider: payment.easyPayProvider,
+              pgProvider: payment.pgProvider,
+              paidAt: payment.paidAt,
+              createdAt: payment.createdAt,
+              updatedAt: payment.updatedAt,
+              user: {
+                id: payment.order.user.id,
+                nickname: payment.order.user.nickname,
+                maskedEmail: maskEmail(payment.order.user.email),
+              },
+              product: {
+                productId: metadata?.productId || null,
+                productType: metadata?.productType || null,
+                category: metadata?.category || null,
+                finalAmount: metadata?.finalAmount || payment.amount,
+              },
+            };
+          }),
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            hasNext: offset + limit < total,
+            hasPrev: page > 1,
+          },
+        },
+        message: '관리자 결제 시도 목록을 성공적으로 조회했습니다.',
+      });
+    }
+  );
+
   /**
    * 전체 사용자 목록 조회 (관리자 전용)
    */

@@ -1,0 +1,1000 @@
+#!/usr/bin/env python3
+"""
+Project-local TARS launcher.
+
+Run `tars` or `./tars` to see the command list.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+VERSION = "0.8.0"
+COMMAND = "tars"
+ROOT = Path.cwd()
+DOCS = ROOT / "docs"
+FRONTEND_ROOT = ROOT.parent / "ai645-front"
+SERVICE_DEFINITION = DOCS / "service-definition.md"
+MVP_TODO = DOCS / "mvp-todo.md"
+START_SESSION = DOCS / "start-session.md"
+
+
+HELP = f"""TARS - 서비스 MVP 실행 런처 (v{VERSION})
+
+TARS는 새 서비스를 시작할 때와 이미 만든 서비스를 고칠 때를 분리해서 다룹니다.
+신규 기획은 Starter Kit 흐름으로, 버그 수정/유지보수는 Maintenance 흐름으로 시작하세요.
+
+바로 시작:
+  tars start                           신규 서비스 MVP 킥오프 프롬프트 출력
+  tars maintain                        빠른 유지보수/수정 작업용 Codex 프롬프트 출력
+  tars maintain --hard                 운영급 유지보수/릴리즈 위험 작업용 프롬프트 출력
+  tars think                           기획/설계/큰 구현 전 깊은 사고 프롬프트 출력
+  tars loop                            todo 기준 작업 루프 프롬프트 출력
+  tars loop --print                    비대화형 환경에서 루프 프롬프트 바로 출력
+  tars wiki                            inbox 원본을 wiki 지식망으로 정리하는 프롬프트 출력
+  tars acceptance                      starter acceptance 불변식 검사
+
+Starter Kit - 새 서비스 만들기:
+  tars init                            킥오프 질문 후 docs/service-definition.md 생성
+  tars init --force                    서비스 정의 다시 입력
+  tars start                           서비스 정의 기반 신규 MVP 시작 프롬프트 출력
+  tars prompt                          기존 docs 기준 신규 MVP 프롬프트만 출력
+  tars status                          스타터 문서 준비 상태 확인
+  tars doctor                          필수 파일, 검증 스크립트, starter acceptance 확인
+  tars wiki                            docs/inbox 원본 자료를 docs/wiki로 정리
+  tars acceptance                      TARS 구조/스모크/기능/안전 불변식 검사
+
+Maintenance - 기존 서비스 수정/유지보수:
+  tars maintain                        빠른 수정 작업 원칙과 Codex 전달 프롬프트 출력
+  tars maintain --hard                 운영급 수정 작업 원칙과 Codex 전달 프롬프트 출력
+  tars verify                          typecheck, lint, test, format:check 실행
+  tars think                           딴길로 새기 쉬운 작업을 구조화해서 먼저 분석
+  tars loop                            열린 todo 브리핑 후 컨펌 받고 루프 시작
+  tars loop --yes                      열린 todo 브리핑 후 컨펌 없이 루프 시작
+  tars loop --print                    Codex/API/CI용 루프 프롬프트 바로 출력
+  tars next                            다음 미완료 MVP todo 확인
+  tars done                            검증 실행, git 상태, 커밋 가이드 출력
+  tars handoff                         다른 PC/세션으로 작업 넘기기와 재진입 체크리스트 출력
+
+유지보수 작업 원칙:
+  1. 사용자의 요청과 기대 동작을 먼저 재확인한다.
+  2. 관련 코드, 테스트, 문서를 읽고 현재 동작을 확인한다.
+  3. 요청 범위 밖의 리디자인, 대규모 리팩터링, 새 기능을 만들지 않는다.
+  4. 같은 실수가 반복되지 않도록 테스트나 회귀 체크를 추가한다.
+  5. 확인하지 못한 것은 완료했다고 말하지 않고, 남은 위험을 보고한다.
+
+TARS가 관리하는 영역:
+  1. 서비스 정의와 페르소나
+  2. G-Stack과 Superpowers
+  3. MVP todo 루프
+  4. 디자인 제작 파이프라인, 레퍼런스, 시각 방향, 디자인 QA
+  5. 프론트엔드 품질 규칙
+  6. AI, analytics, QA, decision gate
+
+예시:
+  tars init                            새 서비스 MVP 정의 시작
+  tars start                           신규 MVP 작업을 Codex에 맡길 때
+  tars maintain                        빠른 버그 수정/유지보수를 Codex에 맡길 때
+  tars maintain --hard                 운영/릴리즈급 수정을 Codex에 맡길 때
+  tars think                           설계/기획/큰 구현을 깊게 검토할 때
+  tars verify                          완료 전 검증 실행
+  tars loop                            todo를 확인하고 작업 루프 시작
+  tars loop --print                    비대화형 환경에서 todo 루프 프롬프트 출력
+  tars wiki                            inbox 원본을 wiki로 정리할 때
+  tars acceptance                      starter acceptance 점검
+  tars done                            완료 전 검증과 커밋 준비
+  tars handoff                         집/회사 PC 전환 전 체크
+
+참고:
+  TARS는 shell CLI입니다. macOS에서는 보통 zsh에서 실행합니다.
+  새 프로젝트에 재사용하려면 `tars`와 `docs/`를 함께 복사하세요.
+"""
+
+
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def is_placeholder_value(value: str) -> bool:
+    stripped = value.strip()
+    return not stripped or stripped.startswith("[") or stripped.startswith("`[")
+
+
+def extract_section(markdown: str, heading: str) -> str:
+    pattern = rf"^## {re.escape(heading)}\n(?P<body>.*?)(?=^## |\Z)"
+    match = re.search(pattern, markdown, flags=re.MULTILINE | re.DOTALL)
+    if not match:
+        return ""
+    body = match.group("body").strip().replace("`", "").strip()
+    lines = [line.strip("- ").strip() for line in body.splitlines() if line.strip()]
+    return " ".join(lines).strip()
+
+
+def load_service_definition() -> dict[str, str]:
+    markdown = read_text(SERVICE_DEFINITION)
+    return {
+        "definition": extract_section(markdown, "One-Line Definition"),
+        "persona": extract_section(markdown, "Persona"),
+        "pain": extract_section(markdown, "Core Pain"),
+        "transformation": extract_section(markdown, "Desired Transformation"),
+        "mechanism": extract_section(markdown, "Core Mechanism"),
+    }
+
+
+def has_service_definition() -> bool:
+    values = load_service_definition()
+    required = ["definition", "persona", "pain", "transformation"]
+    return all(not is_placeholder_value(values.get(key, "")) for key in required)
+
+
+def ask(label: str, hint: str = "") -> str:
+    print(f"\n{label}")
+    if hint:
+        print(f"  {hint}")
+    while True:
+        value = input("> ").strip()
+        if value:
+            return value
+        print("값을 입력해주세요.")
+
+
+def build_service_definition(values: dict[str, str]) -> str:
+    return f"""# Service Definition
+
+## One-Line Definition
+{values["definition"]}
+
+## Persona
+{values["persona"]}
+
+## Core Pain
+{values["pain"]}
+
+## Desired Transformation
+Before:
+- {values["before"]}
+
+After:
+- {values["after"]}
+
+## Core Mechanism
+{values["mechanism"]}
+"""
+
+
+def build_kickoff_prompt(values: dict[str, str]) -> str:
+    transformation = f"{values.get('before', '')} -> {values.get('after', '')}".strip()
+    if not transformation or transformation == "->":
+        transformation = values.get("transformation", "")
+
+    return f"""이 프로젝트는 신규 서비스 MVP야.
+docs/new-service-starter-protocol.md, docs/agent-runbook.md, docs/skills-and-agents.md, docs/lessons-quick.md를 기준으로 시작해줘.
+
+서비스 정의:
+{values["definition"]}
+
+페르소나:
+{values["persona"]}
+
+핵심 pain:
+{values["pain"]}
+
+원하는 변화:
+{transformation}
+
+먼저 브레인스토밍으로 기획을 정리하고,
+G-Stack, Superpowers, MVP todo, 디자인 레퍼런스, 시각 방향 2-3안, 방향 선택, 와이어프레임 계획, 디자인 시스템, 서비스 디자인, 디자인 리뷰/QA, 개발 하네스, AI/QA/analytics 기준을 만든 뒤,
+중요 의사결정 지점은 물어보고,
+그 외에는 MVP core loop가 끝날 때까지 계속 진행해줘.
+
+작업별 스킬/문서 라우팅:
+- 제품 범위, MVP 우선순위, user flow: docs/mvp-execution-harness.md, docs/mvp-todo.md
+- 제품 의도, 리서치, 디자인 근거 확인: docs/wiki/schema.md, docs/wiki/index.md
+- 디자인, 화면, 카피, UX 톤: docs/design-tone-and-manner.md, docs/design-system-spec.md, docs/design-qa-checklist.md
+- 프론트엔드 구현/리팩터링: docs/frontend-engineering-standards.md
+- AI 계획 생성/조정/prompt contract: docs/ai-contracts.md
+- 테스트, analytics, QA/release gate: docs/analytics-events.md, docs/qa-checklist.md
+- Expo 실행, 빌드, 배포, 네트워크/API: .codex/skills/expo-mvp-delivery/SKILL.md
+
+작업 완료 전:
+- tars verify 실행
+- todo 상태 갱신
+- docs/decision-log.md 또는 docs/lessons-and-rules.md 업데이트가 필요한지 확인
+"""
+
+
+def command_init(force: bool = False) -> int:
+    if has_service_definition() and not force:
+        print("docs/service-definition.md에 이미 서비스 정의가 있습니다.")
+        print("다시 입력하려면 tars init --force 를 사용하세요.")
+        print_next_commands()
+        return 0
+
+    print("신규 서비스 MVP 시작 정보를 입력합니다.")
+    values = {
+        "definition": ask(
+            "서비스 정의",
+            "예: [서비스명]은 [페르소나]가 [결과]를 [핵심 메커니즘]으로 달성하게 돕는다.",
+        ),
+        "persona": ask("페르소나", "타겟 유저를 한 문단으로 적어주세요."),
+        "pain": ask("핵심 pain", "사용자가 겪는 가장 선명한 문제를 적어주세요."),
+        "before": ask("Before", "제품 사용 전 사용자의 상태를 적어주세요."),
+        "after": ask("After", "제품 사용 후 사용자의 상태를 적어주세요."),
+        "mechanism": ask("핵심 메커니즘", "서비스가 변화를 만드는 핵심 방식을 적어주세요."),
+    }
+
+    write_text(SERVICE_DEFINITION, build_service_definition(values))
+    prompt = build_kickoff_prompt(values)
+    write_text(START_SESSION, "# Start Session Prompt\n\n" + prompt)
+
+    print("\n서비스 정의를 저장했습니다:")
+    print(f"- {SERVICE_DEFINITION.relative_to(ROOT)}")
+    print(f"- {START_SESSION.relative_to(ROOT)}")
+    print("\n다음 단계:")
+    print("- tars start   : Codex kickoff prompt 출력")
+    print("- tars next    : 다음 MVP todo 확인")
+    return 0
+
+
+def get_prompt() -> str | None:
+    values = load_service_definition()
+    if not has_service_definition():
+        return None
+    return build_kickoff_prompt(
+        {
+            "definition": values["definition"],
+            "persona": values["persona"],
+            "pain": values["pain"],
+            "transformation": values["transformation"],
+        }
+    )
+
+
+def command_prompt() -> int:
+    prompt = get_prompt()
+    if not prompt:
+        print("서비스 정의가 아직 비어 있습니다. 먼저 tars init 을 실행하세요.")
+        return 1
+    write_text(START_SESSION, "# Start Session Prompt\n\n" + prompt)
+    print(prompt)
+    return 0
+
+
+def build_maintenance_prompt(hard: bool = False) -> str:
+    values = load_service_definition()
+    branch = run_git(["branch", "--show-current"]) or "(git branch 확인 불가)"
+    status = run_git(["status", "--short"]) or "(clean)"
+
+    definition = values.get("definition", "")
+    if is_placeholder_value(definition):
+        definition = "(docs/service-definition.md 확인 필요)"
+
+    if hard:
+        mode_label = "운영급 유지보수 모드"
+        first_reads = """- .codex/skills/tars-maintenance/SKILL.md
+- docs/maintenance-workflow.md
+- docs/lessons-quick.md
+- docs/agent-runbook.md
+- docs/skills-and-agents.md
+- docs/decision-log.md
+- docs/lessons-and-rules.md
+- docs/decision-gates.md"""
+        routing_note = """작업별 스킬/문서 라우팅:
+- 제품 범위, MVP 우선순위, user flow: docs/mvp-execution-harness.md, docs/mvp-todo.md
+- 제품 의도, 리서치, 디자인 근거가 불확실할 때만: docs/wiki/schema.md, docs/wiki/index.md
+- 디자인, 화면, 카피, UX 톤: docs/design-tone-and-manner.md, docs/design-system-spec.md, docs/design-qa-checklist.md
+- 프론트엔드 구현/리팩터링: docs/frontend-engineering-standards.md
+- AI 계획 생성/조정/prompt contract: docs/ai-contracts.md
+- 테스트, analytics, QA/release gate: docs/analytics-events.md, docs/qa-checklist.md
+- Expo 실행, 빌드, 배포, 네트워크/API: .codex/skills/expo-mvp-delivery/SKILL.md"""
+        work_rules = """작업 방식:
+1. 내가 요청한 증상, 의도, 기대 동작을 먼저 짧게 재진술해줘.
+2. 관련 코드, 테스트, 문서, 현재 git diff를 읽고 현재 동작과 원인을 확인해줘.
+3. 근본 원인을 설명하기 전에는 수정하지 마.
+4. 수정 범위를 작게 잡고, 요청하지 않은 리디자인/새 기능/대규모 리팩터링은 하지 마.
+5. 사용자에게 보이는 디자인/제품/릴리즈 위험이 있으면 docs/decision-gates.md 기준으로 멈춰 물어봐.
+6. 같은 실수가 반복되지 않도록 테스트, 회귀 체크, 문서 규칙 중 필요한 것을 추가해줘.
+7. 시각/릴리즈 영향이 있으면 가능한 QA 증거(스크린샷, manual QA note, parity map 등)를 남겨줘.
+8. 완료 전 tars verify를 실행하고, 필요하면 tars done으로 커밋 가이드까지 확인해줘.
+9. 완료 보고에는 바꾼 파일, 실행한 체크, 남은 위험, 다음 확인 포인트를 포함해줘."""
+    else:
+        mode_label = "빠른 유지보수 모드"
+        first_reads = """- 현재 git diff/status
+- 직접 관련 코드와 테스트
+- 직접 관련 source-of-truth 문서나 디자인 원본
+- .codex/skills/tars-maintenance/SKILL.md 또는 docs/maintenance-workflow.md는 절차가 헷갈릴 때만"""
+        routing_note = """문서 라우팅:
+- 좁은 수정은 현재 코드, 테스트, 사용자 요청을 우선한다.
+- 제품 의도, 리서치, UX, 카피, 포지셔닝, 디자인 근거가 필요할 때만 docs/wiki/를 참조한다.
+- UI source-of-truth가 직접 주어졌으면 해당 원본과 대상 파일만 우선 비교한다."""
+        work_rules = """작업 방식:
+1. 내가 요청한 증상, 의도, 기대 동작을 한두 문장으로 재진술해줘.
+2. 직접 관련 코드, 테스트, 원본만 읽고 현재 동작과 원인을 확인해줘.
+3. 근본 원인을 설명하기 전에는 수정하지 마.
+4. 수정 범위를 작게 잡고, 요청하지 않은 리디자인/새 기능/대규모 리팩터링은 하지 마.
+5. 같은 실수가 반복되기 쉬울 때만 테스트나 회귀 체크를 추가해줘.
+6. 완료 전 tars verify를 실행하고, 실행하지 못한 검증은 이유를 말해줘.
+7. 완료 보고에는 바꾼 파일, 실행한 체크, 남은 위험을 짧게 포함해줘."""
+
+    return f"""이 프로젝트는 이미 진행 중인 서비스입니다.
+신규 MVP 기획을 다시 시작하지 말고, 유지보수/수정 작업으로 진행해줘.
+
+모드:
+- {mode_label}
+
+서비스 정의:
+{definition}
+
+현재 작업 기준:
+- branch: {branch}
+- next todo: {next_todo_line()}
+- git status: {status}
+
+먼저 읽을 기준:
+{first_reads}
+
+{routing_note}
+
+{work_rules}
+
+금지:
+- 확인하지 않은 작업을 완료했다고 말하지 않기.
+- 사용자 의도와 다른 방향으로 확장하지 않기.
+- 실패한 검증을 숨기지 않기.
+"""
+
+
+def command_maintain(hard: bool = False) -> int:
+    print(build_maintenance_prompt(hard=hard))
+    return 0
+
+
+def build_thinking_prompt() -> str:
+    values = load_service_definition()
+    branch = run_git(["branch", "--show-current"]) or "(git branch 확인 불가)"
+    status = run_git(["status", "--short"]) or "(clean)"
+
+    definition = values.get("definition", "")
+    if is_placeholder_value(definition):
+        definition = "(docs/service-definition.md 확인 필요)"
+
+    return f"""이 프로젝트에서 기획, 설계, 큰 구현, 애매한 todo를 시작하기 전에 깊은 사고 모드로 진행해줘.
+바로 코드 수정하지 말고 먼저 문제 공간을 펼친 뒤, 사용자 확인이 필요한 지점과 실행 계획을 분리해줘.
+
+서비스 정의:
+{definition}
+
+현재 작업 기준:
+- branch: {branch}
+- next todo: {next_todo_line()}
+- git status: {status}
+
+먼저 읽을 기준:
+- .codex/skills/tars-deep-thinking/SKILL.md
+- docs/deep-thinking-workflow.md
+- docs/agent-runbook.md
+- docs/lessons-quick.md
+- docs/mvp-todo.md
+- docs/decision-gates.md
+- 제품 의도, 리서치, UX, 카피, 포지셔닝, 디자인 근거가 필요할 때만 docs/wiki/schema.md와 docs/wiki/index.md
+
+사고 방식:
+1. 요청/다음 todo를 한 문장으로 재정의하고, 성공 기준을 3개 이하로 써줘.
+2. 왜 이 작업이 필요한지, 어떤 상위 목표와 연결되는지 꼬리 질문을 3-5단계로 따라가줘.
+3. 핵심 개념, 사용자 상태, 시스템 상태, 데이터 흐름, 화면/행동 흐름을 간단한 텍스트 마인드맵으로 정리해줘.
+4. 가능한 해법을 최소 2안 비교하고, 각 안의 장점/단점/검증 방법을 적어줘.
+5. 딴길로 새기 쉬운 확장, 리디자인, 과한 리팩터링, 불필요한 문서 작업을 명시적으로 제외해줘.
+6. 불확실한 결정이 사용자-visible, 제품 방향, 비용, 배포, 데이터, 보안, 릴리즈 품질에 영향을 주면 docs/decision-gates.md 기준으로 멈춰 물어봐.
+7. 구현이 가능하면 가장 작은 vertical slice 계획으로 바꾸고, 필요한 파일/테스트/검증만 제안해줘.
+8. 생각 결과는 채팅에 짧게 보고하고, 사용자가 승인하거나 요청이 명확할 때만 구현으로 넘어가줘.
+
+출력 형식:
+- 문제 재정의
+- 꼬리 질문 요약
+- 마인드맵
+- 선택지 비교
+- 제외할 것
+- 결정 필요 여부
+- 실행 계획
+"""
+
+
+def command_think() -> int:
+    print(build_thinking_prompt())
+    return 0
+
+
+def command_start() -> int:
+    if not has_service_definition():
+        print("서비스 정의가 아직 없습니다. 먼저 질문을 시작합니다.")
+        result = command_init()
+        if result != 0:
+            return result
+        print("\n--- Codex Kickoff Prompt ---\n")
+    return command_prompt()
+
+
+def required_files() -> list[str]:
+    return [
+        "new-service-starter-protocol.md",
+        "harness/task-router.md",
+        "harness/ui-ux-component-rules.md",
+        "agent-runbook.md",
+        "service-definition.md",
+        "g-stack.md",
+        "superpowers.md",
+        "mvp-todo.md",
+        "mvp-execution-harness.md",
+        "design-production-pipeline.md",
+        "design-reference-brief.md",
+        "design-philosophy.md",
+        "design-tone-and-manner.md",
+        "design-system-spec.md",
+        "interaction-principles.md",
+        "service-design-blueprint.md",
+        "design-review-rubric.md",
+        "design-qa-checklist.md",
+        "maintenance-workflow.md",
+        "deep-thinking-workflow.md",
+        "reentry-protocol.md",
+        "starter-acceptance.md",
+        "lessons-quick.md",
+        "skills-and-agents.md",
+        "wiki/schema.md",
+        "wiki/index.md",
+        "decision-gates.md",
+        "decision-log.md",
+        "lessons-and-rules.md",
+        "frontend-engineering-standards.md",
+        "ai-contracts.md",
+        "analytics-events.md",
+        "qa-checklist.md",
+    ]
+
+
+def command_status() -> int:
+    print("Starter status")
+    for filename in required_files():
+        path = DOCS / filename
+        marker = "ok" if path.exists() else "missing"
+        print(f"- {marker}: docs/{filename}")
+    print(f"- service definition: {'ready' if has_service_definition() else 'needs input'}")
+    print_next_commands()
+    return 0
+
+
+def command_doctor() -> int:
+    missing = [filename for filename in required_files() if not (DOCS / filename).exists()]
+    missing_paths = [
+        path
+        for path in [
+            ".codex/skills/tars-maintenance/SKILL.md",
+            ".codex/skills/tars-deep-thinking/SKILL.md",
+            "backend/package.json",
+            "../ai645-front/package.json",
+            "tars",
+        ]
+        if not (ROOT / path).exists()
+    ]
+    if missing:
+        print("Doctor: missing required starter files")
+        for filename in missing:
+            print(f"- docs/{filename}")
+    if missing_paths:
+        print("Doctor: missing required project files")
+        for path in missing_paths:
+            print(f"- {path}")
+    backend_package = read_text(ROOT / "backend/package.json")
+    frontend_package = read_text(FRONTEND_ROOT / "package.json")
+    missing_scripts = []
+    for script in ["build", "lint", "test", "openapi:export"]:
+        if f'"{script}"' not in backend_package:
+            missing_scripts.append(f"backend:{script}")
+    for script in ["build", "lint", "lint:blog", "generate:api"]:
+        if f'"{script}"' not in frontend_package:
+            missing_scripts.append(f"frontend:{script}")
+    if missing_scripts:
+        print("Doctor: missing package scripts")
+        for script in missing_scripts:
+            print(f"- {script}")
+    acceptance_failures = acceptance_failures_only()
+    if acceptance_failures:
+        print("Doctor: starter acceptance failures")
+        for failure in acceptance_failures:
+            print(f"- {failure}")
+    if missing or missing_paths or missing_scripts or acceptance_failures:
+        return 1
+
+    print("Doctor: ok")
+    print(f"- root: {ROOT}")
+    print(f"- docs: {DOCS}")
+    print(f"- service definition: {'ready' if has_service_definition() else 'needs input'}")
+    print("- maintenance skill: ready")
+    print("- deep thinking skill: ready")
+    print("- verification scripts: ready")
+    print("- starter acceptance: ready")
+    return 0
+
+
+def contains_all(path: str, needles: list[str]) -> bool:
+    text = read_text(ROOT / path)
+    return bool(text) and all(needle in text for needle in needles)
+
+
+def acceptance_checks() -> list[tuple[str, bool]]:
+    return [
+        ("structure: tars exists", (ROOT / "tars").exists()),
+        (
+            "structure: required harness docs exist",
+            all((DOCS / filename).exists() for filename in required_files()),
+        ),
+        ("structure: maintenance skill exists", (ROOT / ".codex/skills/tars-maintenance/SKILL.md").exists()),
+        ("structure: deep thinking skill exists", (ROOT / ".codex/skills/tars-deep-thinking/SKILL.md").exists()),
+        ("structure: inbox exists", (DOCS / "inbox").exists()),
+        ("structure: wiki schema exists", (DOCS / "wiki/schema.md").exists()),
+        ("structure: wiki index exists", (DOCS / "wiki/index.md").exists()),
+        (
+            "function: tars exposes maintain/verify/think/loop/wiki",
+            contains_all(
+                "tars",
+                ["command_maintain", "command_verify", "command_think", "command_loop", "command_wiki"],
+            ),
+        ),
+        (
+            "function: tars loop supports non-interactive output",
+            contains_all(
+                "tars",
+                ["loop --print", "loop --yes", "sys.stdin.isatty()", "print_only"],
+            ),
+        ),
+        (
+            "function: tars think points to deep thinking workflow",
+            contains_all("tars", ["tars think", "docs/deep-thinking-workflow.md", "tars-deep-thinking"]),
+        ),
+        (
+            "function: tars maintain supports hard mode",
+            contains_all("tars", ["maintain --hard", "hard: bool", "운영급 유지보수"]),
+        ),
+        (
+            "function: routed docs exist for kickoff and maintenance prompts",
+            all(
+                (ROOT / path).exists()
+                for path in [
+                    "docs/mvp-execution-harness.md",
+                    "docs/mvp-todo.md",
+                    "docs/harness/task-router.md",
+                    "docs/harness/ui-ux-component-rules.md",
+                    "docs/wiki/schema.md",
+                    "docs/wiki/index.md",
+                    "docs/design-tone-and-manner.md",
+                    "docs/design-system-spec.md",
+                    "docs/design-qa-checklist.md",
+                    "docs/frontend-engineering-standards.md",
+                    "docs/ai-contracts.md",
+                    "docs/analytics-events.md",
+                    "docs/qa-checklist.md",
+                ]
+            ),
+        ),
+        (
+            "function: backend package scripts expose checks",
+            contains_all("backend/package.json", ['"build"', '"lint"', '"test"', '"openapi:export"']),
+        ),
+        (
+            "function: frontend package scripts expose checks",
+            (FRONTEND_ROOT / "package.json").exists()
+            and all(
+                needle in read_text(FRONTEND_ROOT / "package.json")
+                for needle in ['"build"', '"lint"', '"lint:blog"', '"generate:api"']
+            ),
+        ),
+        (
+            "safety: decision gates include approval risks",
+            contains_all(
+                "docs/decision-gates.md",
+                ["Cost and Accounts", "Data and Privacy", "Destructive Or Broad Actions"],
+            ),
+        ),
+        (
+            "safety: maintenance skill blocks unverified completion",
+            contains_all(
+                ".codex/skills/tars-maintenance/SKILL.md",
+                ["Run `tars verify`", "Do not say \"done\""],
+            ),
+        ),
+        (
+            "safety: maintenance modes separate fast and hard reads",
+            contains_all(
+                "docs/maintenance-workflow.md",
+                ["Default Mode: `tars maintain`", "Hard Mode: `tars maintain --hard`"],
+            ),
+        ),
+        (
+            "re-entry: protocol exists and reconstructs from files",
+            contains_all("docs/reentry-protocol.md", ["Do not restart from scratch", "git status", "tars next"]),
+        ),
+        (
+            "thinking: workflow requires options before implementation",
+            contains_all(
+                "docs/deep-thinking-workflow.md",
+                ["Question Cascade", "Concept Map", "Do Not Edit Yet"],
+            ),
+        ),
+        (
+            "wiki: schema keeps wiki optional",
+            contains_all("docs/wiki/schema.md", ["Do not use it as a mandatory read", "[[Wiki Links]]"]),
+        ),
+    ]
+
+
+def acceptance_failures_only() -> list[str]:
+    return [label for label, passed in acceptance_checks() if not passed]
+
+
+def command_acceptance() -> int:
+    print("TARS acceptance")
+    failures = 0
+    for label, passed in acceptance_checks():
+        if passed:
+            print(f"- ok: {label}")
+        else:
+            failures += 1
+            print(f"- missing: {label}")
+    if failures:
+        print(f"\nAcceptance failed: {failures} item(s).")
+        return 1
+    print("\nAcceptance passed.")
+    return 0
+
+
+def command_next() -> int:
+    todos = open_todos()
+    if todos is None:
+        print("docs/mvp-todo.md를 찾을 수 없습니다.")
+        return 1
+    if todos:
+        print("Next todo:")
+        print(f"- {todos[0]}")
+        print("\nSuggested command:")
+        print("tars loop")
+        return 0
+    print("열린 todo가 없습니다. MVP 완료 조건을 확인하세요.")
+    return 0
+
+
+def open_todos() -> list[str] | None:
+    text = read_text(MVP_TODO)
+    if not text:
+        return None
+    todos: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("- [ ]"):
+            todos.append(line.replace("- [ ]", "", 1).strip())
+    return todos
+
+
+def command_loop(assume_yes: bool = False, print_only: bool = False) -> int:
+    todos = open_todos()
+    if todos is None:
+        print("docs/mvp-todo.md를 찾을 수 없습니다.")
+        return 1
+    if not todos:
+        print("열린 todo가 없습니다. MVP 완료 조건을 확인하세요.")
+        return 0
+
+    print("TARS loop")
+    print("\n열린 todo:")
+    for index, todo in enumerate(todos[:5], start=1):
+        print(f"{index}. {todo}")
+    if len(todos) > 5:
+        print(f"...외 {len(todos) - 5}개")
+
+    print("\n다음 작업:")
+    print(f"- {todos[0]}")
+
+    if print_only or assume_yes:
+        print("\nCodex에게 전달할 루프 지시:\n")
+        print(build_loop_prompt(todos[0]))
+        return 0
+
+    if not sys.stdin.isatty():
+        print("\n비대화형 환경이라 확인 입력을 받을 수 없습니다.")
+        print("루프 지시를 출력하려면 `tars loop --print`를 사용하세요.")
+        return 0
+
+    try:
+        answer = input("\n이 작업을 시작할까요? [y/N] ").strip().lower()
+    except EOFError:
+        print("\n확인 입력을 받지 못해 중단했습니다.")
+        print("루프 지시를 출력하려면 `tars loop --print`를 사용하세요.")
+        return 0
+
+    if answer not in {"y", "yes"}:
+        print("중단했습니다.")
+        return 0
+
+    print("\nCodex에게 전달할 루프 지시:\n")
+    print(build_loop_prompt(todos[0]))
+    return 0
+
+
+def inbox_sources() -> list[str] | None:
+    inbox = DOCS / "inbox"
+    if not inbox.exists():
+        return None
+    sources: list[str] = []
+    for path in sorted(inbox.rglob("*")):
+        if path.is_file() and path.name != ".gitkeep":
+            sources.append(str(path.relative_to(ROOT)))
+    return sources
+
+
+def command_wiki() -> int:
+    sources = inbox_sources()
+    if sources is None:
+        print("docs/inbox 디렉토리를 찾을 수 없습니다.")
+        return 1
+
+    print("TARS wiki")
+    if not sources:
+        print("\ndocs/inbox에 원본 자료가 없습니다.")
+        print("원본 자료를 docs/inbox/에 넣은 뒤 다시 실행하세요.")
+        return 0
+
+    print("\n정리할 원본 자료:")
+    for source in sources[:10]:
+        print(f"- {source}")
+    if len(sources) > 10:
+        print(f"...외 {len(sources) - 10}개")
+
+    print("\nCodex에게 전달할 wiki 정리 지시:\n")
+    print(build_wiki_prompt(sources))
+    return 0
+
+
+def build_wiki_prompt(sources: list[str]) -> str:
+    source_list = "\n".join(f"- {source}" for source in sources)
+    return f"""docs/wiki/schema.md를 먼저 읽고 규칙을 따라줘.
+
+docs/inbox/의 원본 자료를 딱 한 번 정독한 뒤, docs/wiki/에 plain Markdown 지식망으로 정리해줘.
+
+원본 자료:
+{source_list}
+
+규칙:
+1. 사람은 wiki를 직접 고치지 않는다. 원본은 docs/inbox/에 있고, 정리는 Codex가 docs/wiki/에 한다.
+2. wiki 문서는 [[Wiki Links]]로 서로 연결한다.
+3. docs/wiki/index.md를 지식망 시작점으로 갱신한다.
+4. 각 wiki 페이지는 하나의 개념, 결정, 사용자 insight, reference cluster만 다룬다.
+5. 각 페이지에는 Sources 섹션을 두고 사용한 inbox 파일을 적는다.
+6. 원본에 없는 사실은 만들지 말고, 불확실한 내용은 불확실하다고 표시한다.
+7. wiki와 현재 코드, 테스트, 사용자 요청이 충돌하면 어느 쪽이 우선인지 사용자에게 묻는다.
+8. 이 wiki는 모든 작업에서 읽는 문서가 아니다. 제품 의도, 리서치, UX, 카피, 포지셔닝, 디자인 근거가 필요할 때만 참조한다.
+"""
+
+
+def build_loop_prompt(next_todo: str) -> str:
+    return f"""docs/agent-runbook.md, docs/lessons-quick.md, docs/mvp-todo.md를 읽고 첫 번째 미완료 todo를 진행해줘.
+
+다음 todo:
+- {next_todo}
+
+루프 규칙:
+1. 작업 성격에 맞는 문서와 project-local skill을 먼저 읽어라.
+2. 재진입/재개 상황이면 docs/reentry-protocol.md부터 따라라.
+3. 신규 MVP 생성/확장은 tars start 기준으로 진행하라.
+4. 기획, 설계, 큰 구현, 모호한 todo는 .codex/skills/tars-deep-thinking/SKILL.md와 docs/deep-thinking-workflow.md 기준으로 먼저 생각을 펼쳐라.
+5. 기존 동작 수정/유지보수는 .codex/skills/tars-maintenance/SKILL.md와 docs/maintenance-workflow.md 기준으로 진행하라.
+6. 제품 의도, 리서치, UX, 카피, 포지셔닝, 디자인 근거가 필요할 때만 docs/wiki/를 참조하라.
+7. 요청 범위 밖 기능, 리디자인, 대규모 리팩터링은 하지 마라.
+8. 외부 계정, 비용, 배포, 민감 데이터, 파괴적 명령, 큰 범위 변경은 docs/decision-gates.md에 따라 사용자 승인을 받아라.
+9. 완료 전 tars verify를 실행하라.
+10. 완료 후 docs/mvp-todo.md의 해당 todo를 체크하고 필요한 decision/lesson 문서를 갱신하라.
+11. 다음 todo가 있으면 사용자에게 간략히 브리핑하고 컨펌을 받은 뒤 계속하라.
+12. 검증하지 못한 것은 완료했다고 말하지 말고 이유와 남은 리스크를 보고하라.
+"""
+
+
+def run_git(args: list[str]) -> str:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        return ""
+    return result.stdout.strip()
+
+
+def next_todo_line() -> str:
+    text = read_text(MVP_TODO)
+    if not text:
+        return "docs/mvp-todo.md not found"
+    for line in text.splitlines():
+        if line.startswith("- [ ]"):
+            return line.replace("- [ ]", "-", 1)
+    return "No open todo found"
+
+
+def command_handoff() -> int:
+    branch = run_git(["branch", "--show-current"]) or "(not a git repo)"
+    status = run_git(["status", "--short"]) or "(clean)"
+    remote = run_git(["remote", "-v"]) or "(no remote configured)"
+
+    print("TARS handoff")
+    print(f"- project: {ROOT}")
+    print(f"- branch: {branch}")
+    print(f"- next todo: {next_todo_line()}")
+    print("\nGit status:")
+    print(status)
+    print("\nGit remote:")
+    print(remote)
+    print("\nBefore leaving this PC:")
+    print("1. Run checks for the slice you touched.")
+    print("2. Update docs/decision-log.md or docs/lessons-and-rules.md if needed.")
+    print("3. Commit your work.")
+    print("4. Push to the remote.")
+    print("\nWhen starting on another PC:")
+    print("1. Pull the latest branch.")
+    print("2. Read `docs/reentry-protocol.md`.")
+    print("3. Run `tars doctor`.")
+    print("4. Run `tars status`.")
+    print("5. Run `tars next`.")
+    print("6. Tell Codex: `docs/reentry-protocol.md 기준으로 이어서 진행해줘.`")
+    return 0
+
+
+def command_done() -> int:
+    print("TARS done")
+    verify_result = command_verify()
+    status = run_git(["status", "--short"]) or "(clean)"
+
+    print(f"- project: {ROOT}")
+    print(f"- next todo after commit: {next_todo_line()}")
+    print("\nCurrent git status:")
+    print(status)
+    if verify_result != 0:
+        print("\n검증이 실패했습니다. 실패 원인을 수정한 뒤 다시 `tars done`을 실행하세요.")
+        return verify_result
+    print("\nCommit this slice:")
+    print("git add .")
+    print('git commit -m "fix: 변경 내용 한글 요약"')
+    print("\nThen continue:")
+    print("tars next")
+    return 0
+
+
+def command_verify() -> int:
+    checks = [
+        ("backend-build", "cd backend && npm run build"),
+        ("frontend-build", f"cd {FRONTEND_ROOT} && yarn run build"),
+    ]
+
+    print("TARS verify")
+    print("- 기본 검증: backend build + frontend build")
+    print("- 더 좁은 검증이 필요한 경우 AGENTS.md Verification Defaults를 우선 적용하세요.")
+    failures = 0
+    for label, command in checks:
+        print(f"\n[{label}] {command}")
+        result = subprocess.run(
+            ["zsh", "-lc", f"source ~/.zshrc >/dev/null 2>&1; {command}"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        output = result.stdout.strip()
+        if result.returncode == 0:
+            print("PASS")
+        else:
+            failures += 1
+            print("FAIL")
+            if output:
+                print("\n".join(output.splitlines()[-40:]))
+
+    if failures:
+        print(f"\nVerification failed: {failures} check(s) failed.")
+        return 1
+    print("\nVerification passed.")
+    return 0
+
+
+def print_next_commands() -> None:
+    print("\n다음 명령:")
+    print("- tars start   : Codex kickoff prompt 출력")
+    print("- tars maintain: 빠른 유지보수/수정 작업 프롬프트 출력")
+    print("- tars maintain --hard: 운영급 유지보수/릴리즈 위험 작업 프롬프트 출력")
+    print("- tars think   : 기획/설계/큰 구현 전 깊은 사고 프롬프트 출력")
+    print("- tars verify  : 완료 전 검증 실행")
+    print("- tars loop    : todo 루프 프롬프트 출력")
+    print("- tars wiki    : inbox 원본을 wiki 지식망으로 정리")
+    print("- tars acceptance: starter acceptance 불변식 검사")
+    print("- tars status  : 스타터 문서 상태 확인")
+    print("- tars next    : 다음 MVP todo 확인")
+    print("- tars done    : 작업 완료 체크/커밋 가이드")
+    print("- tars handoff : 다른 PC/세션으로 작업 넘기기와 재진입 체크리스트")
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) == 1 or argv[1] in {"--help", "-h", "help"}:
+        print(HELP)
+        return 0
+    if argv[1] == "--version":
+        print(VERSION)
+        return 0
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("command")
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--hard", action="store_true")
+    parser.add_argument("--print", action="store_true", dest="print_only")
+    parser.add_argument("--yes", "-y", action="store_true")
+    args, extra = parser.parse_known_args(argv[1:])
+
+    if extra:
+        print(f"알 수 없는 인자: {' '.join(extra)}")
+        print("도움말은 tars --help")
+        return 2
+    if args.hard and args.command != "maintain":
+        print("--hard는 tars maintain에서만 사용할 수 있습니다.")
+        print("예: tars maintain --hard")
+        return 2
+    if args.print_only and args.command != "loop":
+        print("--print는 tars loop에서만 사용할 수 있습니다.")
+        print("예: tars loop --print")
+        return 2
+    if args.yes and args.command != "loop":
+        print("--yes는 tars loop에서만 사용할 수 있습니다.")
+        print("예: tars loop --yes")
+        return 2
+
+    if args.command == "init":
+        return command_init(force=args.force)
+    if args.command == "start":
+        return command_start()
+    if args.command == "prompt":
+        return command_prompt()
+    if args.command == "maintain":
+        return command_maintain(hard=args.hard)
+    if args.command == "think":
+        return command_think()
+    if args.command == "verify":
+        return command_verify()
+    if args.command == "loop":
+        return command_loop(assume_yes=args.yes, print_only=args.print_only)
+    if args.command == "wiki":
+        return command_wiki()
+    if args.command == "acceptance":
+        return command_acceptance()
+    if args.command == "status":
+        return command_status()
+    if args.command == "next":
+        return command_next()
+    if args.command == "doctor":
+        return command_doctor()
+    if args.command == "done":
+        return command_done()
+    if args.command == "handoff":
+        return command_handoff()
+
+    print(f"알 수 없는 명령: {args.command}")
+    print("도움말은 tars --help")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

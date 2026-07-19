@@ -8,12 +8,17 @@ import { IFortuneSessionRepository } from '../repositories/IFortuneSessionReposi
 import { IConversationLogRepository } from '../repositories/IConversationLogRepository';
 import { FortuneGPTService } from '../services/FortuneGPTService';
 import { IdGenerator } from '../utils/idGenerator';
-import { ChatResponse, FortuneErrorCode, isChatResponseV2, SessionMode } from '../types/fortune';
+import { ChatResponse, FortuneCategory, FortuneErrorCode, isChatResponseV2, SessionMode } from '../types/fortune';
 import { isCategoryMismatch, getSuggestedCategories } from '../utils/categoryDetection';
 import { buildPreviousContextForAI } from '../utils/buildPreviousContextForAI';
 import { CATEGORY_NAMES } from '../data/fortuneProducts';
 import { CustomError } from '../middlewares/errorHandler';
 import { buildMeaninglessChatResponse, isMeaninglessChatInput } from '../utils/chatInputGuard';
+import {
+  ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS,
+  getAdminPaymentBypassUntil,
+  isAdminRole,
+} from '../utils/adminPaymentBypass';
 
 export class ChatFortuneUseCase {
   constructor(
@@ -50,9 +55,13 @@ export class ChatFortuneUseCase {
       throw new CustomError('채팅 세션이 아닙니다.', 400, 'INVALID_REQUEST' as FortuneErrorCode);
     }
 
-    if (image && session.category !== 'HAND') {
+    const imageEnabledCategories = new Set<FortuneCategory>([
+      FortuneCategory.HAND,
+      FortuneCategory.FACE,
+    ]);
+    if (image && !imageEnabledCategories.has(session.category)) {
       throw new CustomError(
-        '이미지 업로드는 현재 손금 상담에서만 지원됩니다.',
+        '이미지 업로드는 현재 손금/관상 상담에서만 지원됩니다.',
         400,
         'INVALID_REQUEST' as FortuneErrorCode,
       );
@@ -61,12 +70,15 @@ export class ChatFortuneUseCase {
     const now = new Date();
     const userRow = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { chatUsableUntil: true },
+      select: { chatUsableUntil: true, role: true },
     });
-    const until = userRow?.chatUsableUntil;
+    const isAdmin = isAdminRole(userRow?.role);
+    const until = isAdmin ? getAdminPaymentBypassUntil(now) : userRow?.chatUsableUntil;
     const accountSec =
-      until && until.getTime() > now.getTime()
-        ? Math.floor((until.getTime() - now.getTime()) / 1000)
+      isAdmin
+        ? ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS
+        : until && until.getTime() > now.getTime()
+          ? Math.floor((until.getTime() - now.getTime()) / 1000)
         : 0;
 
     console.log('[채팅 요청] 세션·계정 상태:', {
@@ -74,6 +86,7 @@ export class ChatFortuneUseCase {
       isActive: session.isActive,
       chatUsableUntil: until?.toISOString(),
       accountSec,
+      adminPaymentBypass: isAdmin,
     });
 
     if (!session.isActive && until && until.getTime() > now.getTime()) {
@@ -105,7 +118,7 @@ export class ChatFortuneUseCase {
       );
     }
 
-    if (!until || until.getTime() <= now.getTime()) {
+    if (!isAdmin && (!until || until.getTime() <= now.getTime())) {
       throw new CustomError(
         '채팅 이용 가능 시간이 만료되었습니다. 이용권을 구매해 주세요.',
         400,
@@ -219,12 +232,15 @@ export class ChatFortuneUseCase {
 
     const userAfter = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { chatUsableUntil: true },
+      select: { chatUsableUntil: true, role: true },
     });
-    const untilAfter = userAfter?.chatUsableUntil;
+    const isAdminAfter = isAdminRole(userAfter?.role);
+    const untilAfter = isAdminAfter ? getAdminPaymentBypassUntil() : userAfter?.chatUsableUntil;
     const effectiveRemainingSeconds =
-      untilAfter && untilAfter.getTime() > Date.now()
-        ? Math.floor((untilAfter.getTime() - Date.now()) / 1000)
+      isAdminAfter
+        ? ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS
+        : untilAfter && untilAfter.getTime() > Date.now()
+          ? Math.floor((untilAfter.getTime() - Date.now()) / 1000)
         : 0;
 
     if (effectiveRemainingSeconds > 0 && effectiveRemainingSeconds <= 30) {

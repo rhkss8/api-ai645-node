@@ -27,6 +27,11 @@ import { INITIAL_CHAT_GUIDES, CATEGORY_NAMES } from '../data/fortuneProducts';
 import { HongsiUnit, FortuneProductType } from '../types/fortune';
 import { CustomError } from '../middlewares/errorHandler';
 import { IdGenerator } from '../utils/idGenerator';
+import {
+  ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS,
+  getAdminPaymentBypassUntil,
+  isAdminRole,
+} from '../utils/adminPaymentBypass';
 
 function generateNextQuestionsByText(params: {
   category: FortuneCategory;
@@ -43,6 +48,16 @@ function generateNextQuestionsByText(params: {
       '손금에서 어떤 부분(재물/연애/직장)을 먼저 봐주실래요?',
       '손바닥을 어떻게 찍어야 잘 나오나요?',
       '사진이 흐릿하면 다시 찍어야 하나요?',
+    ];
+  }
+
+  if (category === FortuneCategory.FACE) {
+    return [
+      '정면 얼굴 사진 업로드했어요. 이제 봐주세요.',
+      '관상에서 가장 먼저 봐야 하는 부분은 어디인가요?',
+      '제 인상에서 일/재물 흐름은 어떻게 보이나요?',
+      '연애나 인간관계 흐름도 같이 봐주세요.',
+      '사진을 어떻게 찍어야 관상이 잘 보이나요?',
     ];
   }
 
@@ -1035,6 +1050,29 @@ export class FortuneController {
           return;
         }
 
+        const sessionOwner = await prisma.user.findUnique({
+          where: { id: payload.userId },
+          select: { role: true },
+        });
+        const hasAdminPaymentBypass = isAdminRole(sessionOwner?.role);
+        const adminChatEntitlementUntil =
+          hasAdminPaymentBypass && sessionRecord.mode === 'CHAT'
+            ? getAdminPaymentBypassUntil()
+            : undefined;
+        const sessionRemainingTime = (() => {
+          if (adminChatEntitlementUntil) {
+            return ADMIN_PAYMENT_BYPASS_REMAINING_SECONDS;
+          }
+          const ent = sessionRecord.chatEntitlementExpiresAt as Date | null | undefined;
+          if (ent) {
+            return Math.max(
+              0,
+              Math.floor((ent.getTime() - Date.now()) / 1000),
+            );
+          }
+          return sessionRecord.remainingTime;
+        })();
+
         // 최근 채팅 N개 조회 (초기 가이드 행 제외: userInput !== '' 만)
         const chats = await prisma.conversationLog.findMany({
           where: {
@@ -1520,19 +1558,15 @@ export class FortuneController {
                   }
                 : {}),
               remainingTime: (() => {
-                const ent = sessionRecord.chatEntitlementExpiresAt as Date | null | undefined;
-                if (ent) {
-                  return Math.max(
-                    0,
-                    Math.floor((ent.getTime() - Date.now()) / 1000),
-                  );
-                }
-                return sessionRecord.remainingTime;
+                return sessionRemainingTime;
               })(),
-              chatEntitlementExpiresAt: sessionRecord.chatEntitlementExpiresAt
-                ? (sessionRecord.chatEntitlementExpiresAt as Date).toISOString()
-                : undefined,
+              chatEntitlementExpiresAt:
+                adminChatEntitlementUntil?.toISOString() ||
+                (sessionRecord.chatEntitlementExpiresAt
+                  ? (sessionRecord.chatEntitlementExpiresAt as Date).toISOString()
+                  : undefined),
               isPaid:
+                hasAdminPaymentBypass ||
                 !!sessionRecord.chatEntitlementExpiresAt ||
                 !!sessionRecord.remainingTime ||
                 sessionRecord.mode === 'DOCUMENT',
@@ -1624,6 +1658,9 @@ export class FortuneController {
             cta: {
               label: '채팅으로 이어보기(홍시 사용)',
               requiresPayment: (() => {
+                if (hasAdminPaymentBypass) {
+                  return false;
+                }
                 if (sessionRecord.mode !== 'CHAT') {
                   return sessionRecord.remainingTime <= 0;
                 }

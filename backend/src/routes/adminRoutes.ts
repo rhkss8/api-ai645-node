@@ -11,6 +11,93 @@ router.use(requireAdmin);
 
 /**
  * @swagger
+ * /api/admin/dashboard/summary:
+ *   get:
+ *     operationId: getAdminDashboardSummary
+ *     summary: 관리자 운영 대시보드 요약 조회
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *           minimum: 1
+ *           maximum: 90
+ *         description: 조회 기간 일수
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 시작 날짜
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: 종료 날짜
+ *     responses:
+ *       200:
+ *         description: 관리자 대시보드 요약 조회 성공
+ *       401:
+ *         description: 인증 실패
+ *       403:
+ *         description: 관리자 권한 없음
+ */
+router.get('/dashboard/summary', adminController.getDashboardSummary);
+
+/**
+ * @swagger
+ * /api/admin/dashboard/payments:
+ *   get:
+ *     operationId: getAdminDashboardPayments
+ *     summary: 관리자 결제 시도 목록 조회
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *           minimum: 1
+ *           maximum: 90
+ *         description: 조회 기간 일수
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, COMPLETED, FAILED, CANCELLED, USER_CANCELLED, REFUNDED]
+ *         description: 결제 상태 필터
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 페이지 번호
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *         description: 페이지당 항목 수
+ *     responses:
+ *       200:
+ *         description: 관리자 결제 시도 목록 조회 성공
+ *       401:
+ *         description: 인증 실패
+ *       403:
+ *         description: 관리자 권한 없음
+ */
+router.get('/dashboard/payments', adminController.getDashboardPayments);
+
+/**
+ * @swagger
  * /api/admin/users:
  *   get:
  *     operationId: getAdminUsers

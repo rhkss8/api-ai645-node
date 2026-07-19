@@ -48,7 +48,7 @@ export const createFortuneRoutes = (
    *             properties:
    *               category:
    *                 type: string
-   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
+   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, FACE, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *                 description: 운세 카테고리
    *                 example: SAJU
    *               formType:
@@ -463,7 +463,7 @@ export const createFortuneRoutes = (
    *             properties:
    *               category:
    *                 type: string
-   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
+   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, FACE, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *                 description: 운세 카테고리
    *                 example: SAJU
    *               formType:
@@ -980,7 +980,7 @@ export const createFortuneRoutes = (
    *                 example: CHAT_SESSION
    *               category:
    *                 type: string
-   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
+   *                 enum: [SAJU, NEW_YEAR, MONEY, HAND, FACE, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *                 description: 운세 카테고리 (DOCUMENT_REPORT일 때 필수, CHAT_SESSION은 생략 가능)
    *                 example: SAJU
    *               payMethod:
@@ -1135,7 +1135,7 @@ export const createFortuneRoutes = (
    *         required: true
    *         schema:
    *           type: string
-   *           enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
+   *           enum: [SAJU, NEW_YEAR, MONEY, HAND, FACE, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *         description: 운세 카테고리
    *     responses:
    *       200:
@@ -1323,7 +1323,7 @@ export const createFortuneRoutes = (
    *         name: category
    *         schema:
    *           type: string
-   *           enum: [SAJU, NEW_YEAR, MONEY, HAND, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
+   *           enum: [SAJU, NEW_YEAR, MONEY, HAND, FACE, TOJEONG, BREAK_UP, CAR_PURCHASE, BUSINESS, INVESTMENT, LOVE, DREAM, LUCKY_NUMBER, MOVING, TRAVEL, COMPATIBILITY, TAROT, CAREER, LUCKY_DAY, NAMING, DAILY]
    *         description: 운세 카테고리 필터
    *       - in: query
    *         name: mode

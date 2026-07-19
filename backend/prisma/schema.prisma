@@ -321,6 +321,7 @@ enum FortuneCategory {
   NEW_YEAR // 신년운세
   MONEY // 횡재수 & 금전운
   HAND // 손금
+  FACE // 관상
   TOJEONG // 토정비결
 
   // ASK (자유 질문)

@@ -15,7 +15,29 @@ docker-compose exec backend node scripts/create-admin.js
 cd backend && node scripts/create-admin.js
 ```
 
-### 2. `create-temp-account.js` ⭐ NEW
+> 현재 운영 관리자 정책은 기존 소셜 로그인 계정에 `ADMIN` role을 부여하는 방식입니다.
+> 신규 관리자 유저를 따로 만드는 대신 `admin:promote`를 우선 사용하세요.
+
+### 2. `promote-admin.js`
+기존 사용자 계정을 관리자로 승격하는 스크립트입니다. 기본은 dry-run이며 `--yes`를 붙여야 실제 변경됩니다.
+
+```bash
+# Docker 환경에서 dry-run
+docker compose exec backend npm run admin:promote -- --provider GOOGLE --nickname "김창열"
+
+# Docker 환경에서 실제 승격
+docker compose exec backend npm run admin:promote -- --provider GOOGLE --nickname "김창열" --yes
+
+# user id 기준 실제 승격
+docker compose exec backend npm run admin:promote -- --user-id cmxxxxxxxxxxxxxxxxxxxxx --yes
+```
+
+운영 권장 순서:
+1. 운영자가 실제 소셜 계정으로 한 번 로그인합니다.
+2. dry-run 명령으로 대상 사용자를 확인합니다.
+3. 같은 명령에 `--yes`를 붙여 `USER -> ADMIN`으로 승격합니다.
+
+### 3. `create-temp-account.js` ⭐ NEW
 **결제 심사용 임시 계정을 생성하는 스크립트입니다.**
 
 ```bash

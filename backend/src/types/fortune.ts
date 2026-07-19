@@ -15,6 +15,8 @@ export enum FortuneCategory {
   MONEY = 'MONEY',
   /** 손금 */
   HAND = 'HAND',
+  /** 관상 */
+  FACE = 'FACE',
   /** 토정비결 */
   TOJEONG = 'TOJEONG',
   
@@ -65,6 +67,7 @@ export function getDocumentExpirationDays(category: FortuneCategory): number {
     FortuneCategory.NEW_YEAR,
     FortuneCategory.MONEY,
     FortuneCategory.HAND,
+    FortuneCategory.FACE,
     FortuneCategory.TOJEONG,
   ];
   
@@ -94,6 +97,7 @@ export function shouldCheckExistingDocument(category: FortuneCategory): boolean 
     [FortuneCategory.NEW_YEAR]: true,
     [FortuneCategory.MONEY]: true,
     [FortuneCategory.HAND]: true,
+    [FortuneCategory.FACE]: true,
     [FortuneCategory.TOJEONG]: true,
     
     // ASK (자유 질문) - 현재는 체크하지 않음 (나중에 필요시 true로 변경)

@@ -17,6 +17,7 @@ import { CAREERChatPrompt } from './chat/career.prompt';
 import { COMPATIBILITYChatPrompt } from './chat/compatibility.prompt';
 import { DREAMChatPrompt } from './chat/dream.prompt';
 import { DAILYChatPrompt } from './chat/daily.prompt';
+import { FACEChatPrompt } from './chat/face.prompt';
 import { HANDChatPrompt } from './chat/hand.prompt';
 import { INVESTMENTChatPrompt } from './chat/investment.prompt';
 import { LOVEChatPrompt } from './chat/love.prompt';
@@ -39,6 +40,7 @@ import { CAREERDocumentPrompt } from './document/career.prompt';
 import { COMPATIBILITYDocumentPrompt } from './document/compatibility.prompt';
 import { DREAMDocumentPrompt } from './document/dream.prompt';
 import { DAILYDocumentPrompt } from './document/daily.prompt';
+import { FACEDocumentPrompt } from './document/face.prompt';
 import { HANDDocumentPrompt } from './document/hand.prompt';
 import { INVESTMENTDocumentPrompt } from './document/investment.prompt';
 import { LOVEDocumentPrompt } from './document/love.prompt';
@@ -62,6 +64,7 @@ const CHAT_PROMPTS: Record<FortuneCategory, string> = {
   [FortuneCategory.NEW_YEAR]: NEW_YEARChatPrompt,
   [FortuneCategory.MONEY]: MONEYChatPrompt,
   [FortuneCategory.HAND]: HANDChatPrompt,
+  [FortuneCategory.FACE]: FACEChatPrompt,
   [FortuneCategory.TOJEONG]: TOJEONGChatPrompt,
   [FortuneCategory.BREAK_UP]: BREAK_UPChatPrompt,
   [FortuneCategory.CAR_PURCHASE]: CAR_PURCHASEChatPrompt,
@@ -89,6 +92,7 @@ const DOCUMENT_PROMPTS: Record<FortuneCategory, string> = {
   [FortuneCategory.NEW_YEAR]: NEW_YEARDocumentPrompt,
   [FortuneCategory.MONEY]: MONEYDocumentPrompt,
   [FortuneCategory.HAND]: HANDDocumentPrompt,
+  [FortuneCategory.FACE]: FACEDocumentPrompt,
   [FortuneCategory.TOJEONG]: TOJEONGDocumentPrompt,
   [FortuneCategory.BREAK_UP]: BREAK_UPDocumentPrompt,
   [FortuneCategory.CAR_PURCHASE]: CAR_PURCHASEDocumentPrompt,

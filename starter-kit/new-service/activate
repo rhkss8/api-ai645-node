@@ -1,0 +1,23 @@
+# Source this file to enable project-local commands in the current shell.
+#
+# Usage:
+#   source ./activate
+#   tars
+#   tars init
+#   tars start
+
+TARS_PROJECT_ROOT="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
+
+tars() {
+  "$TARS_PROJECT_ROOT/tars" "$@"
+}
+
+start() {
+  "$TARS_PROJECT_ROOT/tars" start "$@"
+}
+
+echo "TARS project commands activated:"
+echo "  tars          Show command list"
+echo "  tars init     Ask kickoff questions"
+echo "  tars start    Print Codex kickoff prompt"
+echo "  tars next     Show next MVP todo"

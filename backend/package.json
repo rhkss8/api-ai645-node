@@ -20,6 +20,7 @@
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
+    "admin:promote": "node scripts/promote-admin.js",
     "openapi:export": "node scripts/export-openapi.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
